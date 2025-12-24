@@ -5,12 +5,18 @@
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
-    "start": "electron-forge start",
-    "package": "electron-forge package",
+    "renderer:dev": "cd ../renderer && pnpm run dev",
+    "start": "concurrently \"pnpm run renderer:dev\" \"wait-on tcp:3000 && electron-forge start\"",
+    "renderer:build": "cd ../renderer && pnpm run build",
+    "renderer:start": "cd ../renderer && pnpm run start",
+    "package": "pnpm run renderer:build && electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint ."
   },
+  "files": [
+    "../renderer/out/**/*"
+  ],
   "keywords": [],
   "author": {
     "name": "fangzhen",
@@ -39,6 +45,7 @@
     "@types/electron-squirrel-startup": "^1.0.2",
     "@typescript-eslint/eslint-plugin": "^8.50.1",
     "@typescript-eslint/parser": "^8.50.1",
+    "concurrently": "^9.2.1",
     "electron": "39.2.7",
     "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",
@@ -46,7 +53,9 @@
     "jiti": "^2.6.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.50.1",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vite-plugin-static-copy": "^3.1.4",
+    "wait-on": "^9.0.3"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
