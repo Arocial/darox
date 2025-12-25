@@ -5,11 +5,11 @@
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
-    "renderer:dev": "cd ../renderer && pnpm run dev",
-    "start": "concurrently \"pnpm run renderer:dev\" \"wait-on tcp:3000 && electron-forge start\"",
-    "renderer:build": "cd ../renderer && pnpm run build",
-    "renderer:start": "cd ../renderer && pnpm run start",
-    "package": "pnpm run renderer:build && electron-forge package",
+    "renderer:dev": "cd ../renderer && npm run dev",
+    "start": "concurrently \"npm run renderer:dev\" \"wait-on tcp:3000 && electron-forge start\"",
+    "renderer:build": "cd ../renderer && npm run build",
+    "renderer:start": "cd ../renderer && npm run start",
+    "package": "npm run renderer:build && electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint ."

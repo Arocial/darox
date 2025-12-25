@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',
-  assetPrefix: './',
+  output: 'standalone',
   serverExternalPackages: ["@copilotkit/runtime"],
 };
 
