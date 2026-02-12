@@ -6,11 +6,7 @@ import { computed, ref } from 'vue';
 const chat = new Chat({
   generateId: createIdGenerator({ prefix: 'msgc', size: 16 }),
   transport: new DefaultChatTransport({
-    api: '/api/use-chat-request',
-    // only send the last message to the server:
-    prepareSendMessagesRequest({ messages, id }) {
-      return { body: { message: messages[messages.length - 1], id } };
-    },
+    api: 'http://localhost:8000/api/chat',
   }),
 });
 
