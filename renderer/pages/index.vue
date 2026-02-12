@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { Chat } from '@ai-sdk/vue';
+import { createIdGenerator, DefaultChatTransport } from 'ai';
 import { computed, ref } from 'vue';
 
-const chat = new Chat({});
-const input = ref('');
+const chat = new Chat({
+  generateId: createIdGenerator({ prefix: 'msgc', size: 16 }),
+  transport: new DefaultChatTransport({
+    api: '/api/use-chat-request',
+    // only send the last message to the server:
+    prepareSendMessagesRequest({ messages, id }) {
+      return { body: { message: messages[messages.length - 1], id } };
+    },
+  }),
+});
 
-const disabled = computed(() => chat.status !== 'ready');
+const messageList = computed(() => chat.messages); // computed property for type inference
+const input = ref('');
 
 const handleSubmit = (e: Event) => {
   e.preventDefault();
@@ -16,36 +26,17 @@ const handleSubmit = (e: Event) => {
 
 <template>
   <div class="flex flex-col w-full max-w-md py-24 mx-auto stretch">
-    <div v-for="m in chat.messages" :key="m.id" class="whitespace-pre-wrap">
-      {{ m.role === 'user' ? 'User: ' : 'AI: ' }}
-      {{
-        m.parts.map(part => (part.type === 'text' ? part.text : '')).join('')
-      }}
-    </div>
-
     <div
-      v-if="chat.status === 'submitted' || chat.status === 'streaming'"
-      class="mt-4 text-gray-500"
+      v-for="message in messageList"
+      :key="message.id"
+      class="whitespace-pre-wrap"
     >
-      <div v-if="chat.status === 'submitted'">Loading...</div>
-      <button
-        type="button"
-        class="px-4 py-2 mt-4 text-blue-500 border border-blue-500 rounded-md"
-        @click="chat.stop"
-      >
-        Stop
-      </button>
-    </div>
-
-    <div v-if="chat.error" class="mt-4">
-      <div class="text-red-500">An error occurred.</div>
-      <button
-        type="button"
-        class="px-4 py-2 mt-4 text-blue-500 border border-blue-500 rounded-md"
-        @click="() => chat.regenerate()"
-      >
-        Retry
-      </button>
+      <strong>{{ `${message.role}: ` }}</strong>
+      {{
+        message.parts
+          .map(part => (part.type === 'text' ? part.text : ''))
+          .join('')
+      }}
     </div>
 
     <form @submit="handleSubmit">
@@ -53,7 +44,6 @@ const handleSubmit = (e: Event) => {
         class="fixed bottom-0 w-full max-w-md p-2 mb-8 border border-gray-300 rounded shadow-xl"
         v-model="input"
         placeholder="Say something..."
-        :disabled="disabled"
       />
     </form>
   </div>
