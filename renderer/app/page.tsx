@@ -2,6 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import ChatInput from '@/components/chat-input';
+import { Response } from '@/components/ai-elements/response';
 import { DefaultChatTransport } from 'ai';
 
 export default function Chat() {
@@ -16,9 +17,9 @@ export default function Chat() {
       {messages.map(m => (
         <div key={m.id} className="whitespace-pre-wrap">
           {m.role === 'user' ? 'User: ' : 'AI: '}
-          {m.parts.map(part => {
+          {m.parts.map((part, index) => {
             if (part.type === 'text') {
-              return part.text;
+                return <Response key={index}>{part.text}</Response>;
             }
           })}
         </div>
