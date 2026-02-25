@@ -14,12 +14,12 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
-      {messages.map(m => (
+      {messages.map((m) => (
         <div key={m.id} className="whitespace-pre-wrap">
           {m.role === 'user' ? 'User: ' : 'AI: '}
           {m.parts.map((part, index) => {
             if (part.type === 'text') {
-                return <Response key={index}>{part.text}</Response>;
+              return <Response key={index}>{part.text}</Response>;
             }
           })}
         </div>
@@ -51,7 +51,7 @@ export default function Chat() {
         </div>
       )}
 
-      <ChatInput status={status} onSubmit={text => sendMessage({ text })} />
+      <ChatInput status={status} onSubmit={(text) => sendMessage({ text })} />
     </div>
   );
 }
