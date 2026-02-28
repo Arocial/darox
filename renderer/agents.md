@@ -1,0 +1,1 @@
+- Use `npm` as node package manager.
