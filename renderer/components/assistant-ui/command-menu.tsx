@@ -4,12 +4,21 @@ import { Command } from "cmdk";
 import { FC, useState, useEffect, useRef } from "react";
 import { ComposerPrimitive, useAuiState, useAui } from "@assistant-ui/react";
 
+type SuggestionItem = {
+  id: string;
+  value: string;
+  label: string;
+  description: string | null;
+};
+
 export const ComposerWithCommandMenu: FC = () => {
   const text = useAuiState((s) => s.composer.text);
   const aui = useAui();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [command, setCommand] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const justSelected = useRef(false);
 
   useEffect(() => {
@@ -45,12 +54,53 @@ export const ComposerWithCommandMenu: FC = () => {
     }
   }, [text]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const fetchSuggestions = async () => {
+      setLoading(true);
+      try {
+        const url = new URL("http://localhost:8000/api/suggestions");
+        if (command) {
+          url.searchParams.set("command", command.slice(1));
+          const words = search.split(" ");
+          const lastWord = words[words.length - 1];
+          if (lastWord) {
+            url.searchParams.set("q", lastWord);
+          }
+        } else {
+          if (search) {
+            url.searchParams.set("q", search);
+          }
+        }
+        
+        const res = await fetch(url.toString());
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data.items || []);
+        } else {
+          setSuggestions([]);
+        }
+      } catch (e) {
+        console.error("Failed to fetch suggestions", e);
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(fetchSuggestions, 150);
+    return () => clearTimeout(debounce);
+  }, [command, search, open]);
+
   const handleSelect = (val: string) => {
     justSelected.current = true;
-    if (!command) {
-      aui.composer().setText(`/${val} `);
+    const parts = text.split(" ");
+    parts.pop();
+    if (parts.length === 0) {
+      aui.composer().setText(`${val} `);
     } else {
-      aui.composer().setText(`${command} ${val} `);
+      aui.composer().setText(`${parts.join(" ")} ${val} `);
       setOpen(false);
     }
   };
@@ -90,34 +140,26 @@ export const ComposerWithCommandMenu: FC = () => {
       {open && (
         <div className="absolute bottom-full left-0 w-full mb-2 bg-popover text-popover-foreground border rounded-md shadow-md z-50 overflow-hidden">
           <Command.List className="max-h-[300px] overflow-y-auto p-1">
-            <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No results found.</Command.Empty>
-            {!command ? (
-              <Command.Group heading="Commands" className={groupClassName}>
-                {["add", "remove", "help"].filter(c => c.includes(search)).map(c => (
+            <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
+              {loading ? "Loading..." : "No results found."}
+            </Command.Empty>
+            {suggestions.length > 0 && (
+              <Command.Group heading={!command ? "Commands" : "Suggestions"} className={groupClassName}>
+                {suggestions.map(item => (
                   <Command.Item
-                    key={c}
-                    value={c}
-                    onSelect={() => handleSelect(c)}
-                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                    key={item.id}
+                    value={item.value}
+                    onSelect={() => handleSelect(item.value)}
+                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
                   >
-                    /{c}
+                    <span>{item.label}</span>
+                    {item.description && (
+                      <span className="text-xs text-muted-foreground mt-0.5">{item.description}</span>
+                    )}
                   </Command.Item>
                 ))}
               </Command.Group>
-            ) : command === "/add" ? (
-              <Command.Group heading="Files" className={groupClassName}>
-                {["src/main.ts", "src/utils.ts", "package.json", "README.md"].filter(f => f.includes(search)).map(f => (
-                  <Command.Item
-                    key={f}
-                    value={f}
-                    onSelect={() => handleSelect(f)}
-                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    {f}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            ) : null}
+            )}
           </Command.List>
         </div>
       )}
