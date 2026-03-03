@@ -114,6 +114,7 @@ export const ComposerWithCommandMenu: FC = () => {
   const groupClassName = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
     if (!open) return;
 
     if (e.key === "Escape") {
@@ -169,16 +170,14 @@ export const ComposerWithCommandMenu: FC = () => {
           </Command.List>
         </div>
       )}
-      <Command.Input asChild value={text} onValueChange={(v) => aui.composer().setText(v)}>
-        <ComposerPrimitive.Input
-          placeholder="Send a message..."
-          className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-          rows={1}
-          autoFocus
-          aria-label="Message input"
-          submitMode={open ? "none" : "enter"}
-        />
-      </Command.Input>
+      <ComposerPrimitive.Input
+        placeholder="Send a message..."
+        className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+        rows={1}
+        autoFocus
+        aria-label="Message input"
+        submitMode={open ? "none" : "enter"}
+      />
     </Command>
   );
 };
