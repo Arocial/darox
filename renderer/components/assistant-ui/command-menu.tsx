@@ -77,13 +77,19 @@ export const ComposerWithCommandMenu: FC = () => {
         const res = await fetch(url.toString());
         if (res.ok) {
           const data = await res.json();
-          setSuggestions(data.items || []);
+          const items = data.items || [];
+          setSuggestions(items);
+          if (items.length === 0) {
+            setOpen(false);
+          }
         } else {
           setSuggestions([]);
+          setOpen(false);
         }
       } catch (e) {
         console.error("Failed to fetch suggestions", e);
         setSuggestions([]);
+        setOpen(false);
       } finally {
         setLoading(false);
       }
