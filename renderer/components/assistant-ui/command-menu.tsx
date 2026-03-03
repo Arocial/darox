@@ -19,7 +19,14 @@ export const ComposerWithCommandMenu: FC = () => {
   const [command, setCommand] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedValue, setSelectedValue] = useState("");
   const justSelected = useRef(false);
+
+  useEffect(() => {
+    if (suggestions.length > 0) {
+      setSelectedValue(suggestions[0].value);
+    }
+  }, [suggestions]);
 
   useEffect(() => {
     if (justSelected.current) {
@@ -143,6 +150,8 @@ export const ComposerWithCommandMenu: FC = () => {
       className="relative w-full flex flex-col" 
       shouldFilter={false}
       onKeyDown={handleKeyDown}
+      value={selectedValue}
+      onValueChange={setSelectedValue}
     >
       {open && (
         <div className="absolute bottom-full left-0 w-full mb-2 bg-popover text-popover-foreground border rounded-md shadow-md z-50 overflow-hidden">
