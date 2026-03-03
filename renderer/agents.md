@@ -1,1 +1,3 @@
 - Use `npm` as node package manager.
+- By default, use English for comments and prompt messages in the code unless otherwise specified.
+- After modifying the code, there is no need to perform actual builds or executions (e.g., `npm run build`), but static checks are allowed.
