@@ -9,6 +9,7 @@ type SuggestionItem = {
   value: string;
   label: string;
   description: string | null;
+  source?: 'history' | 'dynamic';
 };
 
 export const ComposerWithCommandMenu: FC = () => {
@@ -18,15 +19,45 @@ export const ComposerWithCommandMenu: FC = () => {
   const [search, setSearch] = useState('');
   const [command, setCommand] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [historySuggestions, setHistorySuggestions] = useState<SuggestionItem[]>(
+    [],
+  );
+  const [history, setHistory] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedValue, setSelectedValue] = useState('');
   const justSelected = useRef(false);
 
   useEffect(() => {
-    if (suggestions.length > 0) {
+    const saved = localStorage.getItem('cmd_history');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse history', e);
+      }
+    }
+  }, []);
+
+  const addToHistory = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    setHistory((prev) => {
+      const newHistory = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(
+        0,
+        50,
+      );
+      localStorage.setItem('cmd_history', JSON.stringify(newHistory));
+      return newHistory;
+    });
+  };
+
+  useEffect(() => {
+    if (historySuggestions.length > 0) {
+      setSelectedValue(historySuggestions[0].value);
+    } else if (suggestions.length > 0) {
       setSelectedValue(suggestions[0].value);
     }
-  }, [suggestions]);
+  }, [suggestions, historySuggestions]);
 
   useEffect(() => {
     if (justSelected.current) {
@@ -56,10 +87,22 @@ export const ComposerWithCommandMenu: FC = () => {
         setCommand(null);
         setSearch(text.slice(1));
       }
+
+      // Filter history
+      const matchedHistory = history
+        .filter((h) => h.startsWith(text) && h !== text)
+        .map((h) => ({
+          id: `history-${h}`,
+          value: h,
+          label: h,
+          description: 'History',
+          source: 'history' as const,
+        }));
+      setHistorySuggestions(matchedHistory);
     } else {
       setOpen(false);
     }
-  }, [text]);
+  }, [text, history]);
 
   useEffect(() => {
     if (!open) return;
@@ -86,17 +129,21 @@ export const ComposerWithCommandMenu: FC = () => {
           const data = await res.json();
           const items = data.items || [];
           setSuggestions(items);
-          if (items.length === 0) {
+          if (items.length === 0 && historySuggestions.length === 0) {
             setOpen(false);
           }
         } else {
           setSuggestions([]);
-          setOpen(false);
+          if (historySuggestions.length === 0) {
+            setOpen(false);
+          }
         }
       } catch (e) {
         console.error('Failed to fetch suggestions', e);
         setSuggestions([]);
-        setOpen(false);
+        if (historySuggestions.length === 0) {
+          setOpen(false);
+        }
       } finally {
         setLoading(false);
       }
@@ -104,10 +151,16 @@ export const ComposerWithCommandMenu: FC = () => {
 
     const debounce = setTimeout(fetchSuggestions, 150);
     return () => clearTimeout(debounce);
-  }, [command, search, open]);
+  }, [command, search, open, historySuggestions]);
 
-  const handleSelect = (val: string) => {
+  const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;
+    if (item.source === 'history') {
+      aui.composer().setText(item.value);
+      setOpen(false);
+      return;
+    }
+    const val = item.value;
     const parts = text.split(' ');
     parts.pop();
     if (parts.length === 0) {
@@ -168,6 +221,25 @@ export const ComposerWithCommandMenu: FC = () => {
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
               {loading ? 'Loading...' : 'No results found.'}
             </Command.Empty>
+            {historySuggestions.length > 0 && (
+              <Command.Group heading="History" className={groupClassName}>
+                {historySuggestions.map((item) => (
+                  <Command.Item
+                    key={item.id}
+                    value={item.value}
+                    onSelect={() => handleSelect(item)}
+                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
+                  >
+                    <span>{item.label}</span>
+                    {item.description && (
+                      <span className="text-xs text-muted-foreground mt-0.5">
+                        {item.description}
+                      </span>
+                    )}
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
             {suggestions.length > 0 && (
               <Command.Group
                 heading={!command ? 'Commands' : 'Suggestions'}
@@ -177,7 +249,7 @@ export const ComposerWithCommandMenu: FC = () => {
                   <Command.Item
                     key={item.id}
                     value={item.value}
-                    onSelect={() => handleSelect(item.value)}
+                    onSelect={() => handleSelect(item)}
                     className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
                   >
                     <span>{item.label}</span>
@@ -203,6 +275,9 @@ export const ComposerWithCommandMenu: FC = () => {
         onKeyDown={(e) => {
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
           if (!open) {
+            if (e.key === 'Enter' && !isModifier) {
+              addToHistory(text);
+            }
             // Prevent cmdk from intercepting keys when the menu is closed,
             // allowing normal textarea behavior (e.g., multi-line input, cursor movement).
             const cmdkKeys = [
