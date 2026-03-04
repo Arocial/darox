@@ -53,9 +53,9 @@ export const ComposerWithCommandMenu: FC = () => {
 
   useEffect(() => {
     if (historySuggestions.length > 0) {
-      setSelectedValue(historySuggestions[0].value);
+      setSelectedValue(historySuggestions[0].id);
     } else if (suggestions.length > 0) {
-      setSelectedValue(suggestions[0].value);
+      setSelectedValue(suggestions[0].id);
     }
   }, [suggestions, historySuggestions]);
 
@@ -226,7 +226,7 @@ export const ComposerWithCommandMenu: FC = () => {
                 {historySuggestions.map((item) => (
                   <Command.Item
                     key={item.id}
-                    value={item.value}
+                    value={item.id}
                     onSelect={() => handleSelect(item)}
                     className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
                   >
@@ -248,7 +248,7 @@ export const ComposerWithCommandMenu: FC = () => {
                 {suggestions.map((item) => (
                   <Command.Item
                     key={item.id}
-                    value={item.value}
+                    value={item.id}
                     onSelect={() => handleSelect(item)}
                     className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
                   >
