@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import type { FC } from "react";
 
-import { ComposerWithCommandMenu } from "@/components/assistant-ui/command-menu";
+import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
 
 export const Thread: FC = () => {
   return (
