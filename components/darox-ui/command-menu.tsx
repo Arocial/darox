@@ -12,7 +12,7 @@ type SuggestionItem = {
   source?: 'history' | 'dynamic';
 };
 
-export const ComposerWithCommandMenu: FC = () => {
+export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }) => {
   const text = useAuiState((s) => s.composer.text);
   const aui = useAui();
   const [open, setOpen] = useState(false);
@@ -266,6 +266,7 @@ export const ComposerWithCommandMenu: FC = () => {
         </div>
       )}
       <ComposerPrimitive.Input
+        disabled={disabled}
         placeholder="Send a message (Shift+Enter to insert newline)..."
         className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
         rows={1}
