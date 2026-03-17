@@ -2,3 +2,4 @@
 - By default, use English for comments and prompt messages in the code unless otherwise specified.
 - After modifying the code, there is no need to perform actual builds or executions (e.g., `npm run build`), but static checks are allowed.
 - Make minial modification to existing files of components/ui and components/assistant-ui/, since they are imported from third-party.
+- Place custom components for the current project under `components/darox-ui/`.

@@ -10,7 +10,7 @@ import { Thread } from '@/components/assistant-ui/thread';
 import {
   ChatInputContext,
   defaultInputArgs,
-} from '@/components/chat-input-context';
+} from '@/components/darox-ui/chat-input-context';
 
 export type ChatInputEventArgs = {
   deferred_tools: Record<string, string>; // id: question
