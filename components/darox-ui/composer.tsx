@@ -1,5 +1,5 @@
 import { useState, type FC } from "react";
-import { ComposerPrimitive, useAui, useAuiState, AuiIf, TextMessagePartProvider } from "@assistant-ui/react";
+import { ComposerPrimitive, useAui, useAuiState, AuiIf, TextMessagePartProvider, MessageProvider } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 
 import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/attachment";
@@ -71,9 +71,11 @@ export const Composer: FC = () => {
       {Object.entries(inputArgs.deferred_tools || {}).map(([id, question]) => (
         <div key={id} className="flex flex-col gap-2 mb-2 mx-2 mt-2">
           <div className="text-sm font-medium text-foreground">
-            <TextMessagePartProvider text={question as string}>
-              <MarkdownText />
-            </TextMessagePartProvider>
+            <MessageProvider message={{ id: "mock", role: "assistant", content: [], createdAt: new Date(), metadata: {} }} index={0}>
+              <TextMessagePartProvider text={question as string}>
+                <MarkdownText />
+              </TextMessagePartProvider>
+            </MessageProvider>
           </div>
           <input
             type="text"
