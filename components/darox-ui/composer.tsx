@@ -1,8 +1,9 @@
 import { useState, type FC } from "react";
-import { ComposerPrimitive, useAui, useAuiState, AuiIf } from "@assistant-ui/react";
+import { ComposerPrimitive, useAui, useAuiState, AuiIf, TextMessagePartProvider } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 
 import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/attachment";
+import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
@@ -36,6 +37,7 @@ export const Composer: FC = () => {
     aui.thread().append({
       role: "user",
       content: [{ type: "text", text: JSON.stringify(result) }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attachments: attachments as any,
     });
     aui.composer().reset();
@@ -68,7 +70,11 @@ export const Composer: FC = () => {
 
       {Object.entries(inputArgs.deferred_tools || {}).map(([id, question]) => (
         <div key={id} className="flex flex-col gap-2 mb-2 mx-2 mt-2">
-          <label className="text-sm font-medium text-foreground">{question as string}</label>
+          <div className="text-sm font-medium text-foreground">
+            <TextMessagePartProvider text={question as string}>
+              <MarkdownText />
+            </TextMessagePartProvider>
+          </div>
           <input
             type="text"
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"

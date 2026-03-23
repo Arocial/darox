@@ -19,7 +19,6 @@ import {
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
-  ArrowUpIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -28,7 +27,6 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
-  SquareIcon,
 } from "lucide-react";
 import { type FC } from "react";
 
