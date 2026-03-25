@@ -23,33 +23,35 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
     [],
   );
   const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const lastHistoryText = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedValue, setSelectedValue] = useState('');
   const justSelected = useRef(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('cmd_history');
-    if (saved) {
-      try {
-        setHistory(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse history', e);
+    const loadHistory = () => {
+      const saved = localStorage.getItem('cmd_history');
+      if (saved) {
+        try {
+          setHistory(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse history', e);
+        }
       }
-    }
+    };
+    loadHistory();
+    window.addEventListener('cmd_history_updated', loadHistory);
+    return () => window.removeEventListener('cmd_history_updated', loadHistory);
   }, []);
 
-  const addToHistory = (val: string) => {
-    const trimmed = val.trim();
-    if (!trimmed) return;
-    setHistory((prev) => {
-      const newHistory = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(
-        0,
-        50,
-      );
-      localStorage.setItem('cmd_history', JSON.stringify(newHistory));
-      return newHistory;
-    });
-  };
+  useEffect(() => {
+    if (historyIndex >= 0) {
+      if (text !== history[historyIndex] && text !== lastHistoryText.current) {
+        setHistoryIndex(-1);
+      }
+    }
+  }, [text, historyIndex, history]);
 
   useEffect(() => {
     if (historySuggestions.length > 0) {
@@ -276,8 +278,30 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
         onKeyDown={(e) => {
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
           if (!open) {
-            if (e.key === 'Enter' && !isModifier) {
-              addToHistory(text);
+            if (e.key === 'ArrowUp' && !isModifier) {
+              if (history.length > 0 && (text === '' || historyIndex >= 0)) {
+                e.preventDefault();
+                const nextIndex = Math.min(historyIndex + 1, history.length - 1);
+                if (nextIndex !== historyIndex) {
+                  lastHistoryText.current = text;
+                  setHistoryIndex(nextIndex);
+                  aui.composer().setText(history[nextIndex]);
+                }
+              }
+            } else if (e.key === 'ArrowDown' && !isModifier) {
+              if (historyIndex >= 0) {
+                e.preventDefault();
+                const nextIndex = historyIndex - 1;
+                if (nextIndex !== historyIndex) {
+                  lastHistoryText.current = text;
+                  setHistoryIndex(nextIndex);
+                  if (nextIndex < 0) {
+                    aui.composer().setText('');
+                  } else {
+                    aui.composer().setText(history[nextIndex]);
+                  }
+                }
+              }
             }
             // Prevent cmdk from intercepting keys when the menu is closed,
             // allowing normal textarea behavior (e.g., multi-line input, cursor movement).

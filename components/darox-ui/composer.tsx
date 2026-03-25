@@ -24,6 +24,20 @@ export const Composer: FC = () => {
     const text = state.text;
     const attachments = state.attachments;
 
+    const trimmed = text.trim();
+    if (trimmed) {
+      const saved = localStorage.getItem('cmd_history');
+      let history: string[] = [];
+      if (saved) {
+        try {
+          history = JSON.parse(saved);
+        } catch (e) {}
+      }
+      const newHistory = [trimmed, ...history.filter((h) => h !== trimmed)].slice(0, 50);
+      localStorage.setItem('cmd_history', JSON.stringify(newHistory));
+      window.dispatchEvent(new Event('cmd_history_updated'));
+    }
+
     const result: ChatInputEventResult = {
       normal_input: {
         user_input: inputArgs.normal_input?.request ? text : null,
