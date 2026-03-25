@@ -16,6 +16,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
   const text = useAuiState((s) => s.composer.text);
   const aui = useAui();
   const [open, setOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [search, setSearch] = useState('');
   const [command, setCommand] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -23,8 +24,6 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
     [],
   );
   const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const lastHistoryText = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedValue, setSelectedValue] = useState('');
   const justSelected = useRef(false);
@@ -46,14 +45,6 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
   }, []);
 
   useEffect(() => {
-    if (historyIndex >= 0) {
-      if (text !== history[historyIndex] && text !== lastHistoryText.current) {
-        setHistoryIndex(-1);
-      }
-    }
-  }, [text, historyIndex, history]);
-
-  useEffect(() => {
     if (historySuggestions.length > 0) {
       setSelectedValue(historySuggestions[0].id);
     } else if (suggestions.length > 0) {
@@ -64,46 +55,43 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
   useEffect(() => {
     if (justSelected.current) {
       justSelected.current = false;
-      if (text.startsWith('/')) {
-        const parts = text.split(' ');
-        if (parts.length > 1) {
-          setCommand(parts[0]);
-          setSearch(parts.slice(1).join(' '));
-        } else {
-          setCommand(null);
-          setSearch(text.slice(1));
-        }
-      } else {
-        setOpen(false);
-      }
+      setOpen(false);
       return;
     }
 
+    setOpen(true);
+
+    let currentCommand = null;
+    let currentSearch = text;
+
     if (text.startsWith('/')) {
-      setOpen(true);
       const parts = text.split(' ');
       if (parts.length > 1) {
-        setCommand(parts[0]);
-        setSearch(parts.slice(1).join(' '));
+        currentCommand = parts[0];
+        currentSearch = parts.slice(1).join(' ');
       } else {
-        setCommand(null);
-        setSearch(text.slice(1));
+        currentCommand = null;
+        currentSearch = text.slice(1);
       }
-
-      // Filter history
-      const matchedHistory = history
-        .filter((h) => h.startsWith(text) && h !== text)
-        .map((h) => ({
-          id: `history-${h}`,
-          value: h,
-          label: h,
-          description: 'History',
-          source: 'history' as const,
-        }));
-      setHistorySuggestions(matchedHistory);
     } else {
-      setOpen(false);
+      currentCommand = null;
+      currentSearch = text;
     }
+
+    setCommand(currentCommand);
+    setSearch(currentSearch);
+
+    // Filter history
+    const matchedHistory = history
+      .filter((h) => h.toLowerCase().includes(text.toLowerCase()) && h !== text)
+      .map((h) => ({
+        id: `history-${h}`,
+        value: h,
+        label: h,
+        description: 'History',
+        source: 'history' as const,
+      }));
+    setHistorySuggestions(matchedHistory);
   }, [text, history]);
 
   useEffect(() => {
@@ -131,21 +119,12 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
           const data = await res.json();
           const items = data.items || [];
           setSuggestions(items);
-          if (items.length === 0 && historySuggestions.length === 0) {
-            setOpen(false);
-          }
         } else {
           setSuggestions([]);
-          if (historySuggestions.length === 0) {
-            setOpen(false);
-          }
         }
       } catch (e) {
         console.error('Failed to fetch suggestions', e);
         setSuggestions([]);
-        if (historySuggestions.length === 0) {
-          setOpen(false);
-        }
       } finally {
         setLoading(false);
       }
@@ -153,7 +132,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
 
     const debounce = setTimeout(fetchSuggestions, 150);
     return () => clearTimeout(debounce);
-  }, [command, search, open, historySuggestions]);
+  }, [command, search, open]);
 
   const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;
@@ -209,6 +188,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
     }
   };
 
+  const showMenu = open && isFocused && (historySuggestions.length > 0 || suggestions.length > 0);
+
   return (
     <Command
       className="relative w-full flex flex-col"
@@ -217,7 +198,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
       value={selectedValue}
       onValueChange={setSelectedValue}
     >
-      {open && (
+      {showMenu && (
         <div className="absolute bottom-full left-0 w-full mb-2 bg-popover text-popover-foreground border rounded-md shadow-md z-50 overflow-hidden">
           <Command.List className="max-h-[300px] overflow-y-auto p-1">
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
@@ -274,35 +255,17 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
         rows={1}
         autoFocus
         aria-label="Message input"
-        submitMode={open ? 'none' : 'enter'}
+        submitMode={showMenu ? 'none' : 'enter'}
+        onFocus={() => {
+          setIsFocused(true);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          setTimeout(() => setIsFocused(false), 200);
+        }}
         onKeyDown={(e) => {
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
-          if (!open) {
-            if (e.key === 'ArrowUp' && !isModifier) {
-              if (history.length > 0 && (text === '' || historyIndex >= 0)) {
-                e.preventDefault();
-                const nextIndex = Math.min(historyIndex + 1, history.length - 1);
-                if (nextIndex !== historyIndex) {
-                  lastHistoryText.current = text;
-                  setHistoryIndex(nextIndex);
-                  aui.composer().setText(history[nextIndex]);
-                }
-              }
-            } else if (e.key === 'ArrowDown' && !isModifier) {
-              if (historyIndex >= 0) {
-                e.preventDefault();
-                const nextIndex = historyIndex - 1;
-                if (nextIndex !== historyIndex) {
-                  lastHistoryText.current = text;
-                  setHistoryIndex(nextIndex);
-                  if (nextIndex < 0) {
-                    aui.composer().setText('');
-                  } else {
-                    aui.composer().setText(history[nextIndex]);
-                  }
-                }
-              }
-            }
+          if (!showMenu) {
             // Prevent cmdk from intercepting keys when the menu is closed,
             // allowing normal textarea behavior (e.g., multi-line input, cursor movement).
             const cmdkKeys = [
