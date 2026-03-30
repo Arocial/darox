@@ -1,5 +1,1 @@
-- Use `npm` as node package manager.
-- By default, use English for comments and prompt messages in the code unless otherwise specified.
-- Make minial modification to existing files of components/ui and components/assistant-ui/, since they are imported from third-party.
-- Place custom components for the current project under `components/darox-ui/`.
-- The web ui is (probably) avaliable at http://localhost:3140, which is the dev server.
+CLAUDE.md
