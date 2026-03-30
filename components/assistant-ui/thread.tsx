@@ -31,6 +31,7 @@ import {
 import { type FC } from "react";
 
 import { Composer } from "@/components/darox-ui/composer";
+import { UserMessageText } from "@/components/darox-ui/user-message-text";
 
 export const Thread: FC = () => {
   return (
@@ -223,7 +224,7 @@ const UserMessage: FC = () => {
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
         <div className="aui-user-message-content wrap-break-word rounded-2xl bg-muted px-4 py-2.5 text-foreground">
-          <MessagePrimitive.Parts />
+          <MessagePrimitive.Parts components={{ Text: UserMessageText }} />
         </div>
         <div className="aui-user-action-bar-wrapper absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 pr-2">
           <UserActionBar />
