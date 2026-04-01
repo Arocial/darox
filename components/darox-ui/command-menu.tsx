@@ -95,6 +95,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
     if (justSelected.current) {
       justSelected.current = false;
       setOpen(false);
+    } else if (text.length === 0) {
+      setOpen(false);
     } else {
       setOpen(true);
     }
@@ -270,10 +272,12 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
         submitMode={showMenu ? 'none' : 'enter'}
         onFocus={() => {
           setIsFocused(true);
-          setOpen(true);
+          if (text.length > 0) {
+            setOpen(true);
+          }
         }}
         onBlur={() => {
-          setTimeout(() => setIsFocused(false), 200);
+          setIsFocused(false);
         }}
         onKeyDown={(e) => {
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
