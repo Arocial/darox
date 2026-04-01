@@ -47,9 +47,9 @@ export const ComposerTabBar: FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveId(tab.id)}
-              className={`group relative flex items-start gap-2 w-full px-3 py-2.5 text-left border-l-3 transition-colors ${
+              className={`group relative flex items-start gap-2 w-full px-3 py-2.5 text-left border-r-3 transition-colors ${
                 activeId === tab.id
-                  ? 'border-primary text-foreground bg-background'
+                  ? 'border-primary text-accent-foreground bg-accent'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             >

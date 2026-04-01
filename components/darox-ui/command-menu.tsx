@@ -225,11 +225,11 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
                     key={item.id}
                     value={item.id}
                     onSelect={() => handleSelect(item)}
-                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
+                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start w-full overflow-hidden"
                   >
-                    <span>{item.label}</span>
+                    <span className="truncate w-full text-left">{item.label}</span>
                     {item.description && (
-                      <span className="text-xs text-muted-foreground mt-0.5">
+                      <span className="text-xs text-muted-foreground mt-0.5 truncate w-full text-left">
                         {item.description}
                       </span>
                     )}
@@ -247,11 +247,11 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
                     key={item.id}
                     value={item.id}
                     onSelect={() => handleSelect(item)}
-                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start"
+                    className="px-2 py-1.5 text-sm rounded-sm cursor-pointer hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground flex flex-col items-start w-full overflow-hidden"
                   >
-                    <span>{item.label}</span>
+                    <span className="truncate w-full text-left">{item.label}</span>
                     {item.description && (
-                      <span className="text-xs text-muted-foreground mt-0.5">
+                      <span className="text-xs text-muted-foreground mt-0.5 truncate w-full text-left">
                         {item.description}
                       </span>
                     )}
