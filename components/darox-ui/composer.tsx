@@ -8,10 +8,12 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { Button } from "@/components/ui/button";
 import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
 import { useChatInput, defaultInputArgs } from "@/components/darox-ui/chat-input-context";
+import { useWorkspace, historyKey } from "@/components/darox-ui/workspace-context";
 import type { ChatInputEventResult } from "@/app/page";
 
 export const Composer: FC = () => {
   const { inputArgs, setInputArgs } = useChatInput();
+  const workspace = useWorkspace();
   const aui = useAui();
 
   const [deferredTools, setDeferredTools] = useState<Record<string, string>>({});
@@ -26,7 +28,8 @@ export const Composer: FC = () => {
 
     const trimmed = text.trim();
     if (trimmed) {
-      const saved = localStorage.getItem('cmd_history');
+      const key = historyKey(workspace);
+      const saved = localStorage.getItem(key);
       let history: string[] = [];
       if (saved) {
         try {
@@ -34,7 +37,7 @@ export const Composer: FC = () => {
         } catch (e) {}
       }
       const newHistory = [trimmed, ...history.filter((h) => h !== trimmed)].slice(0, 50);
-      localStorage.setItem('cmd_history', JSON.stringify(newHistory));
+      localStorage.setItem(key, JSON.stringify(newHistory));
       window.dispatchEvent(new Event('cmd_history_updated'));
     }
 

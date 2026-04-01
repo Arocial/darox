@@ -12,11 +12,12 @@ import {
   defaultInputArgs,
 } from '@/components/darox-ui/chat-input-context';
 import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
+import { WorkspaceContext } from '@/components/darox-ui/workspace-context';
 import type { ChatInputEventArgs } from '@/app/page';
 
 const API_BASE = 'http://localhost:8000';
 
-export function ComposerTabPanel({ composerId }: { composerId: string }) {
+export function ComposerTabPanel({ composerId, workspace }: { composerId: string; workspace: string }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
 
@@ -32,14 +33,16 @@ export function ComposerTabPanel({ composerId }: { composerId: string }) {
   });
 
   return (
-    <ComposerIdContext.Provider value={composerId}>
-      <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
-        <AssistantRuntimeProvider runtime={runtime}>
-          <div className="h-full">
-            <Thread />
-          </div>
-        </AssistantRuntimeProvider>
-      </ChatInputContext.Provider>
-    </ComposerIdContext.Provider>
+    <WorkspaceContext.Provider value={workspace}>
+      <ComposerIdContext.Provider value={composerId}>
+        <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
+          <AssistantRuntimeProvider runtime={runtime}>
+            <div className="h-full">
+              <Thread />
+            </div>
+          </AssistantRuntimeProvider>
+        </ChatInputContext.Provider>
+      </ComposerIdContext.Provider>
+    </WorkspaceContext.Provider>
   );
 }

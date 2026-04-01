@@ -43,7 +43,7 @@ export default function Chat() {
               activeId === tab.id ? 'z-10 visible' : 'z-0 invisible'
             }`}
           >
-            <ComposerTabPanel composerId={tab.id} />
+            <ComposerTabPanel composerId={tab.id} workspace={tab.workspace} />
           </div>
         ))}
         {tabs.length === 0 && (

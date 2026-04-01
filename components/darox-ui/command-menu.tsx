@@ -4,6 +4,7 @@ import { Command } from 'cmdk';
 import { FC, useState, useEffect, useRef, useContext } from 'react';
 import { ComposerPrimitive, useAuiState, useAui } from '@assistant-ui/react';
 import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
+import { useWorkspace, historyKey } from '@/components/darox-ui/workspace-context';
 
 type SuggestionItem = {
   id: string;
@@ -15,6 +16,7 @@ type SuggestionItem = {
 
 export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }) => {
   const composerId = useContext(ComposerIdContext);
+  const workspace = useWorkspace();
   const text = useAuiState((s) => s.composer.text);
   const aui = useAui();
   const [open, setOpen] = useState(false);
@@ -31,20 +33,23 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
   const justSelected = useRef(false);
 
   useEffect(() => {
+    const key = historyKey(workspace);
     const loadHistory = () => {
-      const saved = localStorage.getItem('cmd_history');
+      const saved = localStorage.getItem(key);
       if (saved) {
         try {
           setHistory(JSON.parse(saved));
         } catch (e) {
           console.error('Failed to parse history', e);
         }
+      } else {
+        setHistory([]);
       }
     };
     loadHistory();
     window.addEventListener('cmd_history_updated', loadHistory);
     return () => window.removeEventListener('cmd_history_updated', loadHistory);
-  }, []);
+  }, [workspace]);
 
   useEffect(() => {
     if (historySuggestions.length > 0) {
