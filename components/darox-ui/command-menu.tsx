@@ -60,14 +60,6 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
   }, [suggestions, historySuggestions]);
 
   useEffect(() => {
-    if (justSelected.current) {
-      justSelected.current = false;
-      setOpen(false);
-      return;
-    }
-
-    setOpen(true);
-
     let currentCommand = null;
     let currentSearch = text;
 
@@ -99,6 +91,13 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
         source: 'history' as const,
       }));
     setHistorySuggestions(matchedHistory);
+
+    if (justSelected.current) {
+      justSelected.current = false;
+      setOpen(false);
+    } else {
+      setOpen(true);
+    }
   }, [text, history]);
 
   useEffect(() => {
@@ -158,8 +157,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
       aui.composer().setText(`${val} `);
     } else {
       aui.composer().setText(`${parts.join(' ')} ${val} `);
-      setOpen(false);
     }
+    setOpen(false);
   };
 
   const groupClassName =
@@ -209,7 +208,10 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
       onValueChange={setSelectedValue}
     >
       {showMenu && (
-        <div className="absolute bottom-full left-0 w-full mb-2 bg-popover text-popover-foreground border rounded-md shadow-md z-50 overflow-hidden">
+        <div 
+          className="absolute bottom-full left-0 w-full mb-2 bg-popover text-popover-foreground border rounded-md shadow-md z-50 overflow-hidden"
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <Command.List className="max-h-[300px] overflow-y-auto p-1">
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
               {loading ? 'Loading...' : 'No results found.'}
