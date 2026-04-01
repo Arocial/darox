@@ -34,7 +34,7 @@ export const Composer: FC = () => {
       if (saved) {
         try {
           history = JSON.parse(saved);
-        } catch (e) {}
+        } catch {}
       }
       const newHistory = [trimmed, ...history.filter((h) => h !== trimmed)].slice(0, 50);
       localStorage.setItem(key, JSON.stringify(newHistory));
@@ -88,7 +88,7 @@ export const Composer: FC = () => {
       {Object.entries(inputArgs.deferred_tools || {}).map(([id, question]) => (
         <div key={id} className="flex flex-col gap-2 mb-2 mx-2 mt-2">
           <div className="text-sm font-medium text-foreground">
-            <MessageProvider message={{ id: "mock", role: "assistant", content: [], createdAt: new Date(), metadata: {} }} index={0}>
+            <MessageProvider message={{ id: "mock", role: "assistant", content: [], createdAt: new Date(), status: { type: "complete", reason: "stop" }, metadata: { unstable_state: null, unstable_annotations: [], unstable_data: [], steps: [], custom: {} } }} index={0}>
               <TextMessagePartProvider text={question as string}>
                 <MarkdownText />
               </TextMessagePartProvider>
