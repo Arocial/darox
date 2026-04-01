@@ -33,7 +33,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh flex-row">
       <ComposerTabBar />
       <div className="flex-1 min-h-0 relative">
         {tabs.map((tab) => (
