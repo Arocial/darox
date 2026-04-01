@@ -1,0 +1,82 @@
+'use client';
+
+import { create } from 'zustand';
+
+const API_BASE = 'http://localhost:8000';
+
+export type ComposerTab = {
+  id: string;
+  workspace: string;
+};
+
+type ComposerTabsState = {
+  tabs: ComposerTab[];
+  activeId: string | null;
+  loading: boolean;
+
+  setActiveId: (id: string) => void;
+  loadComposers: () => Promise<void>;
+  createComposer: (workspace: string) => Promise<ComposerTab | null>;
+  deleteComposer: (id: string) => Promise<void>;
+};
+
+export const useComposerTabs = create<ComposerTabsState>((set) => ({
+  tabs: [],
+  activeId: null,
+  loading: false,
+
+  setActiveId: (id) => set({ activeId: id }),
+
+  loadComposers: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetch(`${API_BASE}/api/composers`);
+      if (!res.ok) throw new Error('Failed to load composers');
+      const tabs: ComposerTab[] = await res.json();
+      set({
+        tabs,
+        activeId: tabs.length > 0 ? tabs[0].id : null,
+      });
+    } catch (e) {
+      console.error('Failed to load composers', e);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  createComposer: async (workspace: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/composers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace }),
+      });
+      if (!res.ok) throw new Error('Failed to create composer');
+      const tab: ComposerTab = await res.json();
+      set((state) => ({
+        tabs: [...state.tabs, tab],
+        activeId: tab.id,
+      }));
+      return tab;
+    } catch (e) {
+      console.error('Failed to create composer', e);
+      return null;
+    }
+  },
+
+  deleteComposer: async (id: string) => {
+    try {
+      await fetch(`${API_BASE}/api/composers/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Failed to delete composer', e);
+    }
+    set((state) => {
+      const tabs = state.tabs.filter((t) => t.id !== id);
+      let activeId = state.activeId;
+      if (activeId === id) {
+        activeId = tabs.length > 0 ? tabs[0].id : null;
+      }
+      return { tabs, activeId };
+    });
+  },
+}));

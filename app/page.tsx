@@ -1,16 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  useChatRuntime,
-  AssistantChatTransport,
-} from '@assistant-ui/react-ai-sdk';
-import { AssistantRuntimeProvider } from '@assistant-ui/react';
-import { Thread } from '@/components/assistant-ui/thread';
-import {
-  ChatInputContext,
-  defaultInputArgs,
-} from '@/components/darox-ui/chat-input-context';
+import { useEffect } from 'react';
+import { useComposerTabs } from '@/components/darox-ui/composer-store';
+import { ComposerTabBar } from '@/components/darox-ui/composer-tab-bar';
+import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
 
 export type ChatInputEventArgs = {
   deferred_tools: Record<string, string>; // id: question
@@ -25,26 +18,40 @@ export type ChatInputEventResult = {
 };
 
 export default function Chat() {
-  const [inputArgs, setInputArgs] =
-    useState<ChatInputEventArgs>(defaultInputArgs);
+  const { tabs, activeId, loading, loadComposers } = useComposerTabs();
 
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: 'http://localhost:8000/api/chat',
-    }),
-    onData: (dataPart) => {
-      if (dataPart.type === 'data-input-request') {
-        setInputArgs(dataPart.data as ChatInputEventArgs);
-      }
-    },
-  });
+  useEffect(() => {
+    loadComposers();
+  }, [loadComposers]);
+
+  if (loading) {
+    return (
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
+        Loading composers...
+      </div>
+    );
+  }
+
   return (
-    <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
-      <AssistantRuntimeProvider runtime={runtime}>
-        <div className="h-dvh">
-          <Thread />
-        </div>
-      </AssistantRuntimeProvider>
-    </ChatInputContext.Provider>
+    <div className="flex h-dvh flex-col">
+      <ComposerTabBar />
+      <div className="flex-1 min-h-0 relative">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={`absolute inset-0 ${
+              activeId === tab.id ? 'z-10 visible' : 'z-0 invisible'
+            }`}
+          >
+            <ComposerTabPanel composerId={tab.id} />
+          </div>
+        ))}
+        {tabs.length === 0 && (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            No composers open. Click + to create one.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

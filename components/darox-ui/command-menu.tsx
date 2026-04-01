@@ -1,8 +1,9 @@
 'use client';
 
 import { Command } from 'cmdk';
-import { FC, useState, useEffect, useRef } from 'react';
+import { FC, useState, useEffect, useRef, useContext } from 'react';
 import { ComposerPrimitive, useAuiState, useAui } from '@assistant-ui/react';
+import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
 
 type SuggestionItem = {
   id: string;
@@ -13,6 +14,7 @@ type SuggestionItem = {
 };
 
 export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }) => {
+  const composerId = useContext(ComposerIdContext);
   const text = useAuiState((s) => s.composer.text);
   const aui = useAui();
   const [open, setOpen] = useState(false);
@@ -100,7 +102,10 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
     const fetchSuggestions = async () => {
       setLoading(true);
       try {
-        const url = new URL('http://localhost:8000/api/suggestions');
+        const base = composerId
+          ? `http://localhost:8000/api/composers/${composerId}/suggestions`
+          : 'http://localhost:8000/api/suggestions';
+        const url = new URL(base);
         if (command) {
           url.searchParams.set('command', command.slice(1));
           const words = search.split(' ');
@@ -132,7 +137,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
 
     const debounce = setTimeout(fetchSuggestions, 150);
     return () => clearTimeout(debounce);
-  }, [command, search, open]);
+  }, [command, search, open, composerId]);
 
   const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;
