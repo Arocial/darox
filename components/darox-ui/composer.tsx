@@ -17,7 +17,7 @@ export const Composer: FC = () => {
   const aui = useAui();
 
   const [deferredTools, setDeferredTools] = useState<Record<string, string>>({});
-  const [toContinue, setToContinue] = useState<boolean | null>(null);
+  const [retry, setRetry] = useState<boolean | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -47,7 +47,7 @@ export const Composer: FC = () => {
       },
       deferred_tools: deferredTools,
       exception_input: {
-        to_continue: toContinue ?? true,
+        retry: retry ?? true,
       },
     };
 
@@ -59,7 +59,7 @@ export const Composer: FC = () => {
     });
     aui.composer().reset();
     setDeferredTools({});
-    setToContinue(null);
+    setRetry(null);
     setInputArgs(defaultInputArgs);
   };
 
@@ -74,11 +74,11 @@ export const Composer: FC = () => {
           <p className="text-sm">{inputArgs.exception_input.exception}</p>
           <div className="flex items-center gap-4 mt-2">
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" name="to_continue" checked={toContinue === true} onChange={() => setToContinue(true)} required />
+              <input type="radio" name="retry" checked={retry === true} onChange={() => setRetry(true)} required />
               Continue
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" name="to_continue" checked={toContinue === false} onChange={() => setToContinue(false)} required />
+              <input type="radio" name="retry" checked={retry === false} onChange={() => setRetry(false)} required />
               Stop
             </label>
           </div>

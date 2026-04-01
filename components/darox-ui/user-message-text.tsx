@@ -25,7 +25,7 @@ const UserMessageTextImpl: FC = () => {
   const hasDeferredTools =
     parsed.deferred_tools && Object.keys(parsed.deferred_tools).length > 0;
   const hasException =
-    parsed.exception_input && "to_continue" in parsed.exception_input;
+    parsed.exception_input && "retry" in parsed.exception_input;
   const isExceptionOnly = !hasNormalInput && !hasDeferredTools && hasException;
 
   return (
@@ -52,7 +52,7 @@ const UserMessageTextImpl: FC = () => {
         <div className="flex items-center gap-2 text-sm">
           <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />
           <span>
-            {parsed.exception_input.to_continue ? "Continue" : "Stop"}
+            {parsed.exception_input.retry ? "Retry" : "Stop"}
           </span>
         </div>
       )}

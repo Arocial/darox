@@ -8,12 +8,12 @@ import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
 export type ChatInputEventArgs = {
   deferred_tools: Record<string, string>; // id: question
   normal_input: { request: boolean; user_input: string | null };
-  exception_input: { exception: string | null; to_continue: boolean };
+  exception_input: { exception: string | null; retry: boolean };
 };
 
 export type ChatInputEventResult = {
   deferred_tools: Record<string, string>; // id: answer
-  exception_input: { to_continue: boolean };
+  exception_input: { retry: boolean };
   normal_input: { user_input: string | null };
 };
 
