@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   useChatRuntime,
   AssistantChatTransport,
@@ -14,10 +14,11 @@ import {
 import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
 import { WorkspaceContext } from '@/components/darox-ui/workspace-context';
 import type { ChatInputEventArgs } from '@/app/page';
+import type { UIMessage } from 'ai';
 
 const API_BASE = 'http://localhost:8000';
 
-export function ComposerTabPanel({ composerId, workspace }: { composerId: string; workspace: string }) {
+function ComposerChat({ composerId, workspace, initialMessages }: { composerId: string; workspace: string; initialMessages: UIMessage[] }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
 
@@ -25,6 +26,7 @@ export function ComposerTabPanel({ composerId, workspace }: { composerId: string
     transport: new AssistantChatTransport({
       api: `${API_BASE}/api/composers/${composerId}/chat`,
     }),
+    messages: initialMessages,
     onData: (dataPart) => {
       if (dataPart.type === 'data-input-request') {
         setInputArgs(dataPart.data as ChatInputEventArgs);
@@ -45,4 +47,24 @@ export function ComposerTabPanel({ composerId, workspace }: { composerId: string
       </ComposerIdContext.Provider>
     </WorkspaceContext.Provider>
   );
+}
+
+export function ComposerTabPanel({ composerId, workspace }: { composerId: string; workspace: string }) {
+  const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/composers/${composerId}/history`)
+      .then((res) => res.json())
+      .then((data) => setInitialMessages(data))
+      .catch((err) => {
+        console.error('Failed to fetch history', err);
+        setInitialMessages([]);
+      });
+  }, [composerId]);
+
+  if (initialMessages === null) {
+    return <div className="flex h-full items-center justify-center">Loading history...</div>;
+  }
+
+  return <ComposerChat composerId={composerId} workspace={workspace} initialMessages={initialMessages} />;
 }
