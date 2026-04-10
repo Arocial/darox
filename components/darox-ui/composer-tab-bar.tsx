@@ -1,8 +1,11 @@
 'use client';
 
-import { FC } from 'react';
-import { PlusIcon, XIcon } from 'lucide-react';
-import { useComposerTabs } from '@/components/darox-ui/composer-store';
+import { FC, useEffect, useState } from 'react';
+import { HistoryIcon, PlusIcon, XIcon } from 'lucide-react';
+import {
+  useComposerTabs,
+  type SessionInfo,
+} from '@/components/darox-ui/composer-store';
 
 async function pickDirectory(): Promise<string | null> {
   try {
@@ -23,9 +26,38 @@ function formatTabLabel(workspace: string) {
   return { dirName, parentPath };
 }
 
+function formatRelativeTime(isoDate: string): string {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
 export const ComposerTabBar: FC = () => {
-  const { tabs, activeId, setActiveId, createComposer, deleteComposer } =
-    useComposerTabs();
+  const {
+    tabs,
+    activeId,
+    setActiveId,
+    createComposer,
+    deleteComposer,
+    sessions,
+    loadSessions,
+    openSession,
+  } = useComposerTabs();
+  const [showSessions, setShowSessions] = useState(false);
+
+  useEffect(() => {
+    if (showSessions) {
+      loadSessions();
+    }
+  }, [showSessions, loadSessions]);
 
   const handleAdd = async () => {
     const workspace = await pickDirectory();
@@ -37,6 +69,15 @@ export const ComposerTabBar: FC = () => {
     e.stopPropagation();
     await deleteComposer(id);
   };
+
+  const handleOpenSession = async (session: SessionInfo) => {
+    await openSession(session);
+    setShowSessions(false);
+  };
+
+  // Filter out sessions that are already open as tabs
+  const openSessionIds = new Set(tabs.map((t) => t.id));
+  const availableSessions = sessions.filter((s) => !openSessionIds.has(s.id));
 
   return (
     <div className="flex flex-col border-r bg-muted/30 w-56 shrink-0 overflow-y-auto">
@@ -74,16 +115,65 @@ export const ComposerTabBar: FC = () => {
             </button>
           );
         })}
+
+        {showSessions && (
+          <div className="border-t">
+            <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Recent Sessions
+            </div>
+            {availableSessions.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                No recent sessions
+              </div>
+            ) : (
+              availableSessions.map((session) => {
+                const workspace = session.metadata?.workspace || '';
+                const { dirName } = formatTabLabel(workspace);
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => handleOpenSession(session)}
+                    className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate" title={workspace}>
+                        {dirName || session.id.slice(0, 8)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatRelativeTime(session.updated_at)}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
-      <button
-        onClick={handleAdd}
-        className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-t"
-        aria-label="New composer"
-        title="New composer"
-      >
-        <PlusIcon className="size-4" />
-        <span>New</span>
-      </button>
+      <div className="border-t flex">
+        <button
+          onClick={handleAdd}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          aria-label="New composer"
+          title="New composer"
+        >
+          <PlusIcon className="size-4" />
+          <span>New</span>
+        </button>
+        <button
+          onClick={() => setShowSessions(!showSessions)}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm transition-colors ${
+            showSessions
+              ? 'text-foreground bg-muted/50'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+          aria-label="Recent sessions"
+          title="Recent sessions"
+        >
+          <HistoryIcon className="size-4" />
+          <span>Recent</span>
+        </button>
+      </div>
     </div>
   );
 };

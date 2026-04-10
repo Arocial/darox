@@ -18,11 +18,13 @@ export type ChatInputEventResult = {
 };
 
 export default function Chat() {
-  const { tabs, activeId, loading, loadComposers } = useComposerTabs();
+  const { tabs, activeId, loading, loadComposers, loadSessions } =
+    useComposerTabs();
 
   useEffect(() => {
     loadComposers();
-  }, [loadComposers]);
+    loadSessions();
+  }, [loadComposers, loadSessions]);
 
   if (loading) {
     return (

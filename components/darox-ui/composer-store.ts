@@ -9,21 +9,33 @@ export type ComposerTab = {
   workspace: string;
 };
 
+export type SessionInfo = {
+  id: string;
+  composer_name: string;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, string>;
+};
+
 type ComposerTabsState = {
   tabs: ComposerTab[];
   activeId: string | null;
   loading: boolean;
+  sessions: SessionInfo[];
 
   setActiveId: (id: string) => void;
   loadComposers: () => Promise<void>;
   createComposer: (workspace: string) => Promise<ComposerTab | null>;
   deleteComposer: (id: string) => Promise<void>;
+  loadSessions: () => Promise<void>;
+  openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
 };
 
 export const useComposerTabs = create<ComposerTabsState>((set) => ({
   tabs: [],
   activeId: null,
   loading: false,
+  sessions: [],
 
   setActiveId: (id) => set({ activeId: id }),
 
@@ -78,5 +90,37 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
       }
       return { tabs, activeId };
     });
+  },
+
+  loadSessions: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions`);
+      if (!res.ok) throw new Error('Failed to load sessions');
+      const sessions: SessionInfo[] = await res.json();
+      set({ sessions });
+    } catch (e) {
+      console.error('Failed to load sessions', e);
+    }
+  },
+
+  openSession: async (session: SessionInfo) => {
+    const workspace = session.metadata?.workspace;
+    try {
+      const res = await fetch(`${API_BASE}/api/composers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace: workspace || undefined, session_id: session.id }),
+      });
+      if (!res.ok) throw new Error('Failed to open session');
+      const tab: ComposerTab = await res.json();
+      set((state) => ({
+        tabs: [...state.tabs, tab],
+        activeId: tab.id,
+      }));
+      return tab;
+    } catch (e) {
+      console.error('Failed to open session', e);
+      return null;
+    }
   },
 }));
