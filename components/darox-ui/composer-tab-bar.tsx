@@ -110,7 +110,7 @@ export const ComposerTabBar: FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveId(tab.id)}
-                  className={`group relative flex items-start gap-2 w-full px-3 py-2 text-left border-l-2 transition-colors ${
+                  className={`group relative flex items-start gap-2 w-full px-3 py-2 text-left border-r-2 transition-colors ${
                     activeId === tab.id
                       ? 'border-primary text-accent-foreground bg-accent'
                       : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -167,7 +167,7 @@ export const ComposerTabBar: FC = () => {
                     <button
                       key={session.id}
                       onClick={() => handleOpenSession(session)}
-                      className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent"
+                      className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
                     >
                       <MessageSquareIcon className="size-4 mt-0.5 shrink-0 opacity-70" />
                       <div className="flex-1 min-w-0">
