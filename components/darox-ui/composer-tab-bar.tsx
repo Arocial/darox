@@ -1,12 +1,14 @@
 'use client';
 
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useState, useMemo } from 'react';
 import {
   PlusIcon,
   XIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   MessageSquareIcon,
+  FolderIcon,
+  SquarePenIcon,
 } from 'lucide-react';
 import {
   useComposerTabs,
@@ -59,12 +61,13 @@ export const ComposerTabBar: FC = () => {
     openSession,
   } = useComposerTabs();
   const [showSessions, setShowSessions] = useState(true);
+  const [showWorkspaces, setShowWorkspaces] = useState(true);
 
   useEffect(() => {
-    if (showSessions) {
+    if (showSessions || showWorkspaces) {
       loadSessions();
     }
-  }, [showSessions, loadSessions]);
+  }, [showSessions, showWorkspaces, loadSessions]);
 
   const handleAdd = async () => {
     const workspace = await pickDirectory();
@@ -77,6 +80,18 @@ export const ComposerTabBar: FC = () => {
     await deleteComposer(id);
   };
 
+  const handleReset = async (e: React.MouseEvent, id: string, workspace: string) => {
+    e.stopPropagation();
+    const newTab = await createComposer(workspace);
+    if (newTab) {
+      await deleteComposer(id);
+    }
+  };
+
+  const handleNewInWorkspace = async (workspace: string) => {
+    await createComposer(workspace);
+  };
+
   const handleOpenSession = async (session: SessionInfo) => {
     await openSession(session);
   };
@@ -84,6 +99,20 @@ export const ComposerTabBar: FC = () => {
   // Filter out sessions that are already open as tabs
   const openSessionIds = new Set(tabs.map((t) => t.id));
   const availableSessions = sessions.filter((s) => !openSessionIds.has(s.id));
+
+  // Extract unique workspaces from sessions
+  const recentWorkspaces = useMemo(() => {
+    const seen = new Set<string>();
+    const workspaces: { workspace: string; updated_at: string }[] = [];
+    for (const session of sessions) {
+      const ws = session.metadata?.workspace;
+      if (ws && !seen.has(ws)) {
+        seen.add(ws);
+        workspaces.push({ workspace: ws, updated_at: session.updated_at });
+      }
+    }
+    return workspaces;
+  }, [sessions]);
 
   return (
     <div className="flex flex-col border-r bg-muted/30 w-64 shrink-0 h-full">
@@ -127,25 +156,83 @@ export const ComposerTabBar: FC = () => {
                       {parentPath}
                     </div>
                   </div>
-                  <span
-                    onClick={(e) => handleClose(e, tab.id)}
-                    className="mt-0.5 rounded-sm p-0.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity cursor-pointer shrink-0"
-                    aria-label="Close tab"
-                  >
-                    <XIcon className="size-3.5" />
-                  </span>
+                  <div className="flex items-center gap-1 mt-0.5 shrink-0">
+                    <span
+                      onClick={(e) => handleReset(e, tab.id, tab.workspace)}
+                      className={`rounded-sm p-0.5 hover:bg-foreground/20 hover:text-foreground transition-opacity cursor-pointer ${
+                        activeId === tab.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                      title="New chat in workspace"
+                    >
+                      <SquarePenIcon className="size-3.5" />
+                    </span>
+                    <span
+                      onClick={(e) => handleClose(e, tab.id)}
+                      className={`rounded-sm p-0.5 hover:bg-destructive/20 hover:text-destructive transition-opacity cursor-pointer ${
+                        activeId === tab.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                      title="Close tab"
+                    >
+                      <XIcon className="size-3.5" />
+                    </span>
+                  </div>
                 </button>
               );
             })}
           </div>
         )}
 
+        <div className="mb-4">
+          <button
+            onClick={() => setShowWorkspaces(!showWorkspaces)}
+            className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+          >
+            <span>Workspaces</span>
+            {showWorkspaces ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+          </button>
+
+          {showWorkspaces && (
+            <div className="mt-1">
+              {recentWorkspaces.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  No recent workspaces
+                </div>
+              ) : (
+                recentWorkspaces.map(({ workspace }) => {
+                  const { dirName, parentPath } = formatTabLabel(workspace);
+                  return (
+                    <button
+                      key={workspace}
+                      onClick={() => handleNewInWorkspace(workspace)}
+                      className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
+                    >
+                      <FolderIcon className="size-4 mt-0.5 shrink-0 opacity-70" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm truncate" title={workspace}>
+                          {dirName}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate" title={parentPath}>
+                          {parentPath}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
         <div>
           <button
             onClick={() => setShowSessions(!showSessions)}
             className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
           >
-            <span>Recent</span>
+            <span>Recent Sessions</span>
             {showSessions ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
