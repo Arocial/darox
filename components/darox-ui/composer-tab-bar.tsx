@@ -68,10 +68,10 @@ export const ComposerTabBar: FC = () => {
   const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
-    if (backendStatus === 'connected' && (showSessions || showWorkspaces)) {
+    if (backendStatus === 'connected') {
       loadSessions();
     }
-  }, [backendStatus, showSessions, showWorkspaces, loadSessions]);
+  }, [backendStatus, loadSessions]);
 
   const handleAdd = async () => {
     const workspace = await pickDirectory();
@@ -176,17 +176,29 @@ export const ComposerTabBar: FC = () => {
         )}
 
         <div className="mb-4">
-          <button
-            onClick={() => setShowWorkspaces(!showWorkspaces)}
-            className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-          >
-            <span>Workspaces</span>
-            {showWorkspaces ? (
-              <ChevronDownIcon className="size-3.5" />
-            ) : (
-              <ChevronRightIcon className="size-3.5" />
-            )}
-          </button>
+          <div className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors group">
+            <button
+              onClick={() => setShowWorkspaces(!showWorkspaces)}
+              className="flex-1 flex items-center justify-between text-left"
+            >
+              <span>Workspaces</span>
+              {showWorkspaces ? (
+                <ChevronDownIcon className="size-3.5" />
+              ) : (
+                <ChevronRightIcon className="size-3.5" />
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                loadSessions();
+              }}
+              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
+              title="Refresh Workspaces"
+            >
+              <RotateCwIcon className="size-3" />
+            </button>
+          </div>
 
           {showWorkspaces && (
             <div className="mt-1">
@@ -227,17 +239,29 @@ export const ComposerTabBar: FC = () => {
         </div>
 
         <div>
-          <button
-            onClick={() => setShowSessions(!showSessions)}
-            className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-          >
-            <span>Recent Sessions</span>
-            {showSessions ? (
-              <ChevronDownIcon className="size-3.5" />
-            ) : (
-              <ChevronRightIcon className="size-3.5" />
-            )}
-          </button>
+          <div className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors group">
+            <button
+              onClick={() => setShowSessions(!showSessions)}
+              className="flex-1 flex items-center justify-between text-left"
+            >
+              <span>Recent Sessions</span>
+              {showSessions ? (
+                <ChevronDownIcon className="size-3.5" />
+              ) : (
+                <ChevronRightIcon className="size-3.5" />
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                loadSessions();
+              }}
+              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
+              title="Refresh Sessions"
+            >
+              <RotateCwIcon className="size-3" />
+            </button>
+          </div>
 
           {showSessions && (
             <div className="mt-1">
