@@ -50,7 +50,7 @@ export default function Chat() {
         ))}
         {tabs.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            No composers open. Click + to create one.
+            No composers open. Click &quot;New Composer&quot; to create one.
           </div>
         )}
       </div>
