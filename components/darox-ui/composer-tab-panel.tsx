@@ -13,18 +13,18 @@ import {
 } from '@/components/darox-ui/chat-input-context';
 import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
 import { WorkspaceContext } from '@/components/darox-ui/workspace-context';
+import { useBackendStore } from '@/components/darox-ui/backend-store';
 import type { ChatInputEventArgs } from '@/app/page';
 import type { UIMessage } from 'ai';
-
-const API_BASE = 'http://localhost:8000';
 
 function ComposerChat({ composerId, workspace, initialMessages }: { composerId: string; workspace: string; initialMessages: UIMessage[] }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
+  const apiBase = useBackendStore((s) => s.apiBase);
 
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
-      api: `${API_BASE}/api/composers/${composerId}/chat`,
+      api: `${apiBase}/api/composers/${composerId}/chat`,
     }),
     messages: initialMessages,
     onData: (dataPart) => {
@@ -53,7 +53,8 @@ export function ComposerTabPanel({ composerId, workspace }: { composerId: string
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/composers/${composerId}/history`)
+    const apiBase = useBackendStore.getState().apiBase;
+    fetch(`${apiBase}/api/composers/${composerId}/history`)
       .then((res) => res.json())
       .then((data) => setInitialMessages(data))
       .catch((err) => {

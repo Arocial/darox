@@ -1,8 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-
-const API_BASE = 'http://localhost:8000';
+import { useBackendStore } from '@/components/darox-ui/backend-store';
 
 export type ComposerTab = {
   id: string;
@@ -42,7 +41,8 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
   loadComposers: async () => {
     set({ loading: true });
     try {
-      const res = await fetch(`${API_BASE}/api/composers`);
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await fetch(`${apiBase}/api/composers`);
       if (!res.ok) throw new Error('Failed to load composers');
       const tabs: ComposerTab[] = await res.json();
       set({
@@ -58,7 +58,8 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
 
   createComposer: async (workspace: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/composers`, {
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await fetch(`${apiBase}/api/composers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace }),
@@ -78,7 +79,8 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
 
   deleteComposer: async (id: string) => {
     try {
-      await fetch(`${API_BASE}/api/composers/${id}`, { method: 'DELETE' });
+      const apiBase = useBackendStore.getState().apiBase;
+      await fetch(`${apiBase}/api/composers/${id}`, { method: 'DELETE' });
     } catch (e) {
       console.error('Failed to delete composer', e);
     }
@@ -94,7 +96,8 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
 
   loadSessions: async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/sessions`);
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await fetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error('Failed to load sessions');
       const sessions: SessionInfo[] = await res.json();
       set({ sessions });
@@ -106,7 +109,8 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
   openSession: async (session: SessionInfo) => {
     const workspace = session.metadata?.workspace;
     try {
-      const res = await fetch(`${API_BASE}/api/composers`, {
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await fetch(`${apiBase}/api/composers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace: workspace || undefined, session_id: session.id }),

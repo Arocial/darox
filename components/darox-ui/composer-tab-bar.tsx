@@ -9,11 +9,13 @@ import {
   MessageSquareIcon,
   FolderIcon,
   SquarePenIcon,
+  RotateCwIcon,
 } from 'lucide-react';
 import {
   useComposerTabs,
   type SessionInfo,
 } from '@/components/darox-ui/composer-store';
+import { useBackendStore } from '@/components/darox-ui/backend-store';
 
 async function pickDirectory(): Promise<string | null> {
   try {
@@ -61,12 +63,15 @@ export const ComposerTabBar: FC = () => {
   } = useComposerTabs();
   const [showSessions, setShowSessions] = useState(true);
   const [showWorkspaces, setShowWorkspaces] = useState(true);
+  const backendStatus = useBackendStore((s) => s.status);
+  const restartBackend = useBackendStore((s) => s.restartBackend);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
-    if (showSessions || showWorkspaces) {
+    if (backendStatus === 'connected' && (showSessions || showWorkspaces)) {
       loadSessions();
     }
-  }, [showSessions, showWorkspaces, loadSessions]);
+  }, [backendStatus, showSessions, showWorkspaces, loadSessions]);
 
   const handleAdd = async () => {
     const workspace = await pickDirectory();
@@ -115,7 +120,7 @@ export const ComposerTabBar: FC = () => {
 
   return (
     <div className="flex flex-col border-r bg-muted/30 w-64 shrink-0 h-full">
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto py-2 min-h-0">
         {tabs.length > 0 && (
           <div className="mb-4">
             <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -266,6 +271,38 @@ export const ComposerTabBar: FC = () => {
             </div>
           )}
         </div>
+      </div>
+      <div className="border-t px-3 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className={`inline-block size-2 rounded-full ${
+              backendStatus === 'connected'
+                ? 'bg-green-500'
+                : backendStatus === 'connecting'
+                  ? 'bg-yellow-500 animate-pulse'
+                  : 'bg-red-500'
+            }`}
+          />
+          <span>
+            {backendStatus === 'connected'
+              ? 'Connected'
+              : backendStatus === 'connecting'
+                ? 'Connecting...'
+                : 'Disconnected'}
+          </span>
+        </div>
+        <button
+          onClick={async () => {
+            setRestarting(true);
+            await restartBackend();
+            setRestarting(false);
+          }}
+          disabled={restarting}
+          className="p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+          title="Restart Backend"
+        >
+          <RotateCwIcon className={`size-4 ${restarting ? 'animate-spin' : ''}`} />
+        </button>
       </div>
     </div>
   );

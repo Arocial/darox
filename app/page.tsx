@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useComposerTabs } from '@/components/darox-ui/composer-store';
 import { ComposerTabBar } from '@/components/darox-ui/composer-tab-bar';
 import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
+import { useBackendStore } from '@/components/darox-ui/backend-store';
 
 export type ChatInputEventArgs = {
   deferred_tools: Record<string, string>; // id: question
@@ -20,11 +21,35 @@ export type ChatInputEventResult = {
 export default function Chat() {
   const { tabs, activeId, loading, loadComposers, loadSessions } =
     useComposerTabs();
+  const backendStatus = useBackendStore((s) => s.status);
+  const processStatus = useBackendStore((s) => s.processStatus);
 
   useEffect(() => {
-    loadComposers();
-    loadSessions();
-  }, [loadComposers, loadSessions]);
+    const backend = useBackendStore.getState();
+    backend.setupTauriListeners();
+    backend.startHealthCheck();
+    return () => {
+      backend.stopHealthCheck();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (backendStatus === 'connected') {
+      loadComposers();
+      loadSessions();
+    }
+  }, [backendStatus, loadComposers, loadSessions]);
+
+  if (processStatus === 'starting' && backendStatus !== 'connected') {
+    return (
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted-foreground border-t-transparent" />
+          <span>Starting backend...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
