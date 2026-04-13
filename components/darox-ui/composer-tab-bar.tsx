@@ -14,7 +14,6 @@ import {
   useComposerTabs,
   type SessionInfo,
 } from '@/components/darox-ui/composer-store';
-import { Button } from '@/components/ui/button';
 
 async function pickDirectory(): Promise<string | null> {
   try {
@@ -116,17 +115,6 @@ export const ComposerTabBar: FC = () => {
 
   return (
     <div className="flex flex-col border-r bg-muted/30 w-64 shrink-0 h-full">
-      <div className="p-3">
-        <Button
-          onClick={handleAdd}
-          className="w-full justify-start"
-          variant="outline"
-        >
-          <PlusIcon className="size-4 mr-2" />
-          New Composer
-        </Button>
-      </div>
-
       <div className="flex-1 overflow-y-auto py-2">
         {tabs.length > 0 && (
           <div className="mb-4">
@@ -197,12 +185,18 @@ export const ComposerTabBar: FC = () => {
 
           {showWorkspaces && (
             <div className="mt-1">
-              {recentWorkspaces.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground">
-                  No recent workspaces
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
+              >
+                <PlusIcon className="size-4 shrink-0 opacity-70" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">
+                    New (Choose Workspace)
+                  </div>
                 </div>
-              ) : (
-                recentWorkspaces.map(({ workspace }) => {
+              </button>
+              {recentWorkspaces.map(({ workspace }) => {
                   const { dirName, parentPath } = formatTabLabel(workspace);
                   return (
                     <button
@@ -222,7 +216,7 @@ export const ComposerTabBar: FC = () => {
                     </button>
                   );
                 })
-              )}
+              }
             </div>
           )}
         </div>
