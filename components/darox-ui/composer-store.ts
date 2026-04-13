@@ -30,7 +30,7 @@ type ComposerTabsState = {
   openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
 };
 
-export const useComposerTabs = create<ComposerTabsState>((set) => ({
+export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
   tabs: [],
   activeId: null,
   loading: false,
@@ -92,6 +92,9 @@ export const useComposerTabs = create<ComposerTabsState>((set) => ({
       }
       return { tabs, activeId };
     });
+    
+    // Refresh session list after a session is closed or refreshed
+    get().loadSessions();
   },
 
   loadSessions: async () => {
