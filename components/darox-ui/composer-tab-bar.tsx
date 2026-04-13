@@ -116,11 +116,11 @@ export const ComposerTabBar: FC = () => {
 
   return (
     <div className="flex flex-col border-r bg-muted/30 w-64 shrink-0 h-full">
-      <div className="p-3 border-b">
+      <div className="p-3">
         <Button
           onClick={handleAdd}
           className="w-full justify-start"
-          variant="default"
+          variant="outline"
         >
           <PlusIcon className="size-4 mr-2" />
           New Composer
