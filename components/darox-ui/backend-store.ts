@@ -39,7 +39,7 @@ async function probeBackend(port: number, set: SetState, get: GetState) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiBase}/api/sessions`, {
+    const res = await fetch(`${apiBase}/api/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);

@@ -193,7 +193,7 @@ export const ComposerTabBar: FC = () => {
                 e.stopPropagation();
                 loadSessions();
               }}
-              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
+              className="p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
               title="Refresh Workspaces"
             >
               <RotateCwIcon className="size-3" />
@@ -256,7 +256,7 @@ export const ComposerTabBar: FC = () => {
                 e.stopPropagation();
                 loadSessions();
               }}
-              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
+              className="p-0.5 hover:bg-muted/50 rounded transition-all ml-2"
               title="Refresh Sessions"
             >
               <RotateCwIcon className="size-3" />
