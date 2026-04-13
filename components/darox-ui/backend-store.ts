@@ -17,7 +17,7 @@ type BackendState = {
   startHealthCheck: () => void;
   stopHealthCheck: () => void;
   restartBackend: () => Promise<void>;
-  setupTauriListeners: () => Promise<void>;
+  setupTauriListeners: () => Promise<(() => void) | void>;
 };
 
 function makeApiBase(port: number): string {
@@ -25,7 +25,7 @@ function makeApiBase(port: number): string {
 }
 
 const isTauri =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined;
 
 let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -122,7 +122,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       const { invoke } = await import('@tauri-apps/api/core');
 
       // Listen for future status changes
-      listen<{ status: string; port: number; exit_code?: number }>(
+      const unlisten = await listen<{ status: string; port: number; exit_code?: number }>(
         'backend-status',
         (event) => {
           const { status, port } = event.payload;
@@ -155,6 +155,8 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       } catch (e) {
         console.error('Failed to get initial backend status', e);
       }
+
+      return unlisten;
     } catch (e) {
       console.error('Failed to setup Tauri listeners', e);
     }

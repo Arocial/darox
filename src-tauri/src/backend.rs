@@ -80,16 +80,12 @@ async fn check_health(port: u16) -> bool {
 }
 
 pub async fn start(state: &BackendState, app: &AppHandle) -> Result<u16, String> {
+    // Stop existing process if any, without holding the lock during wait
+    stop(state, app).await;
+
     let mut mgr = state.lock().await;
-
-    // Stop existing process if any
-    if let Some(ref mut child) = mgr.child {
-        let _ = child.kill().await;
-        mgr.child = None;
-    }
-
     let port = find_available_port()?;
-    mgr.shutdown.store(false, Ordering::SeqCst);
+    mgr.shutdown = Arc::new(AtomicBool::new(false));
     mgr.restart_count = 0;
     mgr.port = port;
 
@@ -104,14 +100,14 @@ pub async fn start(state: &BackendState, app: &AppHandle) -> Result<u16, String>
     // Spawn health check task
     let state_clone = state.clone();
     let app_clone = app.clone();
+    let shutdown_clone = shutdown.clone();
     tauri::async_runtime::spawn(async move {
-        health_check_loop(state_clone, app_clone, port, shutdown).await;
+        health_check_loop(state_clone, app_clone, port, shutdown_clone).await;
     });
 
     // Spawn monitor task
     let state_clone = state.clone();
     let app_clone = app.clone();
-    let shutdown = state.lock().await.shutdown.clone();
     tauri::async_runtime::spawn(async move {
         monitor_loop(state_clone, app_clone, shutdown).await;
     });
@@ -155,7 +151,11 @@ async fn monitor_loop(state: BackendState, app: AppHandle, shutdown: Arc<AtomicB
         let exit_status = {
             let mut mgr = state.lock().await;
             if let Some(ref mut child) = mgr.child {
-                Some(child.wait().await)
+                match child.try_wait() {
+                    Ok(Some(status)) => Some(Ok(status)),
+                    Ok(None) => None,
+                    Err(e) => Some(Err(e)),
+                }
             } else {
                 None
             }
@@ -208,18 +208,23 @@ async fn monitor_loop(state: BackendState, app: AppHandle, shutdown: Arc<AtomicB
                 break;
             }
             None => {
-                sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_millis(500)).await;
             }
         }
     }
 }
 
 pub async fn stop(state: &BackendState, app: &AppHandle) {
-    let mut mgr = state.lock().await;
-    mgr.shutdown.store(true, Ordering::SeqCst);
-    let port = mgr.port;
+    let mut child_to_kill = {
+        let mut mgr = state.lock().await;
+        mgr.shutdown.store(true, Ordering::SeqCst);
+        let port = mgr.port;
+        mgr.status = ProcessStatus::Stopped;
+        emit_status(app, &mgr.status, port);
+        mgr.child.take()
+    };
 
-    if let Some(ref mut child) = mgr.child {
+    if let Some(ref mut child) = child_to_kill {
         #[cfg(unix)]
         if let Some(pid) = child.id() {
             unsafe {
@@ -241,12 +246,7 @@ pub async fn stop(state: &BackendState, app: &AppHandle) {
         {
             let _ = child.kill().await;
         }
-
-        mgr.child = None;
     }
-
-    mgr.status = ProcessStatus::Stopped;
-    emit_status(app, &mgr.status, port);
 }
 
 pub async fn get_status(state: &BackendState) -> (ProcessStatus, u16) {

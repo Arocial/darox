@@ -26,10 +26,14 @@ export default function Chat() {
 
   useEffect(() => {
     const backend = useBackendStore.getState();
-    backend.setupTauriListeners();
+    let unlisten: (() => void) | void;
+    backend.setupTauriListeners().then((fn) => {
+      unlisten = fn;
+    });
     backend.startHealthCheck();
     return () => {
       backend.stopHealthCheck();
+      if (unlisten) unlisten();
     };
   }, []);
 
