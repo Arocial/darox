@@ -13,7 +13,7 @@ export type SessionInfo = {
   composer_name: string;
   created_at: string;
   updated_at: string;
-  metadata: Record<string, string>;
+  metadata: Record<string, any>;
 };
 
 type ComposerTabsState = {

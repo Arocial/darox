@@ -273,19 +273,30 @@ export const ComposerTabBar: FC = () => {
                 availableSessions.map((session) => {
                   const workspace = session.metadata?.workspace || '';
                   const { dirName } = formatTabLabel(workspace);
+                  const lastMessages = session.metadata?.last_user_messages as string[] | undefined;
+                  const tooltipText = lastMessages && lastMessages.length > 0 
+                    ? lastMessages.join('\n') 
+                    : workspace;
+
                   return (
                     <button
                       key={session.id}
                       onClick={() => handleOpenSession(session)}
                       className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
+                      title={tooltipText}
                     >
                       <MessageSquareIcon className="size-4 mt-0.5 shrink-0 opacity-70" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate" title={workspace}>
+                        <div className="text-sm truncate">
                           {dirName || session.id.slice(0, 8)}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatRelativeTime(session.updated_at)}
+                        <div className="text-xs text-muted-foreground flex justify-between items-center gap-2 mt-0.5">
+                          <span className="truncate flex-1">
+                            {lastMessages && lastMessages.length > 0 ? lastMessages[0] : 'Empty session'}
+                          </span>
+                          <span className="shrink-0 opacity-70 text-[10px]">
+                            {formatRelativeTime(session.updated_at)}
+                          </span>
                         </div>
                       </div>
                     </button>
