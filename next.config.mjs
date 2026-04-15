@@ -1,6 +1,6 @@
 const isProd = process.env.NODE_ENV === 'production';
 
-const internalHost = process.env.TAURI_DEV_HOST || 'localhost';
+const internalHost = process.env.TAURI_DEV_HOST;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -12,8 +12,9 @@ const nextConfig = {
     images: {
         unoptimized: true,
     },
-    // Configure assetPrefix or else the server won't properly resolve your assets.
-    assetPrefix: isProd ? undefined : `http://${internalHost}:3140`,
+    // assetPrefix is only needed for Tauri dev where the webview origin differs from the dev server.
+    // When TAURI_DEV_HOST is not set (plain `npm run dev`), omit it so assets load from the current origin.
+    assetPrefix: isProd ? undefined : (internalHost ? `http://${internalHost}:3140` : undefined),
 };
 
 export default nextConfig;

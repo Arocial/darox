@@ -21,7 +21,9 @@ type BackendState = {
 };
 
 function makeApiBase(port: number): string {
-  return `http://127.0.0.1:${port}`;
+  const hostname =
+    typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+  return `http://${hostname}:${port}`;
 }
 
 const isTauri =
