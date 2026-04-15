@@ -17,6 +17,7 @@ import {
   type SessionInfo,
 } from '@/components/darox-ui/composer-store';
 import { useBackendStore } from '@/components/darox-ui/backend-store';
+import { toast } from 'sonner';
 
 async function pickDirectory(): Promise<string | null> {
   try {
@@ -88,7 +89,12 @@ export const ComposerTabBar: FC = () => {
 
   const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await deleteSession(id);
+    const success = await deleteSession(id);
+    if (success) {
+      toast.success('Session deleted successfully');
+    } else {
+      toast.error('Failed to delete session');
+    }
   };
 
   const handleReset = async (e: React.MouseEvent, id: string, workspace: string) => {
