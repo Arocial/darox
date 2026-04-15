@@ -26,6 +26,7 @@ type ComposerTabsState = {
   loadComposers: () => Promise<void>;
   createComposer: (workspace: string) => Promise<ComposerTab | null>;
   deleteComposer: (id: string) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
   loadSessions: () => Promise<void>;
   openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
 };
@@ -95,6 +96,16 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
     
     // Refresh session list after a session is closed or refreshed
     get().loadSessions();
+  },
+
+  deleteSession: async (id: string) => {
+    try {
+      const apiBase = useBackendStore.getState().apiBase;
+      await fetch(`${apiBase}/api/sessions/${id}`, { method: 'DELETE' });
+      await get().loadSessions();
+    } catch (e) {
+      console.error('Failed to delete session', e);
+    }
   },
 
   loadSessions: async () => {

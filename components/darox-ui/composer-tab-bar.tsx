@@ -57,6 +57,7 @@ export const ComposerTabBar: FC = () => {
     setActiveId,
     createComposer,
     deleteComposer,
+    deleteSession,
     sessions,
     loadSessions,
     openSession,
@@ -82,6 +83,11 @@ export const ComposerTabBar: FC = () => {
   const handleClose = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     await deleteComposer(id);
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    await deleteSession(id);
   };
 
   const handleReset = async (e: React.MouseEvent, id: string, workspace: string) => {
@@ -282,7 +288,7 @@ export const ComposerTabBar: FC = () => {
                     <button
                       key={session.id}
                       onClick={() => handleOpenSession(session)}
-                      className="flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
+                      className="group flex items-start gap-2 w-full px-3 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-r-2 border-transparent"
                       title={tooltipText}
                     >
                       <MessageSquareIcon className="size-4 mt-0.5 shrink-0 opacity-70" />
@@ -299,6 +305,13 @@ export const ComposerTabBar: FC = () => {
                           </span>
                         </div>
                       </div>
+                      <span
+                        onClick={(e) => handleDeleteSession(e, session.id)}
+                        className="rounded-sm p-0.5 hover:bg-destructive/20 hover:text-destructive transition-opacity cursor-pointer opacity-0 group-hover:opacity-100"
+                        title="Delete session"
+                      >
+                        <XIcon className="size-3.5" />
+                      </span>
                     </button>
                   );
                 })
