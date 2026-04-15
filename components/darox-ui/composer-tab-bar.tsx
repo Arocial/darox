@@ -136,7 +136,8 @@ export const ComposerTabBar: FC = () => {
       <div className="flex-1 overflow-y-auto py-2 min-h-0">
         {tabs.length > 0 && (
           <div className="mb-4">
-            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="px-3 py-1.5 text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
               Active
             </div>
             {tabs.map((tab) => {
