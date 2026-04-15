@@ -4,6 +4,7 @@ import { FC, useEffect, useState, useMemo } from 'react';
 import {
   PlusIcon,
   XIcon,
+  TrashIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   MessageSquareIcon,
@@ -310,7 +311,7 @@ export const ComposerTabBar: FC = () => {
                         className="rounded-sm p-0.5 hover:bg-destructive/20 hover:text-destructive transition-opacity cursor-pointer opacity-0 group-hover:opacity-100"
                         title="Delete session"
                       >
-                        <XIcon className="size-3.5" />
+                        <TrashIcon className="size-3.5" />
                       </span>
                     </button>
                   );
