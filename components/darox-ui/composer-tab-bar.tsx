@@ -136,8 +136,7 @@ export const ComposerTabBar: FC = () => {
       <div className="flex-1 overflow-y-auto py-2 min-h-0">
         {tabs.length > 0 && (
           <div className="mb-4">
-            <div className="px-3 py-1.5 text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <div className="px-3 py-1.5 text-xs font-bold text-primary uppercase tracking-wider">
               Active
             </div>
             {tabs.map((tab) => {
@@ -148,16 +147,17 @@ export const ComposerTabBar: FC = () => {
                   onClick={() => setActiveId(tab.id)}
                   className={`group relative flex items-start gap-2 w-full px-3 py-2 text-left border-r-2 transition-colors ${
                     activeId === tab.id
-                      ? 'border-primary text-accent-foreground bg-accent'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                      ? 'border-primary text-foreground bg-accent shadow-sm'
+                      : 'border-transparent text-foreground/80 hover:text-foreground hover:bg-muted/50'
                   }`}
                 >
+                  <MessageSquareIcon className={`size-4 mt-0.5 shrink-0 ${activeId === tab.id ? 'text-primary' : 'opacity-70'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate" title={tab.workspace}>
+                    <div className={`text-sm truncate ${activeId === tab.id ? 'font-bold' : 'font-medium'}`} title={tab.workspace}>
                       {dirName}
                     </div>
                     <div
-                      className="text-xs text-muted-foreground truncate"
+                      className={`text-xs truncate ${activeId === tab.id ? 'text-muted-foreground/80' : 'text-muted-foreground'}`}
                       title={`${tab.workspace} ${tab.id}`}
                     >
                       {parentPath}
