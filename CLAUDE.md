@@ -9,13 +9,14 @@ Darox is a chatbot UI built with Next.js (static export) and Tauri for cross-pla
 ## Commands
 
 ```bash
-npm run dev        # Dev server on http://localhost:3140
-npm run build      # Next.js static build (output to /out for Tauri)
-npm run lint       # ESLint
-npm run tauri      # Tauri CLI (e.g., npm run tauri dev, npm run tauri build)
+npm run dev         # Dev server on http://localhost:3140
+npm run build:check # Verification build into .next-check — safe to run while `npm run dev` is live
+npm run lint        # ESLint
+npm run tauri       # Tauri CLI (e.g., npm run tauri dev, npm run tauri build)
 ```
 
-Use `npm` as the package manager.
+**Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
+Use `npx tsc --noEmit && npm run lint` instead or  `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 
 ## Architecture
 
