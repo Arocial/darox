@@ -28,7 +28,7 @@ function makeApiBase(port: number): string {
 }
 
 export const isTauri =
-  typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 

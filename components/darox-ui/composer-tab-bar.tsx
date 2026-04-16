@@ -123,7 +123,7 @@ export const ComposerTabBar: FC = () => {
     const workspaces: { workspace: string; updated_at: string }[] = [];
     for (const session of sessions) {
       const ws = session.metadata?.workspace;
-      if (ws && !seen.has(ws)) {
+      if (typeof ws === 'string' && !seen.has(ws)) {
         seen.add(ws);
         workspaces.push({ workspace: ws, updated_at: session.updated_at });
       }
@@ -285,7 +285,7 @@ export const ComposerTabBar: FC = () => {
                 </div>
               ) : (
                 availableSessions.map((session) => {
-                  const workspace = session.metadata?.workspace || '';
+                  const workspace = (session.metadata?.workspace as string) || '';
                   const { dirName } = formatTabLabel(workspace);
                   const lastMessages = session.metadata?.last_user_messages as string[] | undefined;
                   const tooltipText = lastMessages && lastMessages.length > 0 

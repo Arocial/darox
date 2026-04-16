@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useComposerTabs } from '@/components/darox-ui/composer-store';
 import { ComposerTabBar } from '@/components/darox-ui/composer-tab-bar';
 import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
@@ -24,6 +24,11 @@ export default function Chat() {
     useComposerTabs();
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const backend = useBackendStore.getState();
@@ -44,6 +49,10 @@ export default function Chat() {
       loadSessions();
     }
   }, [backendStatus, loadComposers, loadSessions]);
+
+  if (!mounted) {
+    return null;
+  }
 
   if (!isTauri && backendStatus !== 'connected') {
     return <BrowserApiPrompt />;
