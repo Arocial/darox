@@ -12,6 +12,7 @@ type BackendState = {
   processStatus: BackendProcessStatus;
 
   setPort: (port: number) => void;
+  setApiBase: (apiBase: string) => void;
   setStatus: (status: BackendStatus) => void;
   setProcessStatus: (status: BackendProcessStatus) => void;
   startHealthCheck: () => void;
@@ -26,8 +27,8 @@ function makeApiBase(port: number): string {
   return `http://${hostname}:${port}`;
 }
 
-const isTauri =
-  typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined;
+export const isTauri =
+  typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
 
 let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -35,9 +36,9 @@ type SetState = (partial: Partial<BackendState>) => void;
 type GetState = () => BackendState;
 
 /** Try to reach the backend HTTP endpoint. Updates store status accordingly. */
-async function probeBackend(port: number, set: SetState, get: GetState) {
-  if (port === 0) return;
-  const apiBase = makeApiBase(port);
+async function probeBackend(set: SetState, get: GetState) {
+  const apiBase = get().apiBase;
+  if (!apiBase || apiBase.endsWith(':0')) return;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
@@ -86,13 +87,14 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   processStatus: 'stopped',
 
   setPort: (port) => set({ port, apiBase: makeApiBase(port) }),
+  setApiBase: (apiBase) => set({ apiBase }),
 
   setStatus: (status) => set({ status }),
   setProcessStatus: (processStatus) => set({ processStatus }),
 
   startHealthCheck: () => {
     if (healthCheckInterval) return;
-    const check = () => probeBackend(get().port, set, get);
+    const check = () => probeBackend(set, get);
     check();
     healthCheckInterval = setInterval(check, 5000);
   },
@@ -134,7 +136,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
           applyProcessStatus(status, set);
           // When backend reports Running, immediately probe HTTP
           if (status === 'Running' && port > 0) {
-            probeBackend(port, set, get);
+            probeBackend(set, get);
           }
         },
       );
@@ -152,7 +154,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
         // If backend is already starting/running, probe HTTP immediately
         if (port > 0 && (statusStr === 'Running' || statusStr === 'Starting')) {
-          await probeBackend(port, set, get);
+          await probeBackend(set, get);
         }
       } catch (e) {
         console.error('Failed to get initial backend status', e);

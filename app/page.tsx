@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { useComposerTabs } from '@/components/darox-ui/composer-store';
 import { ComposerTabBar } from '@/components/darox-ui/composer-tab-bar';
 import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
-import { useBackendStore } from '@/components/darox-ui/backend-store';
+import { useBackendStore, isTauri } from '@/components/darox-ui/backend-store';
+import { BrowserApiPrompt } from '@/components/darox-ui/browser-api-prompt';
 
 export type ChatInputEventArgs = {
   deferred_tools: Record<string, string>; // id: question
@@ -43,6 +44,10 @@ export default function Chat() {
       loadSessions();
     }
   }, [backendStatus, loadComposers, loadSessions]);
+
+  if (!isTauri && backendStatus !== 'connected') {
+    return <BrowserApiPrompt />;
+  }
 
   if (processStatus === 'starting' && backendStatus !== 'connected') {
     return (
