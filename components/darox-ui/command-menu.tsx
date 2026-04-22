@@ -269,7 +269,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
       )}
       <ComposerPrimitive.Input
         disabled={disabled}
-        placeholder="Send a message (Shift+Enter to insert newline)..."
+        placeholder="Send a message (Shift+Enter or Alt+Enter to insert newline)..."
         className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
         rows={1}
         autoFocus
@@ -285,6 +285,21 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({ disabled }
           setIsFocused(false);
         }}
         onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.altKey) {
+            e.preventDefault();
+            const target = e.currentTarget as HTMLTextAreaElement;
+            const start = target.selectionStart;
+            const end = target.selectionEnd;
+            const value = target.value;
+            const newValue =
+              value.substring(0, start) + '\n' + value.substring(end);
+            aui.composer().setText(newValue);
+            requestAnimationFrame(() => {
+              target.selectionStart = target.selectionEnd = start + 1;
+            });
+            return;
+          }
+
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
           if (!showMenu) {
             // Prevent cmdk from intercepting keys when the menu is closed,
