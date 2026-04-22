@@ -6,6 +6,8 @@ import { useBackendStore } from '@/components/darox-ui/backend-store';
 export type ComposerTab = {
   id: string;
   workspace: string;
+  main_agent: string;
+  subagents: string[];
 };
 
 export type SessionInfo = {
