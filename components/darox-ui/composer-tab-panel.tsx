@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import {
-  useChatRuntime,
-  AssistantChatTransport,
-} from '@assistant-ui/react-ai-sdk';
+import { useChatRuntime } from '@assistant-ui/react-ai-sdk';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { Thread } from '@/components/assistant-ui/thread';
 import {
@@ -15,6 +12,11 @@ import { ComposerIdContext } from '@/components/darox-ui/composer-id-context';
 import { AgentNameContext } from '@/components/darox-ui/agent-name-context';
 import { WorkspaceContext } from '@/components/darox-ui/workspace-context';
 import { useBackendStore } from '@/components/darox-ui/backend-store';
+import {
+  acquireTransport,
+  releaseTransport,
+  httpBaseToWsUrl,
+} from '@/components/darox-ui/websocket-chat-transport';
 import type { ChatInputEventArgs } from '@/app/page';
 import type { UIMessage } from 'ai';
 
@@ -33,17 +35,30 @@ function AgentChat({
     useState<ChatInputEventArgs>(defaultInputArgs);
   const apiBase = useBackendStore((s) => s.apiBase);
 
+  const url = useMemo(
+    () => httpBaseToWsUrl(apiBase, composerId, agentName),
+    [apiBase, composerId, agentName],
+  );
+  const transport = useMemo(() => acquireTransport(url), [url]);
+
+  useEffect(() => {
+    return () => {
+      releaseTransport(url);
+    };
+  }, [url]);
+
   const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: `${apiBase}/api/composers/${composerId}/agents/${agentName}/chat`,
-    }),
+    transport,
     messages: initialMessages,
+    // resume: true triggers transport.reconnectToStream() on mount so we
+    // start draining server-pushed events before the user submits anything.
+    resume: true,
     onData: (dataPart) => {
       if (dataPart.type === 'data-input-request') {
         setInputArgs(dataPart.data as ChatInputEventArgs);
       }
     },
-  });
+  } as Parameters<typeof useChatRuntime>[0]);
 
   return (
     <WorkspaceContext.Provider value={workspace}>
