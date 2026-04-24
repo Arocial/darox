@@ -92,9 +92,9 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/history`)
+    fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/state`)
       .then((res) => res.json())
-      .then((data) => setInitialMessages(data))
+      .then((data) => setInitialMessages(data.history))
       .catch((err) => {
         console.error('Failed to fetch history', err);
         setInitialMessages([]);
