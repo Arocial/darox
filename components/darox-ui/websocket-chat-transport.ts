@@ -196,7 +196,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       this.closeController();
     }
 
-    return new ReadableStream<UIMessageChunk>({
+    const stream = new ReadableStream<UIMessageChunk>({
       start: (controller) => {
         this.controller = controller;
         this.controllerClosed = false;
@@ -206,6 +206,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         this.controllerClosed = true;
       },
     });
+
+    try {
+      this.ws!.send(JSON.stringify({ resume: true }));
+    } catch (err) {
+      this.failController(err instanceof Error ? err : new Error(String(err)));
+    }
+
+    return stream;
   };
 
   close() {
