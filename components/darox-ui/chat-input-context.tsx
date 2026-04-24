@@ -5,7 +5,7 @@ import type { ChatInputEventArgs } from '@/app/page';
 
 export const defaultInputArgs: ChatInputEventArgs = {
   deferred_tools: {},
-  normal_input: { request: true, user_input: null },
+  normal_input: { request: false, user_input: null },
   exception_input: { exception: null, retry: true },
 };
 
