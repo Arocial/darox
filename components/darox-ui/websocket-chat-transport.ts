@@ -203,6 +203,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     await this.ensureOpen();
 
+    // Avoid close the previous controller on remount of strict-mode.
+    // We didn't close the controller on unmount, So we wait for previous controller
+    // to finish by itself.
+    for (let i = 0; i < 10; i++) {
+      if (!this.controller || this.controllerClosed) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     if (this.controller && !this.controllerClosed) {
       this.closeController();
     }
