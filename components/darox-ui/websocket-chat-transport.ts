@@ -13,6 +13,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private url: string;
   private ws: WebSocket | null = null;
   private openPromise: Promise<void> | null = null;
+  private closingPromise: Promise<void> | null = null;
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
@@ -190,6 +191,16 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   };
 
   reconnectToStream: ChatTransport<UI_MESSAGE>['reconnectToStream'] = async () => {
+    // If a previous close() is still tearing the socket down, wait for its
+    // onclose to fire before opening a new one. Avoids Strict-Mode churn
+    // where mount → unmount → mount races a CONNECTING socket against a new
+    // ensureOpen(), and prevents the stale onclose from clobbering the new
+    // controller.
+    // Note: We are caching websocket connection for now and hence no closingPromise.
+    // As a result, the closingPromise mechanism is not necessary in current impl.
+    if (this.closingPromise) {
+      await this.closingPromise;
+    }
     await this.ensureOpen();
 
     if (this.controller && !this.controllerClosed) {
@@ -218,13 +229,33 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
   close() {
     this.failController(new Error('Transport closed'));
-    if (this.ws) {
-      try {
-        this.ws.close();
-      } catch {}
-      this.ws = null;
-    }
+    const ws = this.ws;
+    this.ws = null;
     this.openPromise = null;
+    if (!ws) return;
+
+    if (ws.readyState === WebSocket.CLOSED) {
+      this.closingPromise = null;
+      return;
+    }
+
+    // Detach the handlers bound to `this` — a late onclose firing after a
+    // new socket has been created would otherwise null out the new ws and
+    // fail the new controller.
+    ws.onopen = null;
+    ws.onerror = null;
+    ws.onmessage = null;
+    const closing = new Promise<void>((resolve) => {
+      ws.onclose = () => {
+        ws.onclose = null;
+        if (this.closingPromise === closing) this.closingPromise = null;
+        resolve();
+      };
+    });
+    this.closingPromise = closing;
+    try {
+      ws.close();
+    } catch {}
   }
 }
 
