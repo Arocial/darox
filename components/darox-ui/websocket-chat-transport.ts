@@ -47,7 +47,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         const wasOpening = this.openPromise;
         this.ws = null;
         this.openPromise = null;
-        this.failController(new Error('WebSocket closed'));
         if (wasOpening) reject(new Error('WebSocket closed before open'));
       };
       ws.onmessage = (ev) => this.handleMessage(ev.data);
@@ -224,7 +223,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         this.controllerClosed = true;
       },
     });
-
     try {
       this.ws!.send(JSON.stringify({ resume: true }));
     } catch (err) {
@@ -235,7 +233,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   };
 
   close() {
-    this.failController(new Error('Transport closed'));
     const ws = this.ws;
     this.ws = null;
     this.openPromise = null;
