@@ -31,6 +31,7 @@ type ComposerTabsState = {
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
   openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
+  clearComposers: () => void;
 };
 
 export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
@@ -146,4 +147,12 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
       return null;
     }
   },
+
+  clearComposers: () => set({ tabs: [], activeId: null }),
 }));
+
+useBackendStore.subscribe((state, prevState) => {
+  if (state.processStatus === 'starting' && prevState.processStatus !== 'starting') {
+    useComposerTabs.getState().clearComposers();
+  }
+});
