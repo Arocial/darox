@@ -135,6 +135,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       return JSON.parse(text) as ChatInputEventResult;
     } catch {
       return {
+        req_id: '',
         normal_input: { user_input: text },
         deferred_tools: {},
         exception_input: { retry: true },

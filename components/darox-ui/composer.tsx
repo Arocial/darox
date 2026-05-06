@@ -42,6 +42,7 @@ export const Composer: FC = () => {
     }
 
     const result: ChatInputEventResult = {
+      req_id: inputArgs.req_id,
       normal_input: {
         user_input: inputArgs.normal_input?.request ? text : null,
       },

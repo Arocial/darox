@@ -4,6 +4,7 @@ import { createContext, useContext } from 'react';
 import type { ChatInputEventArgs } from '@/app/page';
 
 export const defaultInputArgs: ChatInputEventArgs = {
+  req_id: '',
   deferred_tools: {},
   normal_input: { request: false, user_input: null },
   exception_input: { exception: null, retry: true },
