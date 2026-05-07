@@ -38,9 +38,10 @@ export default function Chat() {
     backend.setupTauriListeners().then((fn) => {
       unlisten = fn;
     });
-    backend.startHealthCheck();
+    if (!isTauri) {
+      backend.probeBackend();
+    }
     return () => {
-      backend.stopHealthCheck();
       if (unlisten) unlisten();
     };
   }, []);

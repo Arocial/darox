@@ -15,8 +15,7 @@ type BackendState = {
   setApiBase: (apiBase: string) => void;
   setStatus: (status: BackendStatus) => void;
   setProcessStatus: (status: BackendProcessStatus) => void;
-  startHealthCheck: () => void;
-  stopHealthCheck: () => void;
+  probeBackend: () => Promise<void>;
   restartBackend: () => Promise<void>;
   setupTauriListeners: () => Promise<(() => void) | void>;
 };
@@ -29,8 +28,6 @@ function makeApiBase(port: number): string {
 
 export const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-
-let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 type SetState = (partial: Partial<BackendState>) => void;
 type GetState = () => BackendState;
@@ -92,18 +89,8 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   setStatus: (status) => set({ status }),
   setProcessStatus: (processStatus) => set({ processStatus }),
 
-  startHealthCheck: () => {
-    if (healthCheckInterval) return;
-    const check = () => probeBackend(set, get);
-    check();
-    healthCheckInterval = setInterval(check, 5000);
-  },
-
-  stopHealthCheck: () => {
-    if (healthCheckInterval) {
-      clearInterval(healthCheckInterval);
-      healthCheckInterval = null;
-    }
+  probeBackend: async () => {
+    await probeBackend(set, get);
   },
 
   restartBackend: async () => {
