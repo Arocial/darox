@@ -18,6 +18,11 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     null;
   private controllerClosed = true;
   private abortCleanup: (() => void) | null = null;
+  // FIFO of resolvers awaiting an ack for a sent command. Acks are 1:1 with
+  // client-sent frames per the API contract.
+  private commandAckQueue: Array<
+    (ack: { status: string; output?: string }) => void
+  > = [];
 
   constructor(options: { url: string }) {
     this.url = options.url;
@@ -103,11 +108,17 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     if (!msg || typeof msg !== 'object' || !('type' in msg)) return;
 
     switch (msg.type) {
-      case 'ack':
-        if ((msg as { status?: string }).status === 'cancelled') {
+      case 'ack': {
+        const ack = msg as { status?: string; output?: string };
+        const resolver = this.commandAckQueue.shift();
+        if (resolver) {
+          resolver({ status: ack.status ?? 'ok', output: ack.output });
+        }
+        if (ack.status === 'cancelled') {
           this.closeController();
         }
         return;
+      }
       case 'step-done':
         return;
       case 'data-input-request':
@@ -189,6 +200,32 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     return stream;
   };
+
+  /**
+   * Send a structured command (slash-equivalent) without going through the
+   * LLM. Returns the server's ack. The caller is responsible for serializing
+   * concurrent calls if it cares about ack ordering.
+   */
+  async sendCommand(event: {
+    type: string;
+    [key: string]: unknown;
+  }): Promise<{ status: string; output?: string }> {
+    await this.ensureOpen();
+    const ackPromise = new Promise<{ status: string; output?: string }>(
+      (resolve) => {
+        this.commandAckQueue.push(resolve);
+      },
+    );
+    try {
+      this.ws!.send(JSON.stringify({ command: event }));
+    } catch (err) {
+      // Pop the resolver we just pushed so the queue stays consistent.
+      const idx = this.commandAckQueue.length - 1;
+      if (idx >= 0) this.commandAckQueue.splice(idx, 1);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    return ackPromise;
+  }
 
   reconnectToStream: ChatTransport<UI_MESSAGE>['reconnectToStream'] = async () => {
     // If a previous close() is still tearing the socket down, wait for its

@@ -17,6 +17,7 @@ import {
   releaseTransport,
   httpBaseToWsUrl,
 } from '@/components/darox-ui/websocket-chat-transport';
+import { ModelPill } from '@/components/darox-ui/model-pill';
 import type { ChatInputEventArgs } from '@/app/page';
 import type { UIMessage } from 'ai';
 
@@ -166,6 +167,9 @@ export function ComposerTabPanel({
           />
         </div>
       ))}
+      <div className="absolute top-3 left-3 z-20">
+        <ModelPill composerId={composerId} agentName={activeAgent} />
+      </div>
       {agents.length > 1 && (
         <div className="absolute top-3 right-3 z-20 flex flex-col rounded-lg border bg-popover/95 backdrop-blur-sm shadow-md py-1 min-w-32 max-w-48">
           <div className="px-3 py-1.5 mb-2 text-xs font-semibold text-foreground/80 uppercase tracking-wider bg-muted/60 border-b border-border rounded-t-md">
