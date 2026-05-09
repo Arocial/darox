@@ -37,8 +37,19 @@ impl Default for BackendManager {
 
 pub type BackendState = Arc<Mutex<BackendManager>>;
 
-const BINARY: &str = "arox-coder";
 const HOST: &str = "127.0.0.1";
+
+fn get_backend_command() -> String {
+    let mut args = std::env::args();
+    while let Some(arg) = args.next() {
+        if arg == "--backend" {
+            if let Some(cmd) = args.next() {
+                return cmd;
+            }
+        }
+    }
+    "arox-coder".to_string()
+}
 
 fn find_available_port() -> Result<u16, String> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0")
@@ -63,7 +74,16 @@ fn emit_status(app: &AppHandle, status: &ProcessStatus, port: u16) {
 }
 
 fn spawn_process(port: u16) -> Result<Child, String> {
-    Command::new(BINARY)
+    let cmd_str = get_backend_command();
+    let mut parts = cmd_str.split_whitespace();
+    let binary = parts.next().unwrap_or("arox-coder");
+    
+    let mut command = Command::new(binary);
+    for part in parts {
+        command.arg(part);
+    }
+
+    command
         .args([
             "--ui", "vercel_ai",
             "--host", HOST,
