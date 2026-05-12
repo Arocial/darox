@@ -4,15 +4,16 @@ This file provides guidance to coding agents (AI assistants) when working with c
 
 ## Project Overview
 
-Darox is a chatbot UI built with Next.js (static export) and Tauri for cross-platform desktop distribution. It uses the AI SDK for chat and @assistant-ui/react for conversation UI components.
+Darox is a chatbot UI built with Next.js (static export) and Electron for cross-platform desktop distribution. It uses the AI SDK for chat and @assistant-ui/react for conversation UI components.
 
 ## Commands
 
 ```bash
-npm run dev         # Dev server on http://localhost:3140
-npm run build:check # Verification build into .next-check — safe to run while `npm run dev` is live
-npm run lint        # ESLint
-npm run tauri       # Tauri CLI (e.g., npm run tauri dev, npm run tauri build)
+npm run dev           # Next dev server on http://localhost:3140
+npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
+npm run lint          # ESLint
+npm run electron:dev  # Run Next dev + Electron shell together
+npm run electron:build # Static export + electron-builder package
 ```
 
 **Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
@@ -21,13 +22,17 @@ Use `npx tsc --noEmit && npm run lint` instead or  `npm run build:check` (isolat
 ## Architecture
 
 ### Frontend
-- **Next.js 15** with static export (`output: 'export'`) — no SSR, built for Tauri embedding
+- **Next.js 15** with static export (`output: 'export'`) — no SSR, embedded by Electron
 - **React 18** + **TypeScript 5.8**
 - **TailwindCSS 4** with HSL CSS variables for theming (light/dark via class)
 
 ### Desktop
-- **Tauri 2** wraps the static export from `/out`
-- Dev server runs on port 3140; Tauri's `beforeDevCommand` runs `npm run dev`
+- **Electron** main process under `/electron` (compiled to `/electron/dist`)
+  - `main.ts` — window, IPC handlers, `app://` protocol that serves `/out` in prod
+  - `preload.ts` — exposes `window.darox` (`invoke`, `on`, `openDialog`) via `contextBridge`
+  - `backend.ts` — spawns the external backend, port discovery, health check, exponential-backoff restart, graceful shutdown
+- Dev: `electron:dev` runs Next on 3140 and loads it into a BrowserWindow
+- Prod: static export in `/out` is served through a custom `app://` protocol
 
 ### Backend (external)
 - Chat endpoint: `http://localhost:8000/api/chat`
