@@ -55,6 +55,7 @@
     "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "^15.0.0",
+    "png2icons": "^2.0.1",
     "tailwindcss": "^4.2.1",
     "typescript": "5.8.3",
     "wait-on": "^9.0.10"

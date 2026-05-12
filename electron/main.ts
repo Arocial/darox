@@ -70,6 +70,7 @@ function buildContextMenu(win: BrowserWindow, params: Electron.ContextMenuParams
 async function createWindow() {
   mainWindow = new BrowserWindow({
     title: 'darox',
+    icon: path.join(__dirname, '..', '..', 'resources', 'icon.png'),
     width: 800,
     height: 600,
     resizable: true,
