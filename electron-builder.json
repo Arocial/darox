@@ -1,0 +1,29 @@
+{
+  "appId": "net.solariar.darox",
+  "productName": "darox",
+  "directories": {
+    "output": "release",
+    "buildResources": "resources"
+  },
+  "files": [
+    "electron/dist/**/*",
+    "out/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "electron/dist/main.js"
+  },
+  "mac": {
+    "category": "public.app-category.developer-tools",
+    "icon": "resources/icon.icns",
+    "target": ["dmg"]
+  },
+  "win": {
+    "icon": "resources/icon.ico",
+    "target": ["nsis"]
+  },
+  "linux": {
+    "category": "Development",
+    "target": ["AppImage", "deb"]
+  }
+}

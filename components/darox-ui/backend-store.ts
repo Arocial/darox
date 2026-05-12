@@ -17,7 +17,7 @@ type BackendState = {
   setProcessStatus: (status: BackendProcessStatus) => void;
   probeBackend: () => Promise<void>;
   restartBackend: () => Promise<void>;
-  setupTauriListeners: () => Promise<(() => void) | void>;
+  setupDesktopListeners: () => Promise<(() => void) | void>;
 };
 
 function makeApiBase(port: number): string {
@@ -26,8 +26,8 @@ function makeApiBase(port: number): string {
   return `http://${hostname}:${port}`;
 }
 
-export const isTauri =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+export const isDesktop =
+  typeof window !== 'undefined' && typeof window.darox !== 'undefined';
 
 type SetState = (partial: Partial<BackendState>) => void;
 type GetState = () => BackendState;
@@ -77,6 +77,8 @@ function applyProcessStatus(
   }
 }
 
+type StatusPayload = { status: string; port: number; exit_code?: number | null };
+
 export const useBackendStore = create<BackendState>((set, get) => ({
   apiBase: makeApiBase(0),
   port: 0,
@@ -94,11 +96,11 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   },
 
   restartBackend: async () => {
-    if (!isTauri) return;
+    const api = typeof window !== 'undefined' ? window.darox : undefined;
+    if (!api) return;
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       set({ processStatus: 'starting', status: 'connecting' });
-      const port = await invoke<number>('restart_backend');
+      const port = await api.invoke<number>('restart_backend');
       set({ port, apiBase: makeApiBase(port) });
     } catch (e) {
       console.error('Failed to restart backend', e);
@@ -106,40 +108,34 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     }
   },
 
-  setupTauriListeners: async () => {
-    if (!isTauri) return;
+  setupDesktopListeners: async () => {
+    const api = typeof window !== 'undefined' ? window.darox : undefined;
+    if (!api) return;
     try {
-      const { listen } = await import('@tauri-apps/api/event');
-      const { invoke } = await import('@tauri-apps/api/core');
+      const unlisten = api.on('backend-status', (payload) => {
+        const { status, port } = payload as StatusPayload;
+        if (port > 0) {
+          set({ port, apiBase: makeApiBase(port) });
+        }
+        applyProcessStatus(status, set);
+        if (status === 'Running' && port > 0) {
+          probeBackend(set, get);
+        }
+      });
 
-      // Listen for future status changes
-      const unlisten = await listen<{ status: string; port: number; exit_code?: number }>(
-        'backend-status',
-        (event) => {
-          const { status, port } = event.payload;
-          if (port > 0) {
-            set({ port, apiBase: makeApiBase(port) });
-          }
-          applyProcessStatus(status, set);
-          // When backend reports Running, immediately probe HTTP
-          if (status === 'Running' && port > 0) {
-            probeBackend(set, get);
-          }
-        },
-      );
-
-      // Sync current status in case events fired before listener was ready
       try {
-        const result = await invoke<[string | Record<string, unknown>, number]>('get_backend_status');
+        const result = await api.invoke<[string | Record<string, unknown>, number]>(
+          'get_backend_status',
+        );
         console.log('[backend-store] get_backend_status result:', JSON.stringify(result));
         const [status, port] = result;
         if (port > 0) {
           set({ port, apiBase: makeApiBase(port) });
         }
-        const statusStr = typeof status === 'string' ? status : Object.keys(status)[0] || 'Stopped';
+        const statusStr =
+          typeof status === 'string' ? status : Object.keys(status)[0] || 'Stopped';
         applyProcessStatus(statusStr, set);
 
-        // If backend is already starting/running, probe HTTP immediately
         if (port > 0 && (statusStr === 'Running' || statusStr === 'Starting')) {
           await probeBackend(set, get);
         }
@@ -149,7 +145,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
       return unlisten;
     } catch (e) {
-      console.error('Failed to setup Tauri listeners', e);
+      console.error('Failed to setup desktop listeners', e);
     }
   },
 }));

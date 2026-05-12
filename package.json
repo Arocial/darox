@@ -2,13 +2,16 @@
   "name": "darox",
   "version": "0.0.1",
   "private": true,
+  "main": "electron/dist/main.js",
   "scripts": {
     "dev": "next dev -p 3140",
     "build": "next build",
     "build:check": "NEXT_DIST_DIR=.next-check next build",
     "start": "next start -p 3140",
     "lint": "eslint .",
-    "tauri": "tauri"
+    "electron:compile": "tsc -p electron",
+    "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
+    "electron:build": "next build && npm run electron:compile && electron-builder"
   },
   "dependencies": {
     "@ai-sdk/react": "3.0.99",
@@ -21,8 +24,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/postcss": "^4.2.1",
-    "@tauri-apps/api": "^2.8.0",
-    "@tauri-apps/plugin-dialog": "^2.6.0",
     "ai": "6.0.97",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -44,14 +45,18 @@
   "devDependencies": {
     "@eslint/compat": "^2.0.3",
     "@eslint/eslintrc": "^3.3.5",
-    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "20.17.24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.14",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "^15.0.0",
     "tailwindcss": "^4.2.1",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "wait-on": "^9.0.10"
   }
 }

@@ -11,7 +11,7 @@ const compat = new FlatCompat({
 
 const config = [
     {
-        ignores: [".next/**", "node_modules/**", "dist/**", "build/**", "out/**", "src-tauri/**", "next-env.d.ts", "tailwind.config.js"],
+        ignores: [".next/**", ".next-check/**", "node_modules/**", "dist/**", "build/**", "out/**", "electron/dist/**", "release/**", "next-env.d.ts", "tailwind.config.js"],
     },
     ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];

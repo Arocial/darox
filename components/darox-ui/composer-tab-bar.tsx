@@ -20,15 +20,21 @@ import { useBackendStore } from '@/components/darox-ui/backend-store';
 import { toast } from 'sonner';
 
 async function pickDirectory(): Promise<string | null> {
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selected = await open({ directory: true, multiple: false });
-    return selected as string | null;
-  } catch {
-    // Fallback for browser (non-Tauri) environment
-    const dir = prompt('Enter workspace directory path:');
-    return dir || null;
+  const api = typeof window !== 'undefined' ? window.darox : undefined;
+  if (api) {
+    try {
+      const result = await api.openDialog({
+        properties: ['openDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      return result.filePaths[0];
+    } catch (e) {
+      console.error('openDialog failed', e);
+      return null;
+    }
   }
+  const dir = prompt('Enter workspace directory path:');
+  return dir || null;
 }
 
 function formatTabLabel(workspace: string) {

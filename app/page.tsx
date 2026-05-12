@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useComposerTabs } from '@/components/darox-ui/composer-store';
 import { ComposerTabBar } from '@/components/darox-ui/composer-tab-bar';
 import { ComposerTabPanel } from '@/components/darox-ui/composer-tab-panel';
-import { useBackendStore, isTauri } from '@/components/darox-ui/backend-store';
+import { useBackendStore, isDesktop } from '@/components/darox-ui/backend-store';
 import { BrowserApiPrompt } from '@/components/darox-ui/browser-api-prompt';
 
 export type ChatInputEventArgs = {
@@ -35,10 +35,10 @@ export default function Chat() {
   useEffect(() => {
     const backend = useBackendStore.getState();
     let unlisten: (() => void) | void;
-    backend.setupTauriListeners().then((fn) => {
+    backend.setupDesktopListeners().then((fn) => {
       unlisten = fn;
     });
-    if (!isTauri) {
+    if (!isDesktop) {
       backend.probeBackend();
     }
     return () => {
@@ -57,7 +57,7 @@ export default function Chat() {
     return null;
   }
 
-  if (!isTauri && backendStatus !== 'connected') {
+  if (!isDesktop && backendStatus !== 'connected') {
     return <BrowserApiPrompt />;
   }
 
