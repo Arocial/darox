@@ -31,6 +31,10 @@ type ComposerTabsState = {
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
   openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
+  openSessionById: (
+    sessionId: string,
+    workspace?: string,
+  ) => Promise<ComposerTab | null>;
   clearComposers: () => void;
 };
 
@@ -134,6 +138,27 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace: workspace || undefined, session_id: session.id }),
+      });
+      if (!res.ok) throw new Error('Failed to open session');
+      const tab: ComposerTab = await res.json();
+      set((state) => ({
+        tabs: [...state.tabs, tab],
+        activeId: tab.id,
+      }));
+      return tab;
+    } catch (e) {
+      console.error('Failed to open session', e);
+      return null;
+    }
+  },
+
+  openSessionById: async (sessionId: string, workspace?: string) => {
+    try {
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await fetch(`${apiBase}/api/composers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace: workspace || undefined, session_id: sessionId }),
       });
       if (!res.ok) throw new Error('Failed to open session');
       const tab: ComposerTab = await res.json();

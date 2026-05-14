@@ -35,6 +35,8 @@ import { type FC } from "react";
 import { toast } from "sonner";
 
 import { useUserTurnAnchors } from "@/components/darox-ui/user-turn-anchors-context";
+import { useComposerTabs } from "@/components/darox-ui/composer-store";
+import { useWorkspace } from "@/components/darox-ui/workspace-context";
 
 import { Composer } from "@/components/darox-ui/composer";
 import { UserMessageText } from "@/components/darox-ui/user-message-text";
@@ -248,6 +250,8 @@ const UserActionBar: FC = () => {
   const anchorsCtx = useUserTurnAnchors();
   const messageId = useAuiState((s) => s.message.id);
   const anchor = anchorsCtx?.anchors.get(messageId) ?? null;
+  const workspace = useWorkspace();
+  const openSessionById = useComposerTabs((s) => s.openSessionById);
 
   const onFork = async () => {
     if (anchorsCtx === null || anchor === null) {
@@ -256,10 +260,19 @@ const UserActionBar: FC = () => {
     }
     try {
       const ack = await anchorsCtx.forkAt(anchor);
-      if (ack.status === "ok" && ack.output) {
-        toast.success(ack.output);
-      } else {
+      if (ack.status !== "ok") {
         toast.error(ack.output || `Fork failed: ${ack.status}`);
+        return;
+      }
+      const match = ack.output?.match(/New branch session id:\s*(\S+)/);
+      const newSessionId = match?.[1];
+      if (!newSessionId) {
+        toast.error(ack.output || "Fork succeeded but no session id returned.");
+        return;
+      }
+      const tab = await openSessionById(newSessionId, workspace);
+      if (!tab) {
+        toast.error("Forked, but failed to open new session.");
       }
     } catch (err) {
       toast.error(
