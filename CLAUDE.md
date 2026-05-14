@@ -17,16 +17,18 @@ npm run electron:build # Static export + electron-builder package
 ```
 
 **Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
-Use `npx tsc --noEmit && npm run lint` instead or  `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
+Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 
 ## Architecture
 
 ### Frontend
+
 - **Next.js 15** with static export (`output: 'export'`) — no SSR, embedded by Electron
 - **React 18** + **TypeScript 5.8**
 - **TailwindCSS 4** with HSL CSS variables for theming (light/dark via class)
 
 ### Desktop
+
 - **Electron** main process under `/electron` (compiled to `/electron/dist`)
   - `main.ts` — window, IPC handlers, `app://` protocol that serves `/out` in prod
   - `preload.ts` — exposes `window.darox` (`invoke`, `on`, `openDialog`) via `contextBridge`
@@ -35,6 +37,7 @@ Use `npx tsc --noEmit && npm run lint` instead or  `npm run build:check` (isolat
 - Prod: static export in `/out` is served through a custom `app://` protocol
 
 ### Backend (external)
+
 - Chat endpoint: `http://localhost:8000/api/chat`
 - Suggestions endpoint: `http://localhost:8000/api/suggestions`
 - The backend is not part of this repo
@@ -48,6 +51,7 @@ Use `npx tsc --noEmit && npm run lint` instead or  `npm run build:check` (isolat
 ### Chat Data Flow
 
 The app uses `ChatInputEventArgs` (defined in `app/page.tsx`) to handle three input modes:
+
 - `normal_input` — standard user messages
 - `deferred_tools` — interactive tool question responses (tool ID → answer mapping)
 - `exception_input` — error handling with continue/stop
@@ -55,11 +59,13 @@ The app uses `ChatInputEventArgs` (defined in `app/page.tsx`) to handle three in
 User input is JSON-serialized as `ChatInputEventResult` and sent via `AssistantChatTransport` to the backend.
 
 ### State Management
+
 - **Zustand** for component-level state (e.g., attachment handling)
 - **React Context** (`ChatInputContext`) for sharing input event args across components
 - **localStorage** for command history persistence
 
 ### Key Patterns
+
 - `'use client'` on all interactive components
 - Path alias: `@/*` maps to project root
 - Comments and messages in English by default

@@ -1,13 +1,15 @@
-'use client';
+"use client";
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext } from "react";
 
 export const WorkspaceContext = createContext<string | null>(null);
 
 export function useWorkspace(): string {
   const workspace = useContext(WorkspaceContext);
   if (!workspace) {
-    throw new Error('useWorkspace must be used within a WorkspaceContext.Provider');
+    throw new Error(
+      "useWorkspace must be used within a WorkspaceContext.Provider",
+    );
   }
   return workspace;
 }

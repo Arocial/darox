@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer } from "electron";
 
 type Unsub = () => void;
 
@@ -13,12 +13,12 @@ const darox = {
   },
 
   openDialog: (opts: unknown) =>
-    ipcRenderer.invoke('dialog:open', opts) as Promise<{
+    ipcRenderer.invoke("dialog:open", opts) as Promise<{
       canceled: boolean;
       filePaths: string[];
     }>,
 };
 
-contextBridge.exposeInMainWorld('darox', darox);
+contextBridge.exposeInMainWorld("darox", darox);
 
 export type DaroxApi = typeof darox;

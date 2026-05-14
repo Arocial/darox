@@ -1,10 +1,10 @@
-import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai';
-import type { ChatInputEventResult } from '@/app/page';
+import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
+import type { ChatInputEventResult } from "@/app/page";
 
 type WsServerFrame =
-  | { type: 'ack'; status: string }
-  | { type: 'step-done' }
-  | { type: 'data-input-request'; data: unknown }
+  | { type: "ack"; status: string }
+  | { type: "step-done" }
+  | { type: "data-input-request"; data: unknown }
   | ({ type: string } & Record<string, unknown>);
 
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
@@ -52,7 +52,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         const wasOpening = this.openPromise;
         this.ws = null;
         this.openPromise = null;
-        if (wasOpening) reject(new Error('WebSocket closed before open'));
+        if (wasOpening) reject(new Error("WebSocket closed before open"));
       };
       ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
@@ -98,32 +98,32 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   }
 
   private handleMessage(raw: unknown) {
-    if (typeof raw !== 'string') return;
+    if (typeof raw !== "string") return;
     let msg: WsServerFrame;
     try {
       msg = JSON.parse(raw) as WsServerFrame;
     } catch {
       return;
     }
-    if (!msg || typeof msg !== 'object' || !('type' in msg)) return;
+    if (!msg || typeof msg !== "object" || !("type" in msg)) return;
 
     switch (msg.type) {
-      case 'ack': {
+      case "ack": {
         const ack = msg as { status?: string; output?: string };
         const resolver = this.commandAckQueue.shift();
         if (resolver) {
-          resolver({ status: ack.status ?? 'ok', output: ack.output });
+          resolver({ status: ack.status ?? "ok", output: ack.output });
         }
-        if (ack.status === 'cancelled') {
+        if (ack.status === "cancelled") {
           this.closeController();
         }
         return;
       }
-      case 'step-done':
+      case "step-done":
         return;
-      case 'data-input-request':
+      case "data-input-request":
         this.enqueue({
-          type: 'data-input-request',
+          type: "data-input-request",
           data: (msg as { data: unknown }).data,
         } as unknown as UIMessageChunk);
         this.closeController();
@@ -137,19 +137,21 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private extractReply(
     messages: UI_MESSAGE[],
   ): ChatInputEventResult & { client_message_id?: string } {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUser) {
-      throw new Error('No user message to send');
+      throw new Error("No user message to send");
     }
-    const parts = (lastUser as unknown as { parts?: Array<{ type: string; text?: string }> }).parts;
-    const textPart = parts?.find((p) => p.type === 'text');
-    const text = textPart?.text ?? '';
+    const parts = (
+      lastUser as unknown as { parts?: Array<{ type: string; text?: string }> }
+    ).parts;
+    const textPart = parts?.find((p) => p.type === "text");
+    const text = textPart?.text ?? "";
     let base: ChatInputEventResult;
     try {
       base = JSON.parse(text) as ChatInputEventResult;
     } catch {
       base = {
-        req_id: '',
+        req_id: "",
         normal_input: { user_input: text },
         deferred_tools: {},
         exception_input: { retry: true },
@@ -162,7 +164,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     return id ? { ...base, client_message_id: id } : base;
   }
 
-  sendMessages: ChatTransport<UI_MESSAGE>['sendMessages'] = async (options) => {
+  sendMessages: ChatTransport<UI_MESSAGE>["sendMessages"] = async (options) => {
     const reply = this.extractReply(options.messages);
     await this.ensureOpen();
 
@@ -194,9 +196,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       if (signal.aborted) {
         onAbort();
       } else {
-        signal.addEventListener('abort', onAbort, { once: true });
-        this.abortCleanup = () =>
-          signal.removeEventListener('abort', onAbort);
+        signal.addEventListener("abort", onAbort, { once: true });
+        this.abortCleanup = () => signal.removeEventListener("abort", onAbort);
       }
     }
 
@@ -235,48 +236,51 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     return ackPromise;
   }
 
-  reconnectToStream: ChatTransport<UI_MESSAGE>['reconnectToStream'] = async () => {
-    // If a previous close() is still tearing the socket down, wait for its
-    // onclose to fire before opening a new one. Avoids Strict-Mode churn
-    // where mount → unmount → mount races a CONNECTING socket against a new
-    // ensureOpen(), and prevents the stale onclose from clobbering the new
-    // controller.
-    // Note: We are caching websocket connection for now and hence no closingPromise.
-    // As a result, the closingPromise mechanism is not necessary in current impl.
-    if (this.closingPromise) {
-      await this.closingPromise;
-    }
-    await this.ensureOpen();
+  reconnectToStream: ChatTransport<UI_MESSAGE>["reconnectToStream"] =
+    async () => {
+      // If a previous close() is still tearing the socket down, wait for its
+      // onclose to fire before opening a new one. Avoids Strict-Mode churn
+      // where mount → unmount → mount races a CONNECTING socket against a new
+      // ensureOpen(), and prevents the stale onclose from clobbering the new
+      // controller.
+      // Note: We are caching websocket connection for now and hence no closingPromise.
+      // As a result, the closingPromise mechanism is not necessary in current impl.
+      if (this.closingPromise) {
+        await this.closingPromise;
+      }
+      await this.ensureOpen();
 
-    // Avoid close the previous controller on remount of strict-mode.
-    // We didn't close the controller on unmount, So we wait for previous controller
-    // to finish by itself.
-    for (let i = 0; i < 10; i++) {
-      if (!this.controller || this.controllerClosed) break;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    if (this.controller && !this.controllerClosed) {
-      this.closeController();
-    }
+      // Avoid close the previous controller on remount of strict-mode.
+      // We didn't close the controller on unmount, So we wait for previous controller
+      // to finish by itself.
+      for (let i = 0; i < 10; i++) {
+        if (!this.controller || this.controllerClosed) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      if (this.controller && !this.controllerClosed) {
+        this.closeController();
+      }
 
-    const stream = new ReadableStream<UIMessageChunk>({
-      start: (controller) => {
-        this.controller = controller;
-        this.controllerClosed = false;
-      },
-      cancel: () => {
-        this.controller = null;
-        this.controllerClosed = true;
-      },
-    });
-    try {
-      this.ws!.send(JSON.stringify({ resume: true }));
-    } catch (err) {
-      this.failController(err instanceof Error ? err : new Error(String(err)));
-    }
+      const stream = new ReadableStream<UIMessageChunk>({
+        start: (controller) => {
+          this.controller = controller;
+          this.controllerClosed = false;
+        },
+        cancel: () => {
+          this.controller = null;
+          this.controllerClosed = true;
+        },
+      });
+      try {
+        this.ws!.send(JSON.stringify({ resume: true }));
+      } catch (err) {
+        this.failController(
+          err instanceof Error ? err : new Error(String(err)),
+        );
+      }
 
-    return stream;
-  };
+      return stream;
+    };
 
   close() {
     const ws = this.ws;
@@ -314,7 +318,7 @@ export function httpBaseToWsUrl(
   composerId: string,
   agentName: string,
 ): string {
-  const wsBase = apiBase.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+  const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
   return `${wsBase}/api/composers/${composerId}/agents/${agentName}/ws`;
 }
 

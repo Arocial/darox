@@ -8,7 +8,8 @@
     "build": "next build",
     "build:check": "NEXT_DIST_DIR=.next-check next build",
     "start": "next start -p 3140",
-    "lint": "eslint .",
+    "lint": "biome check",
+    "format": "biome format --write .",
     "electron:compile": "tsc -p electron",
     "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
     "electron:build": "next build && npm run electron:compile && electron-builder"
@@ -43,8 +44,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.0.3",
-    "@eslint/eslintrc": "^3.3.5",
+    "@biomejs/biome": "^2.4.15",
     "@types/node": "20.17.24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
@@ -53,8 +53,6 @@
     "cross-env": "^10.1.0",
     "electron": "^42.0.1",
     "electron-builder": "^26.8.1",
-    "eslint": "^9",
-    "eslint-config-next": "^15.0.0",
     "png2icons": "^2.0.1",
     "tailwindcss": "^4.2.1",
     "typescript": "5.8.3",

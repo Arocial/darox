@@ -14,15 +14,15 @@ interface DaroxApi {
     title?: string;
     defaultPath?: string;
     properties?: Array<
-      | 'openFile'
-      | 'openDirectory'
-      | 'multiSelections'
-      | 'showHiddenFiles'
-      | 'createDirectory'
-      | 'promptToCreate'
-      | 'noResolveAliases'
-      | 'treatPackageAsDirectory'
-      | 'dontAddToRecent'
+      | "openFile"
+      | "openDirectory"
+      | "multiSelections"
+      | "showHiddenFiles"
+      | "createDirectory"
+      | "promptToCreate"
+      | "noResolveAliases"
+      | "treatPackageAsDirectory"
+      | "dontAddToRecent"
     >;
     filters?: Array<{ name: string; extensions: string[] }>;
   }): Promise<OpenDialogResult>;

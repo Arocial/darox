@@ -31,21 +31,21 @@ By replacing only the transport, we reuse the entire assistant-ui runtime stack 
 
 Server → client frames are forwarded as AI SDK `UIMessageChunk` objects with only two exceptions:
 
-| Backend frame | Handling |
-|-------------------------|-------------------------------------------------------|
-| `text-*`, `reasoning-*` | forwarded 1:1 |
-| `tool-*` | forwarded 1:1 |
-| `finish`, `start-step`, `finish-step` | forwarded 1:1 |
-| `data-input-request` | forwarded as `data-input-request` data chunk, then current stream is **closed** |
-| `step-done` | swallowed (backend-specific boundary, no UI meaning) |
-| `ack` | swallowed; `status === "cancelled"` closes the stream |
+| Backend frame                         | Handling                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `text-*`, `reasoning-*`               | forwarded 1:1                                                                   |
+| `tool-*`                              | forwarded 1:1                                                                   |
+| `finish`, `start-step`, `finish-step` | forwarded 1:1                                                                   |
+| `data-input-request`                  | forwarded as `data-input-request` data chunk, then current stream is **closed** |
+| `step-done`                           | swallowed (backend-specific boundary, no UI meaning)                            |
+| `ack`                                 | swallowed; `status === "cancelled"` closes the stream                           |
 
 Client → server frames:
 
-| Trigger | Frame sent |
-|---------------------------------------------|-----------------------------------|
+| Trigger                                      | Frame sent                            |
+| -------------------------------------------- | ------------------------------------- |
 | Runtime calls `sendMessages` with a user msg | `{ "reply": <ChatInputEventResult> }` |
-| Runtime's `AbortSignal` fires | `{ "cancel": true }` |
+| Runtime's `AbortSignal` fires                | `{ "cancel": true }`                  |
 
 The user message's text is already a JSON-serialized `ChatInputEventResult` (produced by `components/darox-ui/composer.tsx`), so the transport only has to parse and forward it. Plain-text fallback is preserved for robustness.
 
@@ -67,7 +67,7 @@ This exists to tolerate React StrictMode's mount → unmount → mount sequence 
 
 The AI SDK `Chat` keeps a status machine (`submitted` / `streaming` / `ready`) tied to a single active output stream. The transport maintains this by allowing at most one live stream controller at a time:
 
-1. `reconnectToStream` (via `resume: true`) returns the **initial** stream.  It receives everything the server emits until `data-input-request`.
+1. `reconnectToStream` (via `resume: true`) returns the **initial** stream. It receives everything the server emits until `data-input-request`.
 2. On `data-input-request`, the stream is closed → status goes `ready` → composer becomes interactive.
 3. User submits → `sendMessages` sends `{reply}` over the **same** WS and returns a **new** stream for the next turn's events.
 4. Repeat from (2).

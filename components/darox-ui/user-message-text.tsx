@@ -39,7 +39,7 @@ const UserMessageTextImpl: FC = () => {
           {Object.entries(parsed.deferred_tools).map(([id, answer]) => (
             <div
               key={id}
-              className="flex items-start gap-2 text-sm text-muted-foreground"
+              className="flex items-start gap-2 text-muted-foreground text-sm"
             >
               <WrenchIcon className="mt-0.5 size-3.5 shrink-0" />
               <span>{answer}</span>
@@ -51,9 +51,7 @@ const UserMessageTextImpl: FC = () => {
       {isExceptionOnly && (
         <div className="flex items-center gap-2 text-sm">
           <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />
-          <span>
-            {parsed.exception_input.retry ? "Retry" : "Stop"}
-          </span>
+          <span>{parsed.exception_input.retry ? "Retry" : "Stop"}</span>
         </div>
       )}
     </div>

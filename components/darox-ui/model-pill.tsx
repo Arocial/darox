@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useRef, useState, type FC } from 'react';
-import { ChevronDownIcon, CheckIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FC } from "react";
+import { ChevronDownIcon, CheckIcon } from "lucide-react";
 
-import { useBackendStore } from '@/components/darox-ui/backend-store';
+import { useBackendStore } from "@/components/darox-ui/backend-store";
 import {
   acquireTransport,
   releaseTransport,
   httpBaseToWsUrl,
-} from '@/components/darox-ui/websocket-chat-transport';
+} from "@/components/darox-ui/websocket-chat-transport";
 
 type SuggestionItem = {
   id: string;
@@ -25,7 +25,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
 
   const [model, setModel] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [items, setItems] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled && typeof data?.model === 'string') {
+        if (!cancelled && typeof data?.model === "string") {
           setModel(data.model);
         }
       })
@@ -62,8 +62,8 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
   // Fetch suggestions while open.
@@ -76,8 +76,8 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
         const url = new URL(
           `${apiBase}/api/composers/${composerId}/agents/${agentName}/suggestions`,
         );
-        url.searchParams.set('command', 'model');
-        if (query) url.searchParams.set('q', query);
+        url.searchParams.set("command", "model");
+        if (query) url.searchParams.set("q", query);
         const res = await fetch(url.toString());
         if (!cancelled) {
           if (res.ok) {
@@ -103,16 +103,16 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     if (!modelRef) return;
     const previous = model;
     setOpen(false);
-    setQuery('');
+    setQuery("");
     setError(null);
     setModel(modelRef); // optimistic
     const transport = acquireTransport(wsUrl);
     try {
       const ack = await transport.sendCommand({
-        type: 'SetModelEvent',
+        type: "SetModelEvent",
         model_ref: modelRef,
       });
-      if (ack.status !== 'ok') {
+      if (ack.status !== "ok") {
         setModel(previous);
         setError(ack.output || `Failed to switch model (${ack.status})`);
       }
@@ -124,31 +124,30 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     }
   };
 
-  const label = model ?? 'Select model';
+  const label = model ?? "Select model";
 
   return (
     <div ref={wrapperRef} className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-full border border-input bg-background px-2.5 py-0.5 text-xs text-foreground/80 hover:bg-muted/60 hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1 rounded-full border border-input bg-background px-2.5 py-0.5 text-foreground/80 text-xs transition-colors hover:bg-muted/60 hover:text-foreground"
         title={error ?? `Current model: ${label}`}
       >
-        <span className="truncate max-w-[14rem]">{label}</span>
+        <span className="max-w-[14rem] truncate">{label}</span>
         <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-md border bg-popover shadow-md">
-          <div className="p-1.5 border-b border-border">
+        <div className="absolute top-full left-0 z-30 mt-1 w-72 rounded-md border bg-popover shadow-md">
+          <div className="border-border border-b p-1.5">
             <input
-              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && query.trim()) {
+                if (e.key === "Enter" && query.trim()) {
                   e.preventDefault();
                   handleSelect(query.trim());
-                } else if (e.key === 'Escape') {
+                } else if (e.key === "Escape") {
                   setOpen(false);
                 }
               }}
@@ -158,7 +157,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
           </div>
           <div className="max-h-64 overflow-y-auto py-1">
             {loading && items.length === 0 && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+              <div className="px-3 py-2 text-muted-foreground text-xs">
                 Loading…
               </div>
             )}
@@ -168,15 +167,15 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
                 <button
                   type="button"
                   onClick={() => handleSelect(query.trim())}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm rounded-sm mx-1 text-foreground/80 hover:text-foreground hover:bg-muted/60 transition-colors"
+                  className="mx-1 flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-left text-foreground/80 text-sm transition-colors hover:bg-muted/60 hover:text-foreground"
                 >
-                  <span className="truncate flex-1">
+                  <span className="flex-1 truncate">
                     Use &ldquo;{query.trim()}&rdquo;
                   </span>
                 </button>
               )}
             {!loading && items.length === 0 && !query.trim() && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+              <div className="px-3 py-2 text-muted-foreground text-xs">
                 No suggestions
               </div>
             )}
@@ -188,14 +187,14 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
                   key={item.id}
                   type="button"
                   onClick={() => handleSelect(ref)}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm rounded-sm mx-1 transition-colors ${
+                  className={`mx-1 flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-left text-sm transition-colors ${
                     isCurrent
-                      ? 'bg-accent text-foreground'
-                      : 'text-foreground/80 hover:text-foreground hover:bg-muted/60'
+                      ? "bg-accent text-foreground"
+                      : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
                   }`}
                   title={item.description ?? undefined}
                 >
-                  <span className="truncate flex-1">{item.label}</span>
+                  <span className="flex-1 truncate">{item.label}</span>
                   {isCurrent && <CheckIcon className="size-3.5 shrink-0" />}
                 </button>
               );
@@ -204,7 +203,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
         </div>
       )}
       {error && (
-        <div className="absolute left-0 top-full mt-8 z-30 max-w-xs rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+        <div className="absolute top-full left-0 z-30 mt-8 max-w-xs rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-destructive text-xs">
           {error}
         </div>
       )}

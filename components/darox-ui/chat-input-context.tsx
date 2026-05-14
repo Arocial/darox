@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { createContext, useContext } from 'react';
-import type { ChatInputEventArgs } from '@/app/page';
+import { createContext, useContext } from "react";
+import type { ChatInputEventArgs } from "@/app/page";
 
 export const defaultInputArgs: ChatInputEventArgs = {
-  req_id: '',
+  req_id: "",
   deferred_tools: {},
   normal_input: { request: false, user_input: null },
   exception_input: { exception: null, retry: true },
@@ -18,7 +18,7 @@ export const ChatInputContext = createContext<{
 export function useChatInput() {
   const context = useContext(ChatInputContext);
   if (!context) {
-    throw new Error('useChatInput must be used within a ChatInputProvider');
+    throw new Error("useChatInput must be used within a ChatInputProvider");
   }
   return context;
 }

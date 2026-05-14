@@ -1,9 +1,13 @@
-'use client';
+"use client";
 
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type BackendStatus = 'disconnected' | 'connecting' | 'connected';
-export type BackendProcessStatus = 'stopped' | 'starting' | 'running' | 'crashed';
+export type BackendStatus = "disconnected" | "connecting" | "connected";
+export type BackendProcessStatus =
+  | "stopped"
+  | "starting"
+  | "running"
+  | "crashed";
 
 type BackendState = {
   apiBase: string;
@@ -17,17 +21,17 @@ type BackendState = {
   setProcessStatus: (status: BackendProcessStatus) => void;
   probeBackend: () => Promise<void>;
   restartBackend: () => Promise<void>;
-  setupDesktopListeners: () => Promise<(() => void) | void>;
+  setupDesktopListeners: () => Promise<(() => void) | undefined>;
 };
 
 function makeApiBase(port: number): string {
   const hostname =
-    typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+    typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
   return `http://${hostname}:${port}`;
 }
 
 export const isDesktop =
-  typeof window !== 'undefined' && typeof window.darox !== 'undefined';
+  typeof window !== "undefined" && typeof window.darox !== "undefined";
 
 type SetState = (partial: Partial<BackendState>) => void;
 type GetState = () => BackendState;
@@ -35,7 +39,7 @@ type GetState = () => BackendState;
 /** Try to reach the backend HTTP endpoint. Updates store status accordingly. */
 async function probeBackend(set: SetState, get: GetState) {
   const apiBase = get().apiBase;
-  if (!apiBase || apiBase.endsWith(':0')) return;
+  if (!apiBase || apiBase.endsWith(":0")) return;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
@@ -44,15 +48,15 @@ async function probeBackend(set: SetState, get: GetState) {
     });
     clearTimeout(timeout);
     if (res.ok) {
-      set({ status: 'connected' });
+      set({ status: "connected" });
     } else {
       set({
-        status: get().status === 'connecting' ? 'connecting' : 'disconnected',
+        status: get().status === "connecting" ? "connecting" : "disconnected",
       });
     }
   } catch {
     set({
-      status: get().status === 'connecting' ? 'connecting' : 'disconnected',
+      status: get().status === "connecting" ? "connecting" : "disconnected",
     });
   }
 }
@@ -62,28 +66,32 @@ function applyProcessStatus(
   set: (partial: Partial<BackendState>) => void,
 ) {
   switch (statusStr) {
-    case 'Starting':
-      set({ processStatus: 'starting', status: 'connecting' });
+    case "Starting":
+      set({ processStatus: "starting", status: "connecting" });
       break;
-    case 'Running':
-      set({ processStatus: 'running' });
+    case "Running":
+      set({ processStatus: "running" });
       break;
-    case 'Stopped':
-      set({ processStatus: 'stopped', status: 'disconnected' });
+    case "Stopped":
+      set({ processStatus: "stopped", status: "disconnected" });
       break;
-    case 'Crashed':
-      set({ processStatus: 'crashed', status: 'disconnected' });
+    case "Crashed":
+      set({ processStatus: "crashed", status: "disconnected" });
       break;
   }
 }
 
-type StatusPayload = { status: string; port: number; exit_code?: number | null };
+type StatusPayload = {
+  status: string;
+  port: number;
+  exit_code?: number | null;
+};
 
 export const useBackendStore = create<BackendState>((set, get) => ({
   apiBase: makeApiBase(0),
   port: 0,
-  status: 'disconnected',
-  processStatus: 'stopped',
+  status: "disconnected",
+  processStatus: "stopped",
 
   setPort: (port) => set({ port, apiBase: makeApiBase(port) }),
   setApiBase: (apiBase) => set({ apiBase }),
@@ -96,56 +104,62 @@ export const useBackendStore = create<BackendState>((set, get) => ({
   },
 
   restartBackend: async () => {
-    const api = typeof window !== 'undefined' ? window.darox : undefined;
+    const api = typeof window !== "undefined" ? window.darox : undefined;
     if (!api) return;
     try {
-      set({ processStatus: 'starting', status: 'connecting' });
-      const port = await api.invoke<number>('restart_backend');
+      set({ processStatus: "starting", status: "connecting" });
+      const port = await api.invoke<number>("restart_backend");
       set({ port, apiBase: makeApiBase(port) });
     } catch (e) {
-      console.error('Failed to restart backend', e);
-      set({ processStatus: 'crashed' });
+      console.error("Failed to restart backend", e);
+      set({ processStatus: "crashed" });
     }
   },
 
   setupDesktopListeners: async () => {
-    const api = typeof window !== 'undefined' ? window.darox : undefined;
+    const api = typeof window !== "undefined" ? window.darox : undefined;
     if (!api) return;
     try {
-      const unlisten = api.on('backend-status', (payload) => {
+      const unlisten = api.on("backend-status", (payload) => {
         const { status, port } = payload as StatusPayload;
         if (port > 0) {
           set({ port, apiBase: makeApiBase(port) });
         }
         applyProcessStatus(status, set);
-        if (status === 'Running' && port > 0) {
+        if (status === "Running" && port > 0) {
           probeBackend(set, get);
         }
       });
 
       try {
-        const result = await api.invoke<[string | Record<string, unknown>, number]>(
-          'get_backend_status',
+        const result =
+          await api.invoke<[string | Record<string, unknown>, number]>(
+            "get_backend_status",
+          );
+        console.log(
+          "[backend-store] get_backend_status result:",
+          JSON.stringify(result),
         );
-        console.log('[backend-store] get_backend_status result:', JSON.stringify(result));
         const [status, port] = result;
         if (port > 0) {
           set({ port, apiBase: makeApiBase(port) });
         }
         const statusStr =
-          typeof status === 'string' ? status : Object.keys(status)[0] || 'Stopped';
+          typeof status === "string"
+            ? status
+            : Object.keys(status)[0] || "Stopped";
         applyProcessStatus(statusStr, set);
 
-        if (port > 0 && (statusStr === 'Running' || statusStr === 'Starting')) {
+        if (port > 0 && (statusStr === "Running" || statusStr === "Starting")) {
           await probeBackend(set, get);
         }
       } catch (e) {
-        console.error('Failed to get initial backend status', e);
+        console.error("Failed to get initial backend status", e);
       }
 
       return unlisten;
     } catch (e) {
-      console.error('Failed to setup desktop listeners', e);
+      console.error("Failed to setup desktop listeners", e);
     }
   },
 }));

@@ -1,35 +1,35 @@
-import { spawn, ChildProcess } from 'node:child_process';
-import { createServer, createConnection } from 'node:net';
-import { BrowserWindow } from 'electron';
+import { spawn, type ChildProcess } from "node:child_process";
+import { createServer, createConnection } from "node:net";
+import type { BrowserWindow } from "electron";
 
 export type ProcessStatus =
-  | { status: 'Stopped' }
-  | { status: 'Starting' }
-  | { status: 'Running' }
-  | { status: 'Crashed'; exit_code: number | null };
+  | { status: "Stopped" }
+  | { status: "Starting" }
+  | { status: "Running" }
+  | { status: "Crashed"; exit_code: number | null };
 
-const HOST = '127.0.0.1';
+const HOST = "127.0.0.1";
 
 function getBackendCommand(): string {
   const argv = process.argv;
-  const i = argv.indexOf('--backend');
+  const i = argv.indexOf("--backend");
   if (i >= 0 && argv[i + 1]) return argv[i + 1];
-  return 'arox-coder';
+  return "arox-coder";
 }
 
 function findPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
     srv.unref();
-    srv.on('error', reject);
+    srv.on("error", reject);
     srv.listen(0, HOST, () => {
       const addr = srv.address();
-      if (addr && typeof addr === 'object') {
+      if (addr && typeof addr === "object") {
         const port = addr.port;
         srv.close(() => resolve(port));
       } else {
         srv.close();
-        reject(new Error('Failed to get port'));
+        reject(new Error("Failed to get port"));
       }
     });
   });
@@ -42,14 +42,14 @@ function checkHealth(port: number): Promise<boolean> {
       sock.destroy();
       resolve(ok);
     };
-    sock.once('connect', () => done(true));
-    sock.once('error', () => done(false));
+    sock.once("connect", () => done(true));
+    sock.once("error", () => done(false));
   });
 }
 
 export class BackendManager {
   private child: ChildProcess | null = null;
-  private status: ProcessStatus = { status: 'Stopped' };
+  private status: ProcessStatus = { status: "Stopped" };
   private port = 0;
   private restartCount = 0;
   private shutdown = false;
@@ -67,10 +67,10 @@ export class BackendManager {
     if (!this.win || this.win.isDestroyed()) return;
     const s = this.status;
     const payload =
-      s.status === 'Crashed'
-        ? { status: 'Crashed', exit_code: s.exit_code, port: this.port }
+      s.status === "Crashed"
+        ? { status: "Crashed", exit_code: s.exit_code, port: this.port }
         : { status: s.status, port: this.port };
-    this.win.webContents.send('backend-status', payload);
+    this.win.webContents.send("backend-status", payload);
   }
 
   private spawnProc(port: number): ChildProcess {
@@ -79,14 +79,17 @@ export class BackendManager {
     const [bin, ...rest] = parts;
     const args = [
       ...rest,
-      '--ui', 'vercel_ai',
-      '--host', HOST,
-      '--port', String(port),
+      "--ui",
+      "vercel_ai",
+      "--host",
+      HOST,
+      "--port",
+      String(port),
     ];
-    console.log(`[backend] spawn: ${bin} ${args.join(' ')}`);
-    const child = spawn(bin, args, { stdio: 'inherit' });
-    child.on('error', (err) => {
-      console.error('[backend] spawn error:', err);
+    console.log(`[backend] spawn: ${bin} ${args.join(" ")}`);
+    const child = spawn(bin, args, { stdio: "inherit" });
+    child.on("error", (err) => {
+      console.error("[backend] spawn error:", err);
     });
     return child;
   }
@@ -97,7 +100,7 @@ export class BackendManager {
     this.restartCount = 0;
     this.port = await findPort();
     this.child = this.spawnProc(this.port);
-    this.status = { status: 'Starting' };
+    this.status = { status: "Starting" };
     this.emit();
     this.attachMonitor(this.child);
     this.healthLoop();
@@ -109,8 +112,8 @@ export class BackendManager {
     while (!this.shutdown && this.port === targetPort) {
       await new Promise((r) => setTimeout(r, 2000));
       if (this.shutdown || this.port !== targetPort) break;
-      if (this.status.status === 'Starting' && (await checkHealth(this.port))) {
-        this.status = { status: 'Running' };
+      if (this.status.status === "Starting" && (await checkHealth(this.port))) {
+        this.status = { status: "Running" };
         this.restartCount = 0;
         this.emit();
         console.log(`[backend] running on ${HOST}:${this.port}`);
@@ -119,11 +122,11 @@ export class BackendManager {
   }
 
   private attachMonitor(child: ChildProcess) {
-    child.on('exit', async (code) => {
+    child.on("exit", async (code) => {
       if (this.shutdown) return;
       if (this.child !== child) return; // superseded by a newer process
       this.child = null;
-      this.status = { status: 'Crashed', exit_code: code };
+      this.status = { status: "Crashed", exit_code: code };
       this.emit();
       console.warn(`[backend] exited with code ${code}`);
 
@@ -135,11 +138,11 @@ export class BackendManager {
       try {
         const next = this.spawnProc(this.port);
         this.child = next;
-        this.status = { status: 'Starting' };
+        this.status = { status: "Starting" };
         this.emit();
         this.attachMonitor(next);
       } catch (e) {
-        console.error('[backend] failed to restart:', e);
+        console.error("[backend] failed to restart:", e);
       }
     });
   }
@@ -148,7 +151,7 @@ export class BackendManager {
     this.shutdown = true;
     const child = this.child;
     this.child = null;
-    this.status = { status: 'Stopped' };
+    this.status = { status: "Stopped" };
     this.emit();
     if (!child) return;
 
@@ -159,9 +162,9 @@ export class BackendManager {
         done = true;
         resolve();
       };
-      child.once('exit', finish);
+      child.once("exit", finish);
       try {
-        child.kill('SIGTERM');
+        child.kill("SIGTERM");
       } catch {
         finish();
         return;
@@ -169,7 +172,7 @@ export class BackendManager {
       setTimeout(() => {
         if (!done) {
           try {
-            child.kill('SIGKILL');
+            child.kill("SIGKILL");
           } catch {
             // ignore
           }

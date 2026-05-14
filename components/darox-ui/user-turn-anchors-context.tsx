@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { createContext, useContext } from 'react';
-import type { ComposerCommandAck } from './composer-command';
+import { createContext, useContext } from "react";
+import type { ComposerCommandAck } from "./composer-command";
 
 export type UserTurnAnchorsContextValue = {
   // Map from UI message id to the absolute event index of its corresponding

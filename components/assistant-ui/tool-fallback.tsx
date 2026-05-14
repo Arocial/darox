@@ -113,7 +113,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2 px-4 text-sm transition-colors overflow-hidden",
+        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2 overflow-hidden px-4 text-sm transition-colors",
         className,
       )}
       {...props}
@@ -129,14 +129,14 @@ function ToolFallbackTrigger({
       <span
         data-slot="tool-fallback-trigger-label"
         className={cn(
-          "aui-tool-fallback-trigger-label-wrapper relative grow text-left leading-none truncate",
+          "aui-tool-fallback-trigger-label-wrapper relative grow truncate text-left leading-none",
           isCancelled && "text-muted-foreground line-through",
         )}
       >
         <span className="block truncate">
           {label}: <b>{toolName}</b>
           {argsText && (
-            <span className="text-muted-foreground ml-2 font-mono text">
+            <span className="text ml-2 font-mono text-muted-foreground">
               {argsText.replace(/\s+/g, " ")}
             </span>
           )}
@@ -145,11 +145,11 @@ function ToolFallbackTrigger({
           <span
             aria-hidden
             data-slot="tool-fallback-trigger-shimmer"
-            className="aui-tool-fallback-trigger-shimmer shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none block truncate"
+            className="aui-tool-fallback-trigger-shimmer shimmer pointer-events-none absolute inset-0 block truncate motion-reduce:animate-none"
           >
             {label}: <b>{toolName}</b>
             {argsText && (
-              <span className="text-muted-foreground ml-2 font-mono text">
+              <span className="text ml-2 font-mono text-muted-foreground">
                 {argsText.replace(/\s+/g, " ")}
               </span>
             )}
@@ -293,7 +293,11 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
     <ToolFallbackRoot
       className={cn(isCancelled && "border-muted-foreground/30 bg-muted/30")}
     >
-      <ToolFallbackTrigger toolName={toolName} argsText={argsText} status={status} />
+      <ToolFallbackTrigger
+        toolName={toolName}
+        argsText={argsText}
+        status={status}
+      />
       <ToolFallbackContent>
         <ToolFallbackError status={status} />
         <ToolFallbackArgs

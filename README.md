@@ -13,6 +13,7 @@ All server-side code and advanced features from the original AI SDK example have
 ## Getting Started
 
 1. Install dependencies:
+
    ```bash
    npm install
    # or
@@ -22,6 +23,7 @@ All server-side code and advanced features from the original AI SDK example have
    ```
 
 2. Run the development server:
+
    ```bash
    npm run dev
    # or
@@ -40,7 +42,7 @@ By default, the `useChat` hook expects an API route at `/api/chat` to handle the
 2. Configure `useChat` to point to an external API endpoint by passing the `api` option:
    ```tsx
    const { messages, input, handleInputChange, handleSubmit } = useChat({
-     api: 'https://your-api-endpoint.com/chat'
+     api: 'https://your-api-endpoint.com/chat',
    });
    ```
 

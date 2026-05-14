@@ -1,6 +1,4 @@
-import {
-  UserMessageAttachments,
-} from "@/components/assistant-ui/attachment";
+import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { Reasoning, ReasoningGroup } from "@/components/assistant-ui/reasoning";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
@@ -31,7 +29,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
 } from "lucide-react";
-import { type FC } from "react";
+import type { FC } from "react";
 import { toast } from "sonner";
 
 import { useUserTurnAnchors } from "@/components/darox-ui/user-turn-anchors-context";
@@ -137,8 +135,6 @@ const ThreadSuggestionItem: FC = () => {
     </div>
   );
 };
-
-
 
 const MessageError: FC = () => {
   return (
@@ -275,9 +271,7 @@ const UserActionBar: FC = () => {
         toast.error("Forked, but failed to open new session.");
       }
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Fork request failed.",
-      );
+      toast.error(err instanceof Error ? err.message : "Fork request failed.");
     }
   };
 

@@ -8,7 +8,7 @@ export type ComposerCommandAck = {
 };
 
 export function composerWsUrl(apiBase: string, composerId: string): string {
-  const wsBase = apiBase.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+  const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
   return `${wsBase}/api/composers/${composerId}/ws`;
 }
 
@@ -44,22 +44,23 @@ export function sendComposerCommand(
       }
     };
     ws.onmessage = (ev) => {
-      if (typeof ev.data !== 'string') return;
-      let msg: { type?: string; status?: string; output?: string } | null = null;
+      if (typeof ev.data !== "string") return;
+      let msg: { type?: string; status?: string; output?: string } | null =
+        null;
       try {
         msg = JSON.parse(ev.data);
       } catch {
         return;
       }
-      if (msg && msg.type === 'ack') {
-        finish({ status: msg.status ?? 'ok', output: msg.output });
+      if (msg && msg.type === "ack") {
+        finish({ status: msg.status ?? "ok", output: msg.output });
       }
     };
     ws.onerror = () => {
-      finish(new Error('composer ws error'));
+      finish(new Error("composer ws error"));
     };
     ws.onclose = () => {
-      if (!settled) finish(new Error('composer ws closed before ack'));
+      if (!settled) finish(new Error("composer ws closed before ack"));
     };
   });
 }
