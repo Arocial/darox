@@ -134,7 +134,9 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
   }
 
-  private extractReply(messages: UI_MESSAGE[]): ChatInputEventResult {
+  private extractReply(
+    messages: UI_MESSAGE[],
+  ): ChatInputEventResult & { client_message_id?: string } {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastUser) {
       throw new Error('No user message to send');
@@ -142,16 +144,22 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     const parts = (lastUser as unknown as { parts?: Array<{ type: string; text?: string }> }).parts;
     const textPart = parts?.find((p) => p.type === 'text');
     const text = textPart?.text ?? '';
+    let base: ChatInputEventResult;
     try {
-      return JSON.parse(text) as ChatInputEventResult;
+      base = JSON.parse(text) as ChatInputEventResult;
     } catch {
-      return {
+      base = {
         req_id: '',
         normal_input: { user_input: text },
         deferred_tools: {},
         exception_input: { retry: true },
       };
     }
+    // Carry the UI message id up to the server so it can pair the resulting
+    // user_input session event with this specific message — letting the
+    // client later look up its absolute event index by id.
+    const id = (lastUser as unknown as { id?: string }).id;
+    return id ? { ...base, client_message_id: id } : base;
   }
 
   sendMessages: ChatTransport<UI_MESSAGE>['sendMessages'] = async (options) => {

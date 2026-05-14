@@ -17,6 +17,7 @@ import {
   MessagePrimitive,
   SuggestionPrimitive,
   ThreadPrimitive,
+  useAuiState,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -25,11 +26,15 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  GitBranchIcon,
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { type FC } from "react";
+import { toast } from "sonner";
+
+import { useUserTurnAnchors } from "@/components/darox-ui/user-turn-anchors-context";
 
 import { Composer } from "@/components/darox-ui/composer";
 import { UserMessageText } from "@/components/darox-ui/user-message-text";
@@ -240,6 +245,29 @@ const UserMessage: FC = () => {
 };
 
 const UserActionBar: FC = () => {
+  const anchorsCtx = useUserTurnAnchors();
+  const messageId = useAuiState((s) => s.message.id);
+  const anchor = anchorsCtx?.anchors.get(messageId) ?? null;
+
+  const onFork = async () => {
+    if (anchorsCtx === null || anchor === null) {
+      toast.error("Fork not available: missing turn anchor.");
+      return;
+    }
+    try {
+      const ack = await anchorsCtx.forkAt(anchor);
+      if (ack.status === "ok" && ack.output) {
+        toast.success(ack.output);
+      } else {
+        toast.error(ack.output || `Fork failed: ${ack.status}`);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Fork request failed.",
+      );
+    }
+  };
+
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -251,6 +279,18 @@ const UserActionBar: FC = () => {
           <PencilIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
+      <TooltipIconButton
+        tooltip={
+          anchor !== null
+            ? `Fork from this turn (@${anchor})`
+            : "Fork unavailable"
+        }
+        className="aui-user-action-fork p-4"
+        onClick={onFork}
+        disabled={anchor === null}
+      >
+        <GitBranchIcon />
+      </TooltipIconButton>
     </ActionBarPrimitive.Root>
   );
 };

@@ -18,6 +18,8 @@ import {
   httpBaseToWsUrl,
 } from '@/components/darox-ui/websocket-chat-transport';
 import { ModelPill } from '@/components/darox-ui/model-pill';
+import { UserTurnAnchorsContext } from '@/components/darox-ui/user-turn-anchors-context';
+import { sendComposerCommand } from '@/components/darox-ui/composer-command';
 import type { ChatInputEventArgs } from '@/app/page';
 import type { UIMessage } from 'ai';
 
@@ -26,14 +28,19 @@ function AgentChat({
   agentName,
   workspace,
   initialMessages,
+  initialAnchors,
 }: {
   composerId: string;
   agentName: string;
   workspace: string;
   initialMessages: UIMessage[];
+  initialAnchors: Record<string, number>;
 }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
+  const [anchors, setAnchors] = useState<Map<string, number>>(
+    () => new Map(Object.entries(initialAnchors)),
+  );
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
@@ -57,20 +64,47 @@ function AgentChat({
     onData: (dataPart) => {
       if (dataPart.type === 'data-input-request') {
         setInputArgs(dataPart.data as ChatInputEventArgs);
+      } else if (dataPart.type === 'data-user-turn') {
+        const { eventIndex, messageId } = dataPart as {
+          eventIndex?: number;
+          messageId?: string;
+        };
+        if (typeof eventIndex === 'number' && typeof messageId === 'string') {
+          setAnchors((prev) => {
+            if (prev.get(messageId) === eventIndex) return prev;
+            const next = new Map(prev);
+            next.set(messageId, eventIndex);
+            return next;
+          });
+        }
       }
     },
   } as Parameters<typeof useChatRuntime>[0]);
+
+  const anchorsValue = useMemo(
+    () => ({
+      anchors,
+      forkAt: (eventIndex: number) =>
+        sendComposerCommand(apiBase, composerId, {
+          type: 'ForkEvent',
+          event_index: eventIndex,
+        }),
+    }),
+    [anchors, apiBase, composerId],
+  );
 
   return (
     <WorkspaceContext.Provider value={workspace}>
       <ComposerIdContext.Provider value={composerId}>
         <AgentNameContext.Provider value={agentName}>
           <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
-            <AssistantRuntimeProvider runtime={runtime}>
-              <div className="h-full">
-                <Thread />
-              </div>
-            </AssistantRuntimeProvider>
+            <UserTurnAnchorsContext.Provider value={anchorsValue}>
+              <AssistantRuntimeProvider runtime={runtime}>
+                <div className="h-full">
+                  <Thread />
+                </div>
+              </AssistantRuntimeProvider>
+            </UserTurnAnchorsContext.Provider>
           </ChatInputContext.Provider>
         </AgentNameContext.Provider>
       </ComposerIdContext.Provider>
@@ -90,12 +124,21 @@ function AgentChatLoader({
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     null,
   );
+  const [initialAnchors, setInitialAnchors] = useState<Record<string, number>>(
+    {},
+  );
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
     fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/state`)
       .then((res) => res.json())
-      .then((data) => setInitialMessages(data.history))
+      .then((data) => {
+        setInitialMessages(data.history);
+        const raw = data.user_turn_anchors;
+        setInitialAnchors(
+          raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {},
+        );
+      })
       .catch((err) => {
         console.error('Failed to fetch history', err);
         setInitialMessages([]);
@@ -116,6 +159,7 @@ function AgentChatLoader({
       agentName={agentName}
       workspace={workspace}
       initialMessages={initialMessages}
+      initialAnchors={initialAnchors}
     />
   );
 }
