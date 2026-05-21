@@ -50,10 +50,30 @@ function AgentChat({
   const transport = useMemo(() => acquireTransport(url), [url]);
 
   useEffect(() => {
+    transport.onEvent = (dataPart) => {
+      if (dataPart.type === "data-input-request") {
+        setInputArgs(dataPart.data as ChatInputEventArgs);
+      } else if (dataPart.type === "data-user-turn") {
+        const { eventIndex, messageId } = dataPart as {
+          eventIndex?: number;
+          messageId?: string;
+        };
+        if (typeof eventIndex === "number" && typeof messageId === "string") {
+          setAnchors((prev) => {
+            if (prev.get(messageId) === eventIndex) return prev;
+            const next = new Map(prev);
+            next.set(messageId, eventIndex);
+            return next;
+          });
+        }
+      }
+    };
+
     return () => {
+      transport.onEvent = undefined;
       releaseTransport(url);
     };
-  }, [url]);
+  }, [transport, url]);
 
   const runtime = useChatRuntime({
     transport,

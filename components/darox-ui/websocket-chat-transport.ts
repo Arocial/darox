@@ -10,6 +10,7 @@ type WsServerFrame =
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
 {
+  public onEvent?: (event: UIMessageChunk) => void;
   private url: string;
   private ws: WebSocket | null = null;
   private openPromise: Promise<void> | null = null;
@@ -121,16 +122,22 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       }
       case "step-done":
         return;
-      case "data-input-request":
-        this.enqueue({
+      case "data-input-request": {
+        const chunk = {
           type: "data-input-request",
           data: (msg as { data: unknown }).data,
-        } as unknown as UIMessageChunk);
+        } as unknown as UIMessageChunk;
+        this.enqueue(chunk);
         this.closeController();
+        if (this.onEvent) this.onEvent(chunk);
         return;
-      default:
-        this.enqueue(msg as unknown as UIMessageChunk);
+      }
+      default: {
+        const chunk = msg as unknown as UIMessageChunk;
+        this.enqueue(chunk);
+        if (this.onEvent) this.onEvent(chunk);
         return;
+      }
     }
   }
 
