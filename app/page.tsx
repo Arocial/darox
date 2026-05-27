@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useComposerTabs } from "@/components/darox-ui/composer-store";
-import { ComposerTabBar } from "@/components/darox-ui/composer-tab-bar";
-import { ComposerTabPanel } from "@/components/darox-ui/composer-tab-panel";
+import { useAgentTabs } from "@/components/darox-ui/agent-store";
+import { AgentTabBar } from "@/components/darox-ui/agent-tab-bar";
+import { AgentTabPanel } from "@/components/darox-ui/agent-tab-panel";
 import {
   useBackendStore,
   isDesktop,
@@ -25,8 +25,7 @@ export type ChatInputEventResult = {
 };
 
 export default function Chat() {
-  const { tabs, activeId, loading, loadComposers, loadSessions } =
-    useComposerTabs();
+  const { tabs, activeId, loading, loadAgents, loadSessions } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
   const [mounted, setMounted] = useState(false);
@@ -51,10 +50,10 @@ export default function Chat() {
 
   useEffect(() => {
     if (backendStatus === "connected") {
-      loadComposers();
+      loadAgents();
       loadSessions();
     }
-  }, [backendStatus, loadComposers, loadSessions]);
+  }, [backendStatus, loadAgents, loadSessions]);
 
   if (!mounted) {
     return null;
@@ -78,14 +77,14 @@ export default function Chat() {
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center text-muted-foreground">
-        Loading composers...
+        Loading agents...
       </div>
     );
   }
 
   return (
     <div className="flex h-dvh flex-row">
-      <ComposerTabBar />
+      <AgentTabBar />
       <div className="relative min-h-0 flex-1">
         {tabs.map((tab) => (
           <div
@@ -94,8 +93,8 @@ export default function Chat() {
               activeId === tab.id ? "visible z-10" : "invisible z-0"
             }`}
           >
-            <ComposerTabPanel
-              composerId={tab.id}
+            <AgentTabPanel
+              agentId={tab.id}
               workspace={tab.workspace}
               mainAgent={tab.main_agent}
               subagents={tab.subagents}
@@ -104,7 +103,7 @@ export default function Chat() {
         ))}
         {tabs.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            No composers open. Click &quot;New Composer&quot; to create one.
+            No agents open. Click &quot;New&quot; to create one.
           </div>
         )}
       </div>

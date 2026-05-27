@@ -13,9 +13,9 @@ import {
   RotateCwIcon,
 } from "lucide-react";
 import {
-  useComposerTabs,
+  useAgentTabs,
   type SessionInfo,
-} from "@/components/darox-ui/composer-store";
+} from "@/components/darox-ui/agent-store";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 import { toast } from "sonner";
 
@@ -58,18 +58,18 @@ function formatRelativeTime(isoDate: string): string {
   return date.toLocaleDateString();
 }
 
-export const ComposerTabBar: FC = () => {
+export const AgentTabBar: FC = () => {
   const {
     tabs,
     activeId,
     setActiveId,
-    createComposer,
-    deleteComposer,
+    createAgent,
+    deleteAgent,
     deleteSession,
     sessions,
     loadSessions,
     openSession,
-  } = useComposerTabs();
+  } = useAgentTabs();
   const [showSessions, setShowSessions] = useState(true);
   const [showWorkspaces, setShowWorkspaces] = useState(true);
   const backendStatus = useBackendStore((s) => s.status);
@@ -85,12 +85,12 @@ export const ComposerTabBar: FC = () => {
   const handleAdd = async () => {
     const workspace = await pickDirectory();
     if (!workspace) return;
-    await createComposer(workspace);
+    await createAgent(workspace);
   };
 
   const handleClose = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await deleteComposer(id);
+    await deleteAgent(id);
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
@@ -109,14 +109,14 @@ export const ComposerTabBar: FC = () => {
     workspace: string,
   ) => {
     e.stopPropagation();
-    const newTab = await createComposer(workspace);
+    const newTab = await createAgent(workspace);
     if (newTab) {
-      await deleteComposer(id);
+      await deleteAgent(id);
     }
   };
 
   const handleNewInWorkspace = async (workspace: string) => {
-    await createComposer(workspace);
+    await createAgent(workspace);
   };
 
   const handleOpenSession = async (session: SessionInfo) => {

@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 
-export type ComposerTab = {
+export type AgentTab = {
   id: string;
   workspace: string;
   main_agent: string;
@@ -12,33 +12,33 @@ export type ComposerTab = {
 
 export type SessionInfo = {
   id: string;
-  composer_name: string;
+  main_agent: string;
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown>;
 };
 
-type ComposerTabsState = {
-  tabs: ComposerTab[];
+type AgentTabsState = {
+  tabs: AgentTab[];
   activeId: string | null;
   loading: boolean;
   sessions: SessionInfo[];
 
   setActiveId: (id: string) => void;
-  loadComposers: () => Promise<void>;
-  createComposer: (workspace: string) => Promise<ComposerTab | null>;
-  deleteComposer: (id: string) => Promise<void>;
+  loadAgents: () => Promise<void>;
+  createAgent: (workspace: string) => Promise<AgentTab | null>;
+  deleteAgent: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
-  openSession: (session: SessionInfo) => Promise<ComposerTab | null>;
+  openSession: (session: SessionInfo) => Promise<AgentTab | null>;
   openSessionById: (
     sessionId: string,
     workspace?: string,
-  ) => Promise<ComposerTab | null>;
-  clearComposers: () => void;
+  ) => Promise<AgentTab | null>;
+  clearAgents: () => void;
 };
 
-export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
+export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   tabs: [],
   activeId: null,
   loading: false,
@@ -46,25 +46,25 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
 
   setActiveId: (id) => set({ activeId: id }),
 
-  loadComposers: async () => {
+  loadAgents: async () => {
     set({ loading: true });
     try {
       const apiBase = useBackendStore.getState().apiBase;
       const res = await fetch(`${apiBase}/api/agents`);
-      if (!res.ok) throw new Error("Failed to load composers");
-      const tabs: ComposerTab[] = await res.json();
+      if (!res.ok) throw new Error("Failed to load agents");
+      const tabs: AgentTab[] = await res.json();
       set({
         tabs,
         activeId: tabs.length > 0 ? tabs[0].id : null,
       });
     } catch (e) {
-      console.error("Failed to load composers", e);
+      console.error("Failed to load agents", e);
     } finally {
       set({ loading: false });
     }
   },
 
-  createComposer: async (workspace: string) => {
+  createAgent: async (workspace: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
       const res = await fetch(`${apiBase}/api/agents`, {
@@ -72,25 +72,25 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),
       });
-      if (!res.ok) throw new Error("Failed to create composer");
-      const tab: ComposerTab = await res.json();
+      if (!res.ok) throw new Error("Failed to create agent");
+      const tab: AgentTab = await res.json();
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
       }));
       return tab;
     } catch (e) {
-      console.error("Failed to create composer", e);
+      console.error("Failed to create agent", e);
       return null;
     }
   },
 
-  deleteComposer: async (id: string) => {
+  deleteAgent: async (id: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
       await fetch(`${apiBase}/api/agents/${id}`, { method: "DELETE" });
     } catch (e) {
-      console.error("Failed to delete composer", e);
+      console.error("Failed to delete agent", e);
     }
     set((state) => {
       const tabs = state.tabs.filter((t) => t.id !== id);
@@ -145,7 +145,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
         }),
       });
       if (!res.ok) throw new Error("Failed to open session");
-      const tab: ComposerTab = await res.json();
+      const tab: AgentTab = await res.json();
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
@@ -169,7 +169,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
         }),
       });
       if (!res.ok) throw new Error("Failed to open session");
-      const tab: ComposerTab = await res.json();
+      const tab: AgentTab = await res.json();
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
@@ -181,7 +181,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
     }
   },
 
-  clearComposers: () => set({ tabs: [], activeId: null }),
+  clearAgents: () => set({ tabs: [], activeId: null }),
 }));
 
 useBackendStore.subscribe((state, prevState) => {
@@ -189,6 +189,6 @@ useBackendStore.subscribe((state, prevState) => {
     state.processStatus === "starting" &&
     prevState.processStatus !== "starting"
   ) {
-    useComposerTabs.getState().clearComposers();
+    useAgentTabs.getState().clearAgents();
   }
 });

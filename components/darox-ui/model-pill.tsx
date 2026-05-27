@@ -17,8 +17,8 @@ type SuggestionItem = {
   description?: string | null;
 };
 
-export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
-  composerId,
+export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
+  agentId,
   agentName,
 }) => {
   const apiBase = useBackendStore((s) => s.apiBase);
@@ -32,14 +32,14 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const wsUrl = useMemo(
-    () => httpBaseToWsUrl(apiBase, composerId, agentName),
-    [apiBase, composerId, agentName],
+    () => httpBaseToWsUrl(apiBase, agentId, agentName),
+    [apiBase, agentId, agentName],
   );
 
   // Fetch initial model from /state.
   useEffect(() => {
     let cancelled = false;
-    fetch(`${apiBase}/api/agents/${composerId}/${agentName}/state`)
+    fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && typeof data?.model === "string") {
@@ -52,7 +52,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, composerId, agentName]);
+  }, [apiBase, agentId, agentName]);
 
   // Close on outside click.
   useEffect(() => {
@@ -74,7 +74,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     const t = setTimeout(async () => {
       try {
         const url = new URL(
-          `${apiBase}/api/agents/${composerId}/${agentName}/suggestions`,
+          `${apiBase}/api/agents/${agentId}/${agentName}/suggestions`,
         );
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);
@@ -97,7 +97,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, query, apiBase, composerId, agentName]);
+  }, [open, query, apiBase, agentId, agentName]);
 
   const handleSelect = async (modelRef: string) => {
     if (!modelRef) return;

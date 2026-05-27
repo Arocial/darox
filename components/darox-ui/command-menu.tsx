@@ -3,7 +3,7 @@
 import { Command } from "cmdk";
 import { type FC, useState, useEffect, useRef, useContext } from "react";
 import { ComposerPrimitive, useAuiState, useAui } from "@assistant-ui/react";
-import { ComposerIdContext } from "@/components/darox-ui/composer-id-context";
+import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
 import {
   useWorkspace,
@@ -22,7 +22,7 @@ type SuggestionItem = {
 export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
   disabled,
 }) => {
-  const composerId = useContext(ComposerIdContext);
+  const agentId = useContext(AgentIdContext);
   const agentName = useContext(AgentNameContext);
   const workspace = useWorkspace();
   const apiBase = useBackendStore((s) => s.apiBase);
@@ -118,8 +118,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
       setLoading(true);
       try {
         const base =
-          composerId && agentName
-            ? `${apiBase}/api/agents/${composerId}/${agentName}/suggestions`
+          agentId && agentName
+            ? `${apiBase}/api/agents/${agentId}/${agentName}/suggestions`
             : `${apiBase}/api/suggestions`;
         const url = new URL(base);
         if (command) {
@@ -153,7 +153,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
 
     const debounce = setTimeout(fetchSuggestions, 150);
     return () => clearTimeout(debounce);
-  }, [command, search, open, composerId, agentName, apiBase]);
+  }, [command, search, open, agentId, agentName, apiBase]);
 
   const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;

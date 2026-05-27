@@ -4,12 +4,12 @@
 // WebSocket was removed; the MainAgent now handles these global commands via
 // a plugin, so they are sent over its own WebSocket.
 
-export type ComposerCommandAck = {
+export type AgentCommandAck = {
   status: string;
   output?: string;
 };
 
-export function composerWsUrl(
+export function agentWsUrl(
   apiBase: string,
   agentId: string,
   mainAgentName: string,
@@ -18,14 +18,14 @@ export function composerWsUrl(
   return `${wsBase}/api/agents/${agentId}/${mainAgentName}/ws`;
 }
 
-export function sendComposerCommand(
+export function sendAgentCommand(
   apiBase: string,
   agentId: string,
   mainAgentName: string,
   event: { type: string; [key: string]: unknown },
-): Promise<ComposerCommandAck> {
-  const url = composerWsUrl(apiBase, agentId, mainAgentName);
-  return new Promise<ComposerCommandAck>((resolve, reject) => {
+): Promise<AgentCommandAck> {
+  const url = agentWsUrl(apiBase, agentId, mainAgentName);
+  return new Promise<AgentCommandAck>((resolve, reject) => {
     let settled = false;
     let ws: WebSocket;
     try {
@@ -34,7 +34,7 @@ export function sendComposerCommand(
       reject(err);
       return;
     }
-    const finish = (result: ComposerCommandAck | Error) => {
+    const finish = (result: AgentCommandAck | Error) => {
       if (settled) return;
       settled = true;
       try {
@@ -64,10 +64,10 @@ export function sendComposerCommand(
       }
     };
     ws.onerror = () => {
-      finish(new Error("composer ws error"));
+      finish(new Error("agent ws error"));
     };
     ws.onclose = () => {
-      if (!settled) finish(new Error("composer ws closed before ack"));
+      if (!settled) finish(new Error("agent ws closed before ack"));
     };
   });
 }

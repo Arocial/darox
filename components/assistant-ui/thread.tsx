@@ -33,7 +33,7 @@ import type { FC } from "react";
 import { toast } from "sonner";
 
 import { useUserTurnAnchors } from "@/components/darox-ui/user-turn-anchors-context";
-import { useComposerTabs } from "@/components/darox-ui/composer-store";
+import { useAgentTabs } from "@/components/darox-ui/agent-store";
 import { useWorkspace } from "@/components/darox-ui/workspace-context";
 
 import { Composer } from "@/components/darox-ui/composer";
@@ -248,7 +248,7 @@ const UserActionBar: FC = () => {
   const messageId = useAuiState((s) => s.message.id);
   const anchor = anchorsCtx?.anchors.get(messageId) ?? null;
   const workspace = useWorkspace();
-  const openSessionById = useComposerTabs((s) => s.openSessionById);
+  const openSessionById = useAgentTabs((s) => s.openSessionById);
 
   const onFork = async () => {
     if (anchorsCtx === null || anchor === null) {

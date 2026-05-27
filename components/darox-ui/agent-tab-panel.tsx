@@ -8,7 +8,7 @@ import {
   ChatInputContext,
   defaultInputArgs,
 } from "@/components/darox-ui/chat-input-context";
-import { ComposerIdContext } from "@/components/darox-ui/composer-id-context";
+import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
 import { WorkspaceContext } from "@/components/darox-ui/workspace-context";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
@@ -19,19 +19,19 @@ import {
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
 import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
-import { sendComposerCommand } from "@/components/darox-ui/composer-command";
+import { sendAgentCommand } from "@/components/darox-ui/agent-command";
 import type { ChatInputEventArgs } from "@/app/page";
 import type { UIMessage } from "ai";
 
 function AgentChat({
-  composerId,
+  agentId,
   agentName,
   mainAgent,
   workspace,
   initialMessages,
   initialAnchors,
 }: {
-  composerId: string;
+  agentId: string;
   agentName: string;
   mainAgent: string;
   workspace: string;
@@ -46,8 +46,8 @@ function AgentChat({
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
-    () => httpBaseToWsUrl(apiBase, composerId, agentName),
-    [apiBase, composerId, agentName],
+    () => httpBaseToWsUrl(apiBase, agentId, agentName),
+    [apiBase, agentId, agentName],
   );
   const transport = useMemo(() => acquireTransport(url), [url]);
 
@@ -107,17 +107,17 @@ function AgentChat({
     () => ({
       anchors,
       forkAt: (eventIndex: number) =>
-        sendComposerCommand(apiBase, composerId, mainAgent, {
+        sendAgentCommand(apiBase, agentId, mainAgent, {
           type: "ForkEvent",
           event_index: eventIndex,
         }),
     }),
-    [anchors, apiBase, composerId, mainAgent],
+    [anchors, apiBase, agentId, mainAgent],
   );
 
   return (
     <WorkspaceContext.Provider value={workspace}>
-      <ComposerIdContext.Provider value={composerId}>
+      <AgentIdContext.Provider value={agentId}>
         <AgentNameContext.Provider value={agentName}>
           <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
             <UserTurnAnchorsContext.Provider value={anchorsValue}>
@@ -129,18 +129,18 @@ function AgentChat({
             </UserTurnAnchorsContext.Provider>
           </ChatInputContext.Provider>
         </AgentNameContext.Provider>
-      </ComposerIdContext.Provider>
+      </AgentIdContext.Provider>
     </WorkspaceContext.Provider>
   );
 }
 
 function AgentChatLoader({
-  composerId,
+  agentId,
   agentName,
   mainAgent,
   workspace,
 }: {
-  composerId: string;
+  agentId: string;
   agentName: string;
   mainAgent: string;
   workspace: string;
@@ -154,7 +154,7 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    fetch(`${apiBase}/api/agents/${composerId}/${agentName}/state`)
+    fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         setInitialMessages(data.history);
@@ -167,7 +167,7 @@ function AgentChatLoader({
         console.error("Failed to fetch history", err);
         setInitialMessages([]);
       });
-  }, [composerId, agentName]);
+  }, [agentId, agentName]);
 
   if (initialMessages === null) {
     return (
@@ -179,7 +179,7 @@ function AgentChatLoader({
 
   return (
     <AgentChat
-      composerId={composerId}
+      agentId={agentId}
       agentName={agentName}
       mainAgent={mainAgent}
       workspace={workspace}
@@ -189,13 +189,13 @@ function AgentChatLoader({
   );
 }
 
-export function ComposerTabPanel({
-  composerId,
+export function AgentTabPanel({
+  agentId,
   workspace,
   mainAgent,
   subagents,
 }: {
-  composerId: string;
+  agentId: string;
   workspace: string;
   mainAgent: string;
   subagents: string[];
@@ -230,7 +230,7 @@ export function ComposerTabPanel({
           }`}
         >
           <AgentChatLoader
-            composerId={composerId}
+            agentId={agentId}
             agentName={name}
             mainAgent={mainAgent}
             workspace={workspace}
@@ -238,7 +238,7 @@ export function ComposerTabPanel({
         </div>
       ))}
       <div className="absolute top-3 left-3 z-20">
-        <ModelPill composerId={composerId} agentName={activeAgent} />
+        <ModelPill agentId={agentId} agentName={activeAgent} />
       </div>
       {agents.length > 1 && (
         <div className="absolute top-3 right-3 z-20 flex min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm">

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { ComposerCommandAck } from "./composer-command";
+import type { AgentCommandAck } from "./agent-command";
 
 export type UserTurnAnchorsContextValue = {
   // Map from UI message id to the absolute event index of its corresponding
@@ -10,7 +10,7 @@ export type UserTurnAnchorsContextValue = {
   anchors: ReadonlyMap<string, number>;
   // Fork the current session at the given absolute event index. Returns
   // the server ack carrying the new session id in `output`.
-  forkAt: (eventIndex: number) => Promise<ComposerCommandAck>;
+  forkAt: (eventIndex: number) => Promise<AgentCommandAck>;
 };
 
 export const UserTurnAnchorsContext =
