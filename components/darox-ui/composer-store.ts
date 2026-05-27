@@ -50,7 +50,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
     set({ loading: true });
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/composers`);
+      const res = await fetch(`${apiBase}/api/agents`);
       if (!res.ok) throw new Error("Failed to load composers");
       const tabs: ComposerTab[] = await res.json();
       set({
@@ -67,7 +67,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
   createComposer: async (workspace: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/composers`, {
+      const res = await fetch(`${apiBase}/api/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),
@@ -88,7 +88,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
   deleteComposer: async (id: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      await fetch(`${apiBase}/api/composers/${id}`, { method: "DELETE" });
+      await fetch(`${apiBase}/api/agents/${id}`, { method: "DELETE" });
     } catch (e) {
       console.error("Failed to delete composer", e);
     }
@@ -136,7 +136,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
     const workspace = session.metadata?.workspace;
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/composers`, {
+      const res = await fetch(`${apiBase}/api/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,7 +160,7 @@ export const useComposerTabs = create<ComposerTabsState>((set, get) => ({
   openSessionById: async (sessionId: string, workspace?: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/composers`, {
+      const res = await fetch(`${apiBase}/api/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -322,11 +322,11 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
 export function httpBaseToWsUrl(
   apiBase: string,
-  composerId: string,
+  agentId: string,
   agentName: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/api/composers/${composerId}/agents/${agentName}/ws`;
+  return `${wsBase}/api/agents/${agentId}/${agentName}/ws`;
 }
 
 // Module-level cache keyed by URL. Lets StrictMode's unmount→remount reuse

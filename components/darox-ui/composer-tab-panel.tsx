@@ -26,12 +26,14 @@ import type { UIMessage } from "ai";
 function AgentChat({
   composerId,
   agentName,
+  mainAgent,
   workspace,
   initialMessages,
   initialAnchors,
 }: {
   composerId: string;
   agentName: string;
+  mainAgent: string;
   workspace: string;
   initialMessages: UIMessage[];
   initialAnchors: Record<string, number>;
@@ -105,12 +107,12 @@ function AgentChat({
     () => ({
       anchors,
       forkAt: (eventIndex: number) =>
-        sendComposerCommand(apiBase, composerId, {
+        sendComposerCommand(apiBase, composerId, mainAgent, {
           type: "ForkEvent",
           event_index: eventIndex,
         }),
     }),
-    [anchors, apiBase, composerId],
+    [anchors, apiBase, composerId, mainAgent],
   );
 
   return (
@@ -135,10 +137,12 @@ function AgentChat({
 function AgentChatLoader({
   composerId,
   agentName,
+  mainAgent,
   workspace,
 }: {
   composerId: string;
   agentName: string;
+  mainAgent: string;
   workspace: string;
 }) {
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
@@ -150,7 +154,7 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/state`)
+    fetch(`${apiBase}/api/agents/${composerId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         setInitialMessages(data.history);
@@ -177,6 +181,7 @@ function AgentChatLoader({
     <AgentChat
       composerId={composerId}
       agentName={agentName}
+      mainAgent={mainAgent}
       workspace={workspace}
       initialMessages={initialMessages}
       initialAnchors={initialAnchors}
@@ -227,6 +232,7 @@ export function ComposerTabPanel({
           <AgentChatLoader
             composerId={composerId}
             agentName={name}
+            mainAgent={mainAgent}
             workspace={workspace}
           />
         </div>

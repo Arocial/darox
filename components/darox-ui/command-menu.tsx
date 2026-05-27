@@ -119,7 +119,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
       try {
         const base =
           composerId && agentName
-            ? `${apiBase}/api/composers/${composerId}/agents/${agentName}/suggestions`
+            ? `${apiBase}/api/agents/${composerId}/${agentName}/suggestions`
             : `${apiBase}/api/suggestions`;
         const url = new URL(base);
         if (command) {

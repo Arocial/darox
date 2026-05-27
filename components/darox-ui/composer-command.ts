@@ -1,23 +1,30 @@
-// One-shot composer-scope command over the composer's WebSocket endpoint.
-// Used for slash-equivalents like ForkEvent that target the composer
-// itself rather than any individual agent.
+// One-shot global command over the MainAgent's WebSocket endpoint.
+// Used for slash-equivalents like ForkEvent that target the whole agent
+// instance rather than any individual subagent. The dedicated composer-level
+// WebSocket was removed; the MainAgent now handles these global commands via
+// a plugin, so they are sent over its own WebSocket.
 
 export type ComposerCommandAck = {
   status: string;
   output?: string;
 };
 
-export function composerWsUrl(apiBase: string, composerId: string): string {
+export function composerWsUrl(
+  apiBase: string,
+  agentId: string,
+  mainAgentName: string,
+): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/api/composers/${composerId}/ws`;
+  return `${wsBase}/api/agents/${agentId}/${mainAgentName}/ws`;
 }
 
 export function sendComposerCommand(
   apiBase: string,
-  composerId: string,
+  agentId: string,
+  mainAgentName: string,
   event: { type: string; [key: string]: unknown },
 ): Promise<ComposerCommandAck> {
-  const url = composerWsUrl(apiBase, composerId);
+  const url = composerWsUrl(apiBase, agentId, mainAgentName);
   return new Promise<ComposerCommandAck>((resolve, reject) => {
     let settled = false;
     let ws: WebSocket;

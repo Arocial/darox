@@ -39,7 +39,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
   // Fetch initial model from /state.
   useEffect(() => {
     let cancelled = false;
-    fetch(`${apiBase}/api/composers/${composerId}/agents/${agentName}/state`)
+    fetch(`${apiBase}/api/agents/${composerId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && typeof data?.model === "string") {
@@ -74,7 +74,7 @@ export const ModelPill: FC<{ composerId: string; agentName: string }> = ({
     const t = setTimeout(async () => {
       try {
         const url = new URL(
-          `${apiBase}/api/composers/${composerId}/agents/${agentName}/suggestions`,
+          `${apiBase}/api/agents/${composerId}/${agentName}/suggestions`,
         );
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);
