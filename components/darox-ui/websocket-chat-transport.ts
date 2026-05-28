@@ -122,6 +122,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       }
       case "step-done":
         return;
+      case "data-user-turn": {
+        // Control signal carrying the fork anchor (eventId) for the user
+        // message identified by messageId. Consumed via onEvent, which stamps
+        // it onto the message metadata; it is not part of the assistant
+        // message stream, so it must not be enqueued.
+        if (this.onEvent) this.onEvent(msg as unknown as UIMessageChunk);
+        return;
+      }
       case "data-input-request": {
         const chunk = {
           type: "data-input-request",
