@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useChat } from "@ai-sdk/react";
+import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
 import {
@@ -18,7 +19,10 @@ import {
   httpBaseToWsUrl,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
-import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
+import {
+  UserTurnAnchorsContext,
+  USER_INPUT_ID_KEY,
+} from "@/components/darox-ui/user-turn-anchors-context";
 import { sendAgentCommand } from "@/components/darox-ui/agent-command";
 import type { ChatInputEventArgs } from "@/app/page";
 import type { UIMessage } from "ai";
@@ -29,20 +33,15 @@ function AgentChat({
   mainAgent,
   workspace,
   initialMessages,
-  initialAnchors,
 }: {
   agentId: string;
   agentName: string;
   mainAgent: string;
   workspace: string;
   initialMessages: UIMessage[];
-  initialAnchors: Record<string, string>;
 }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
-  const [anchors, setAnchors] = useState<Map<string, string>>(
-    () => new Map(Object.entries(initialAnchors)),
-  );
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
@@ -51,23 +50,55 @@ function AgentChat({
   );
   const transport = useMemo(() => acquireTransport(url), [url]);
 
+  const chat = useChat({
+    id: `${agentId}:${agentName}`,
+    transport,
+    messages: initialMessages,
+    // resume: true triggers transport.reconnectToStream() on mount so we
+    // start draining server-pushed events before the user submits anything.
+    resume: true,
+    onData: (dataPart) => {
+      if (dataPart.type === "data-input-request") {
+        setInputArgs(dataPart.data as ChatInputEventArgs);
+      }
+    },
+  });
+
+  const runtime = useAISDKRuntime(chat);
+
+  // Stable handle to setMessages for the transport.onEvent closure below.
+  const setMessagesRef = useRef(chat.setMessages);
+  setMessagesRef.current = chat.setMessages;
+
   useEffect(() => {
     transport.onEvent = (dataPart) => {
       if (dataPart.type === "data-input-request") {
-        setInputArgs(dataPart.data as ChatInputEventArgs);
+        setInputArgs((dataPart as { data: ChatInputEventArgs }).data);
       } else if (dataPart.type === "data-user-turn") {
         const { eventId, messageId } = dataPart as {
           eventId?: string;
           messageId?: string;
         };
-        if (typeof eventId === "string" && typeof messageId === "string") {
-          setAnchors((prev) => {
-            if (prev.get(messageId) === eventId) return prev;
-            const next = new Map(prev);
-            next.set(messageId, eventId);
-            return next;
-          });
-        }
+        if (typeof eventId !== "string" || typeof messageId !== "string")
+          return;
+        // Stamp the fork anchor onto the user message's own metadata, in the
+        // same place /state delivers it on reload (metadata.custom). No
+        // separate message-id -> event-id map to maintain.
+        setMessagesRef.current((prev) =>
+          prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const custom = (m.metadata as { custom?: Record<string, unknown> })
+              ?.custom;
+            if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;
+            return {
+              ...m,
+              metadata: {
+                ...(m.metadata as object | undefined),
+                custom: { ...custom, [USER_INPUT_ID_KEY]: eventId },
+              },
+            };
+          }),
+        );
       }
     };
 
@@ -77,42 +108,15 @@ function AgentChat({
     };
   }, [transport, url]);
 
-  const runtime = useChatRuntime({
-    transport,
-    messages: initialMessages,
-    // resume: true triggers transport.reconnectToStream() on mount so we
-    // start draining server-pushed events before the user submits anything.
-    resume: true,
-    onData: (dataPart) => {
-      if (dataPart.type === "data-input-request") {
-        setInputArgs(dataPart.data as ChatInputEventArgs);
-      } else if (dataPart.type === "data-user-turn") {
-        const { eventId, messageId } = dataPart as {
-          eventId?: string;
-          messageId?: string;
-        };
-        if (typeof eventId === "string" && typeof messageId === "string") {
-          setAnchors((prev) => {
-            if (prev.get(messageId) === eventId) return prev;
-            const next = new Map(prev);
-            next.set(messageId, eventId);
-            return next;
-          });
-        }
-      }
-    },
-  } as Parameters<typeof useChatRuntime>[0]);
-
   const anchorsValue = useMemo(
     () => ({
-      anchors,
       forkAt: (eventId: string) =>
         sendAgentCommand(apiBase, agentId, mainAgent, {
           type: "ForkEvent",
           event_id: eventId,
         }),
     }),
-    [anchors, apiBase, agentId, mainAgent],
+    [apiBase, agentId, mainAgent],
   );
 
   return (
@@ -148,31 +152,18 @@ function AgentChatLoader({
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     null,
   );
-  const [initialAnchors, setInitialAnchors] = useState<Record<string, string>>(
-    {},
-  );
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
     fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
+        // Each user message already carries its fork anchor under
+        // metadata.custom.user_input_id, so no separate mapping is needed.
         const history: UIMessage[] = Array.isArray(data.history)
           ? data.history
           : [];
         setInitialMessages(history);
-        // Pair the backend's ordered user-turn event ids with our own user
-        // messages by position to rebuild the message-id -> event-id map.
-        const turns: string[] = Array.isArray(data.user_turns)
-          ? data.user_turns
-          : [];
-        const userMsgs = history.filter((m) => m.role === "user");
-        const anchors: Record<string, string> = {};
-        const n = Math.min(userMsgs.length, turns.length);
-        for (let k = 0; k < n; k++) {
-          anchors[userMsgs[k].id] = turns[k];
-        }
-        setInitialAnchors(anchors);
       })
       .catch((err) => {
         console.error("Failed to fetch history", err);
@@ -195,7 +186,6 @@ function AgentChatLoader({
       mainAgent={mainAgent}
       workspace={workspace}
       initialMessages={initialMessages}
-      initialAnchors={initialAnchors}
     />
   );
 }

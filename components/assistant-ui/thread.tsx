@@ -32,7 +32,10 @@ import {
 import type { FC } from "react";
 import { toast } from "sonner";
 
-import { useUserTurnAnchors } from "@/components/darox-ui/user-turn-anchors-context";
+import {
+  useUserTurnAnchors,
+  USER_INPUT_ID_KEY,
+} from "@/components/darox-ui/user-turn-anchors-context";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
 import { useWorkspace } from "@/components/darox-ui/workspace-context";
 
@@ -245,8 +248,10 @@ const UserMessage: FC = () => {
 
 const UserActionBar: FC = () => {
   const anchorsCtx = useUserTurnAnchors();
-  const messageId = useAuiState((s) => s.message.id);
-  const anchor = anchorsCtx?.anchors.get(messageId) ?? null;
+  const anchorValue = useAuiState(
+    (s) => s.message.metadata?.custom?.[USER_INPUT_ID_KEY],
+  );
+  const anchor = typeof anchorValue === "string" ? anchorValue : null;
   const workspace = useWorkspace();
   const openSessionById = useAgentTabs((s) => s.openSessionById);
 
