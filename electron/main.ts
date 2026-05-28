@@ -108,6 +108,11 @@ async function createWindow() {
     menu.popup({ window: mainWindow });
   });
 
+  // Relay native find-in-page results (match count, active ordinal) to renderer.
+  mainWindow.webContents.on("found-in-page", (_e, result) => {
+    mainWindow?.webContents.send("found-in-page", result);
+  });
+
   if (isDev) {
     await mainWindow.loadURL("http://localhost:3140");
   } else {
@@ -141,6 +146,31 @@ app.whenReady().then(async () => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
     return dialog.showOpenDialog(mainWindow, opts ?? {});
   });
+  ipcMain.handle(
+    "find:start",
+    (
+      _e,
+      args: {
+        text: string;
+        forward?: boolean;
+        findNext?: boolean;
+        matchCase?: boolean;
+      },
+    ) => {
+      if (!mainWindow || !args?.text) return null;
+      return mainWindow.webContents.findInPage(args.text, {
+        forward: args.forward ?? true,
+        findNext: args.findNext ?? false,
+        matchCase: args.matchCase ?? false,
+      });
+    },
+  );
+  ipcMain.handle(
+    "find:stop",
+    (_e, action?: "clearSelection" | "keepSelection" | "activateSelection") => {
+      mainWindow?.webContents.stopFindInPage(action ?? "clearSelection");
+    },
+  );
 
   await createWindow();
 
