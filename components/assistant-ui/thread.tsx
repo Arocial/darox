@@ -288,11 +288,7 @@ const UserActionBar: FC = () => {
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
       <TooltipIconButton
-        tooltip={
-          anchor !== null
-            ? `Fork from this turn (@${anchor})`
-            : "Fork unavailable"
-        }
+        tooltip={anchor !== null ? "Fork from this turn" : "Fork unavailable"}
         className="aui-user-action-fork p-4"
         onClick={onFork}
         disabled={anchor === null}

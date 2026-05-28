@@ -36,11 +36,11 @@ function AgentChat({
   mainAgent: string;
   workspace: string;
   initialMessages: UIMessage[];
-  initialAnchors: Record<string, number>;
+  initialAnchors: Record<string, string>;
 }) {
   const [inputArgs, setInputArgs] =
     useState<ChatInputEventArgs>(defaultInputArgs);
-  const [anchors, setAnchors] = useState<Map<string, number>>(
+  const [anchors, setAnchors] = useState<Map<string, string>>(
     () => new Map(Object.entries(initialAnchors)),
   );
   const apiBase = useBackendStore((s) => s.apiBase);
@@ -56,15 +56,15 @@ function AgentChat({
       if (dataPart.type === "data-input-request") {
         setInputArgs(dataPart.data as ChatInputEventArgs);
       } else if (dataPart.type === "data-user-turn") {
-        const { eventIndex, messageId } = dataPart as {
-          eventIndex?: number;
+        const { eventId, messageId } = dataPart as {
+          eventId?: string;
           messageId?: string;
         };
-        if (typeof eventIndex === "number" && typeof messageId === "string") {
+        if (typeof eventId === "string" && typeof messageId === "string") {
           setAnchors((prev) => {
-            if (prev.get(messageId) === eventIndex) return prev;
+            if (prev.get(messageId) === eventId) return prev;
             const next = new Map(prev);
-            next.set(messageId, eventIndex);
+            next.set(messageId, eventId);
             return next;
           });
         }
@@ -87,15 +87,15 @@ function AgentChat({
       if (dataPart.type === "data-input-request") {
         setInputArgs(dataPart.data as ChatInputEventArgs);
       } else if (dataPart.type === "data-user-turn") {
-        const { eventIndex, messageId } = dataPart as {
-          eventIndex?: number;
+        const { eventId, messageId } = dataPart as {
+          eventId?: string;
           messageId?: string;
         };
-        if (typeof eventIndex === "number" && typeof messageId === "string") {
+        if (typeof eventId === "string" && typeof messageId === "string") {
           setAnchors((prev) => {
-            if (prev.get(messageId) === eventIndex) return prev;
+            if (prev.get(messageId) === eventId) return prev;
             const next = new Map(prev);
-            next.set(messageId, eventIndex);
+            next.set(messageId, eventId);
             return next;
           });
         }
@@ -106,10 +106,10 @@ function AgentChat({
   const anchorsValue = useMemo(
     () => ({
       anchors,
-      forkAt: (eventIndex: number) =>
+      forkAt: (eventId: string) =>
         sendAgentCommand(apiBase, agentId, mainAgent, {
           type: "ForkEvent",
-          event_index: eventIndex,
+          event_id: eventId,
         }),
     }),
     [anchors, apiBase, agentId, mainAgent],
@@ -148,7 +148,7 @@ function AgentChatLoader({
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     null,
   );
-  const [initialAnchors, setInitialAnchors] = useState<Record<string, number>>(
+  const [initialAnchors, setInitialAnchors] = useState<Record<string, string>>(
     {},
   );
 
@@ -157,11 +157,22 @@ function AgentChatLoader({
     fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
-        setInitialMessages(data.history);
-        const raw = data.user_turn_anchors;
-        setInitialAnchors(
-          raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {},
-        );
+        const history: UIMessage[] = Array.isArray(data.history)
+          ? data.history
+          : [];
+        setInitialMessages(history);
+        // Pair the backend's ordered user-turn event ids with our own user
+        // messages by position to rebuild the message-id -> event-id map.
+        const turns: string[] = Array.isArray(data.user_turns)
+          ? data.user_turns
+          : [];
+        const userMsgs = history.filter((m) => m.role === "user");
+        const anchors: Record<string, string> = {};
+        const n = Math.min(userMsgs.length, turns.length);
+        for (let k = 0; k < n; k++) {
+          anchors[userMsgs[k].id] = turns[k];
+        }
+        setInitialAnchors(anchors);
       })
       .catch((err) => {
         console.error("Failed to fetch history", err);
