@@ -5,7 +5,8 @@ import { useBackendStore } from "@/components/darox-ui/backend-store";
 import { Button } from "@/components/ui/button";
 
 export function BrowserApiPrompt() {
-  const { apiBase, setApiBase, status } = useBackendStore();
+  const { apiBase, setApiBase, setStatus, probeBackend, status } =
+    useBackendStore();
   const [inputUrl, setInputUrl] = useState("");
 
   useEffect(() => {
@@ -13,8 +14,9 @@ export function BrowserApiPrompt() {
     if (savedUrl) {
       setApiBase(savedUrl);
       setInputUrl(savedUrl);
+      probeBackend();
     }
-  }, [setApiBase]);
+  }, [setApiBase, probeBackend]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +27,8 @@ export function BrowserApiPrompt() {
     }
     localStorage.setItem("darox_api_base", url);
     setApiBase(url);
+    setStatus("connecting");
+    probeBackend();
   };
 
   if (status === "connected") return null;
