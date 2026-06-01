@@ -9,6 +9,7 @@ import {
   isDesktop,
 } from "@/components/darox-ui/backend-store";
 import { BrowserApiPrompt } from "@/components/darox-ui/browser-api-prompt";
+import { WindowTitleUpdater } from "@/components/darox-ui/window-title-updater";
 
 export type ChatInputEventArgs = {
   req_id: string;
@@ -84,6 +85,7 @@ export default function Chat() {
 
   return (
     <div className="flex h-dvh flex-row">
+      <WindowTitleUpdater />
       <AgentTabBar />
       <div className="relative min-h-0 flex-1">
         {tabs.map((tab) => (

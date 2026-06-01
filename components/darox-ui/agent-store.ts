@@ -25,10 +25,16 @@ type AgentTabsState = {
   loading: boolean;
   sessions: SessionInfo[];
   needsInput: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
+  isStreaming: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
 
   setActiveId: (id: string) => void;
   setNeedsInput: (sessionId: string, agentName: string, needs: boolean) => void;
   clearNeedsInput: (sessionId: string) => void;
+  setStreaming: (
+    sessionId: string,
+    agentName: string,
+    streaming: boolean,
+  ) => void;
   loadAgents: () => Promise<void>;
   createAgent: (workspace: string) => Promise<AgentTab | null>;
   deleteAgent: (id: string) => Promise<void>;
@@ -48,6 +54,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   loading: false,
   sessions: [],
   needsInput: {},
+  isStreaming: {},
 
   setActiveId: (id) =>
     set((state) => {
@@ -77,6 +84,21 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       const newNeedsInput = { ...state.needsInput };
       delete newNeedsInput[sessionId];
       return { needsInput: newNeedsInput };
+    }),
+
+  setStreaming: (sessionId, agentName, streaming) =>
+    set((state) => {
+      const sessionStreaming = state.isStreaming[sessionId] || {};
+      if (sessionStreaming[agentName] === streaming) return state;
+      return {
+        isStreaming: {
+          ...state.isStreaming,
+          [sessionId]: {
+            ...sessionStreaming,
+            [agentName]: streaming,
+          },
+        },
+      };
     }),
 
   loadAgents: async () => {
@@ -129,12 +151,19 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       const tabs = state.tabs.filter((t) => t.id !== id);
       const newNeedsInput = { ...state.needsInput };
       delete newNeedsInput[id];
+      const newIsStreaming = { ...state.isStreaming };
+      delete newIsStreaming[id];
 
       let activeId = state.activeId;
       if (activeId === id) {
         activeId = tabs.length > 0 ? tabs[0].id : null;
       }
-      return { tabs, activeId, needsInput: newNeedsInput };
+      return {
+        tabs,
+        activeId,
+        needsInput: newNeedsInput,
+        isStreaming: newIsStreaming,
+      };
     });
 
     // Refresh session list after a session is closed or refreshed
@@ -217,7 +246,8 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     }
   },
 
-  clearAgents: () => set({ tabs: [], activeId: null, needsInput: {} }),
+  clearAgents: () =>
+    set({ tabs: [], activeId: null, needsInput: {}, isStreaming: {} }),
 }));
 
 useBackendStore.subscribe((state, prevState) => {

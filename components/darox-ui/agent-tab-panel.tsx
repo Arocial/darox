@@ -69,8 +69,14 @@ function AgentChat({
 
   const setNeedsInput = useAgentTabs((s) => s.setNeedsInput);
   const clearNeedsInput = useAgentTabs((s) => s.clearNeedsInput);
+  const setStreaming = useAgentTabs((s) => s.setStreaming);
   const isActive = useAgentTabs((s) => s.activeId === agentId);
   const lastReqIdRef = useRef<string>("");
+
+  useEffect(() => {
+    const isBusy = chat.status === "submitted" || chat.status === "streaming";
+    setStreaming(agentId, agentName, isBusy);
+  }, [chat.status, agentId, agentName, setStreaming]);
 
   useEffect(() => {
     const needsInput = !!inputArgs.req_id;
@@ -79,25 +85,34 @@ function AgentChat({
     if (needsInput && inputArgs.req_id !== lastReqIdRef.current) {
       lastReqIdRef.current = inputArgs.req_id;
       // Send desktop notification
-      if ("Notification" in window) {
-        if (Notification.permission === "granted") {
-          new Notification(`Input required: ${agentName}`, {
-            body: `Workspace: ${workspace}`,
-          });
-        } else if (Notification.permission !== "denied") {
-          Notification.requestPermission().then((permission) => {
-            if (permission === "granted") {
-              new Notification(`Input required: ${agentName}`, {
-                body: `Workspace: ${workspace}`,
-              });
-            }
-          });
+      if (!isActive || !document.hasFocus()) {
+        if ("Notification" in window) {
+          if (Notification.permission === "granted") {
+            new Notification(`Input required: ${agentName}`, {
+              body: `Workspace: ${workspace}`,
+            });
+          } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then((permission) => {
+              if (permission === "granted") {
+                new Notification(`Input required: ${agentName}`, {
+                  body: `Workspace: ${workspace}`,
+                });
+              }
+            });
+          }
         }
       }
     } else if (!needsInput) {
       lastReqIdRef.current = "";
     }
-  }, [inputArgs.req_id, agentId, agentName, setNeedsInput, workspace]);
+  }, [
+    inputArgs.req_id,
+    agentId,
+    agentName,
+    setNeedsInput,
+    workspace,
+    isActive,
+  ]);
 
   useEffect(() => {
     if (!isActive) return;
