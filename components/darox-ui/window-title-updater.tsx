@@ -12,13 +12,16 @@ function formatTabLabel(workspace: string) {
   return { dirName };
 }
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 export function WindowTitleUpdater() {
   const activeId = useAgentTabs((s) => s.activeId);
   const tabs = useAgentTabs((s) => s.tabs);
-  const needsInput = useAgentTabs((s) => s.needsInput);
   const isStreaming = useAgentTabs((s) => s.isStreaming);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | undefined;
+
     if (!activeId) {
       document.title = "Darox";
       return;
@@ -31,16 +34,26 @@ export function WindowTitleUpdater() {
     }
 
     const { dirName } = formatTabLabel(activeTab.workspace);
-    const hasInputRequest = Object.values(needsInput[activeId] || {}).some(
-      (v) => v,
-    );
     const hasStreaming = Object.values(isStreaming[activeId] || {}).some(
       (v) => v,
     );
 
-    const busy = hasInputRequest || hasStreaming;
-    document.title = busy ? `[Busy] ${dirName} - Darox` : `${dirName} - Darox`;
-  }, [activeId, tabs, needsInput, isStreaming]);
+    if (hasStreaming) {
+      let frameIndex = 0;
+      const updateTitle = () => {
+        document.title = `${SPINNER_FRAMES[frameIndex]} ${dirName} - Darox`;
+        frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length;
+      };
+      updateTitle(); // Initial set
+      intervalId = setInterval(updateTitle, 80);
+    } else {
+      document.title = `${dirName} - Darox`;
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeId, tabs, isStreaming]);
 
   return null;
 }
