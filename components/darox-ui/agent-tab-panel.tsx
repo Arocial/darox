@@ -9,6 +9,7 @@ import {
   ChatInputContext,
   defaultInputArgs,
 } from "@/components/darox-ui/chat-input-context";
+import { useAgentTabs } from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
 import { WorkspaceContext } from "@/components/darox-ui/workspace-context";
@@ -65,6 +66,51 @@ function AgentChat({
   });
 
   const runtime = useAISDKRuntime(chat);
+
+  const setNeedsInput = useAgentTabs((s) => s.setNeedsInput);
+  const clearNeedsInput = useAgentTabs((s) => s.clearNeedsInput);
+  const isActive = useAgentTabs((s) => s.activeId === agentId);
+  const lastReqIdRef = useRef<string>("");
+
+  useEffect(() => {
+    const needsInput = !!inputArgs.req_id;
+    setNeedsInput(agentId, agentName, needsInput);
+
+    if (needsInput && inputArgs.req_id !== lastReqIdRef.current) {
+      lastReqIdRef.current = inputArgs.req_id;
+      // Send desktop notification
+      if ("Notification" in window) {
+        if (Notification.permission === "granted") {
+          new Notification(`Input required: ${agentName}`, {
+            body: `Workspace: ${workspace}`,
+          });
+        } else if (Notification.permission !== "denied") {
+          Notification.requestPermission().then((permission) => {
+            if (permission === "granted") {
+              new Notification(`Input required: ${agentName}`, {
+                body: `Workspace: ${workspace}`,
+              });
+            }
+          });
+        }
+      }
+    } else if (!needsInput) {
+      lastReqIdRef.current = "";
+    }
+  }, [inputArgs.req_id, agentId, agentName, setNeedsInput, workspace]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleInteraction = () => {
+      clearNeedsInput(agentId);
+    };
+
+    window.addEventListener("focus", handleInteraction);
+    return () => {
+      window.removeEventListener("focus", handleInteraction);
+    };
+  }, [isActive, agentId, clearNeedsInput]);
 
   // Stable handle to setMessages for the transport.onEvent closure below.
   const setMessagesRef = useRef(chat.setMessages);
@@ -126,7 +172,11 @@ function AgentChat({
           <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
             <UserTurnAnchorsContext.Provider value={anchorsValue}>
               <AssistantRuntimeProvider runtime={runtime}>
-                <div className="h-full">
+                <div
+                  className="h-full"
+                  onMouseDown={() => isActive && clearNeedsInput(agentId)}
+                  onKeyDown={() => isActive && clearNeedsInput(agentId)}
+                >
                   <Thread />
                 </div>
               </AssistantRuntimeProvider>

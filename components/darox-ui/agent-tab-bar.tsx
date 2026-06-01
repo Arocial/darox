@@ -72,6 +72,7 @@ export const AgentTabBar: FC = () => {
     sessions,
     loadSessions,
     openSession,
+    needsInput,
   } = useAgentTabs();
   const [showSessions, setShowSessions] = useState(true);
   const [showWorkspaces, setShowWorkspaces] = useState(true);
@@ -154,6 +155,9 @@ export const AgentTabBar: FC = () => {
             </div>
             {tabs.map((tab) => {
               const { dirName, parentPath } = formatTabLabel(tab.workspace);
+              const hasInputRequest = Object.values(
+                needsInput[tab.id] || {},
+              ).some((v) => v);
               return (
                 <button
                   key={tab.id}
@@ -169,10 +173,16 @@ export const AgentTabBar: FC = () => {
                   />
                   <div className="min-w-0 flex-1">
                     <div
-                      className={`truncate text-sm ${activeId === tab.id ? "font-bold" : "font-medium"}`}
+                      className={`flex items-center gap-1.5 truncate text-sm ${activeId === tab.id ? "font-bold" : "font-medium"}`}
                       title={tab.workspace}
                     >
-                      {dirName}
+                      <span className="truncate">{dirName}</span>
+                      {hasInputRequest && (
+                        <span
+                          className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                          title="Input required"
+                        />
+                      )}
                     </div>
                     <div
                       className={`truncate text-xs ${activeId === tab.id ? "text-muted-foreground/80" : "text-muted-foreground"}`}
