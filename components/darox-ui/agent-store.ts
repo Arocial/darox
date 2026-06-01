@@ -13,6 +13,7 @@ export type AgentTab = {
 export type SessionInfo = {
   id: string;
   main_agent: string;
+  workspace: string;
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown>;
@@ -133,7 +134,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   },
 
   openSession: async (session: SessionInfo) => {
-    const workspace = session.metadata?.workspace;
+    const workspace = session.workspace;
     try {
       const apiBase = useBackendStore.getState().apiBase;
       const res = await fetch(`${apiBase}/api/agents`, {

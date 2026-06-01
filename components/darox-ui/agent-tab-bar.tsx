@@ -37,7 +37,10 @@ async function pickDirectory(): Promise<string | null> {
   return dir || null;
 }
 
-function formatTabLabel(workspace: string) {
+function formatTabLabel(workspace?: string | null) {
+  if (!workspace || typeof workspace !== "string") {
+    return { dirName: "Unknown", parentPath: "Unknown" };
+  }
   const parts = workspace.replace(/\/+$/, "").split("/");
   const dirName = parts[parts.length - 1] || workspace;
   const parentPath = parts.length > 1 ? parts.slice(-2).join("/") : dirName;
@@ -132,7 +135,7 @@ export const AgentTabBar: FC = () => {
     const seen = new Set<string>();
     const workspaces: { workspace: string; updated_at: string }[] = [];
     for (const session of sessions) {
-      const ws = session.metadata?.workspace;
+      const ws = session.workspace;
       if (typeof ws === "string" && !seen.has(ws)) {
         seen.add(ws);
         workspaces.push({ workspace: ws, updated_at: session.updated_at });
@@ -304,8 +307,7 @@ export const AgentTabBar: FC = () => {
                 </div>
               ) : (
                 availableSessions.map((session) => {
-                  const workspace =
-                    (session.metadata?.workspace as string) || "";
+                  const workspace = session.workspace;
                   const { dirName } = formatTabLabel(workspace);
                   const lastMessages = session.metadata?.last_user_messages as
                     | string[]
