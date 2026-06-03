@@ -40,6 +40,7 @@ import { useAgentTabs } from "@/components/darox-ui/agent-store";
 import { useWorkspace } from "@/components/darox-ui/workspace-context";
 
 import { Composer } from "@/components/darox-ui/composer";
+import { ComposerJsonUnwrapper } from "@/components/darox-ui/composer-json-unwrapper";
 import { UserMessageText } from "@/components/darox-ui/user-message-text";
 
 export const Thread: FC = () => {
@@ -308,6 +309,7 @@ const EditComposer: FC = () => {
   return (
     <MessagePrimitive.Root className="aui-edit-composer-wrapper mx-auto flex w-full max-w-(--thread-max-width) flex-col px-2 py-3">
       <ComposerPrimitive.Root className="aui-edit-composer-root ml-auto flex w-full max-w-[85%] flex-col rounded-2xl bg-muted">
+        <ComposerJsonUnwrapper />
         <ComposerPrimitive.Input
           className="aui-edit-composer-input min-h-14 w-full resize-none bg-transparent p-4 text-foreground text-sm outline-none"
           autoFocus
