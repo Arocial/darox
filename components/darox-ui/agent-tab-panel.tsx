@@ -80,29 +80,35 @@ function AgentChat({
 
   useEffect(() => {
     const needsInput = !!inputArgs.req_id;
-    setNeedsInput(agentId, agentName, needsInput);
 
-    if (needsInput && inputArgs.req_id !== lastReqIdRef.current) {
-      lastReqIdRef.current = inputArgs.req_id;
-      // Send desktop notification
-      if (!isActive || !document.hasFocus()) {
-        if ("Notification" in window) {
-          if (Notification.permission === "granted") {
-            new Notification(`Input required: ${agentName}`, {
-              body: `Workspace: ${workspace}`,
-            });
-          } else if (Notification.permission !== "denied") {
-            Notification.requestPermission().then((permission) => {
-              if (permission === "granted") {
-                new Notification(`Input required: ${agentName}`, {
-                  body: `Workspace: ${workspace}`,
-                });
-              }
-            });
+    if (needsInput) {
+      if (inputArgs.req_id !== lastReqIdRef.current) {
+        lastReqIdRef.current = inputArgs.req_id;
+        if (!isActive) {
+          setNeedsInput(agentId, agentName, true);
+        }
+
+        // Send desktop notification
+        if (!isActive || !document.hasFocus()) {
+          if ("Notification" in window) {
+            if (Notification.permission === "granted") {
+              new Notification(`Input required: ${agentName}`, {
+                body: `Workspace: ${workspace}`,
+              });
+            } else if (Notification.permission !== "denied") {
+              Notification.requestPermission().then((permission) => {
+                if (permission === "granted") {
+                  new Notification(`Input required: ${agentName}`, {
+                    body: `Workspace: ${workspace}`,
+                  });
+                }
+              });
+            }
           }
         }
       }
-    } else if (!needsInput) {
+    } else {
+      setNeedsInput(agentId, agentName, false);
       lastReqIdRef.current = "";
     }
   }, [
