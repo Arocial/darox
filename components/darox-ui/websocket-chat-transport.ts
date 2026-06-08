@@ -7,10 +7,17 @@ type WsServerFrame =
   | { type: "data-input-request"; data: unknown }
   | ({ type: string } & Record<string, unknown>);
 
+export type BackendCommand = {
+  type: string;
+  payload?: any;
+  [key: string]: any;
+};
+
+export type CommandListener = (cmd: BackendCommand) => void;
+
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
 {
-  public onEvent?: (event: UIMessageChunk) => void;
   private url: string;
   private ws: WebSocket | null = null;
   private openPromise: Promise<void> | null = null;
@@ -24,6 +31,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private commandAckQueue: Array<
     (ack: { status: string; output?: string }) => void
   > = [];
+  // Listeners for backend-initiated one-shot commands
+  private commandListeners: Set<CommandListener> = new Set();
 
   constructor(options: { url: string }) {
     this.url = options.url;
@@ -58,6 +67,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
     return this.openPromise;
+  }
+
+  public onCommand(listener: CommandListener): () => void {
+    this.commandListeners.add(listener);
+    return () => {
+      this.commandListeners.delete(listener);
+    };
   }
 
   private enqueue(chunk: UIMessageChunk) {
@@ -108,6 +124,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     if (!msg || typeof msg !== "object" || !("type" in msg)) return;
 
+    if (msg.type.startsWith("cmd-")) {
+      const command = msg as BackendCommand;
+      this.commandListeners.forEach((listener) => {
+        listener(command);
+      });
+      return;
+    }
+
     switch (msg.type) {
       case "ack": {
         const ack = msg as { status?: string; output?: string };
@@ -120,30 +144,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         }
         return;
       }
+      case "stream-close":
+        this.closeController();
+        return;
       case "step-done":
         return;
-      case "data-user-turn": {
-        // Control signal carrying the fork anchor (eventId) for the user
-        // message identified by messageId. Consumed via onEvent, which stamps
-        // it onto the message metadata; it is not part of the assistant
-        // message stream, so it must not be enqueued.
-        if (this.onEvent) this.onEvent(msg as unknown as UIMessageChunk);
-        return;
-      }
-      case "data-input-request": {
-        const chunk = {
-          type: "data-input-request",
-          data: (msg as { data: unknown }).data,
-        } as unknown as UIMessageChunk;
-        this.enqueue(chunk);
-        this.closeController();
-        if (this.onEvent) this.onEvent(chunk);
-        return;
-      }
       default: {
         const chunk = msg as unknown as UIMessageChunk;
         this.enqueue(chunk);
-        if (this.onEvent) this.onEvent(chunk);
         return;
       }
     }

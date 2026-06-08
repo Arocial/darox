@@ -25,6 +25,7 @@ import {
   USER_INPUT_ID_KEY,
 } from "@/components/darox-ui/user-turn-anchors-context";
 import { sendAgentCommand } from "@/components/darox-ui/agent-command";
+import { useBackendCommands } from "@/hooks/use-backend-commands";
 import type { ChatInputEventArgs } from "@/app/page";
 import type { UIMessage } from "ai";
 
@@ -58,11 +59,6 @@ function AgentChat({
     // resume: true triggers transport.reconnectToStream() on mount so we
     // start draining server-pushed events before the user submits anything.
     resume: true,
-    onData: (dataPart) => {
-      if (dataPart.type === "data-input-request") {
-        setInputArgs(dataPart.data as ChatInputEventArgs);
-      }
-    },
   });
 
   const runtime = useAISDKRuntime(chat);
@@ -133,47 +129,41 @@ function AgentChat({
     };
   }, [isActive, agentId, clearNeedsInput]);
 
-  // Stable handle to setMessages for the transport.onEvent closure below.
-  const setMessagesRef = useRef(chat.setMessages);
-  setMessagesRef.current = chat.setMessages;
+  useBackendCommands(url, (cmd) => {
+    if (cmd.type === "cmd-input-request") {
+      setInputArgs(cmd.payload as ChatInputEventArgs);
+    } else if (cmd.type === "cmd-user-turn") {
+      const { eventId, messageId } = cmd.payload as {
+        eventId?: string;
+        messageId?: string;
+      };
+      if (typeof eventId !== "string" || typeof messageId !== "string") return;
+      // Stamp the fork anchor onto the user message's own metadata, in the
+      // same place /state delivers it on reload (metadata.custom). No
+      // separate message-id -> event-id map to maintain.
+      chat.setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const custom = (m.metadata as { custom?: Record<string, unknown> })
+            ?.custom;
+          if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;
+          return {
+            ...m,
+            metadata: {
+              ...(m.metadata as object | undefined),
+              custom: { ...custom, [USER_INPUT_ID_KEY]: eventId },
+            },
+          };
+        }),
+      );
+    }
+  });
 
   useEffect(() => {
-    transport.onEvent = (dataPart) => {
-      if (dataPart.type === "data-input-request") {
-        setInputArgs((dataPart as { data: ChatInputEventArgs }).data);
-      } else if (dataPart.type === "data-user-turn") {
-        const { eventId, messageId } = dataPart as {
-          eventId?: string;
-          messageId?: string;
-        };
-        if (typeof eventId !== "string" || typeof messageId !== "string")
-          return;
-        // Stamp the fork anchor onto the user message's own metadata, in the
-        // same place /state delivers it on reload (metadata.custom). No
-        // separate message-id -> event-id map to maintain.
-        setMessagesRef.current((prev) =>
-          prev.map((m) => {
-            if (m.id !== messageId) return m;
-            const custom = (m.metadata as { custom?: Record<string, unknown> })
-              ?.custom;
-            if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;
-            return {
-              ...m,
-              metadata: {
-                ...(m.metadata as object | undefined),
-                custom: { ...custom, [USER_INPUT_ID_KEY]: eventId },
-              },
-            };
-          }),
-        );
-      }
-    };
-
     return () => {
-      transport.onEvent = undefined;
       releaseTransport(url);
     };
-  }, [transport, url]);
+  }, [url]);
 
   const anchorsValue = useMemo(
     () => ({
