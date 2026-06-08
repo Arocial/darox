@@ -48,15 +48,18 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 2. **`/components/assistant-ui`** — @assistant-ui conversation components (thread, markdown, attachments, tool-fallback). Minimize modifications (third-party origin).
 3. **`/components/darox-ui`** — Custom project components. **Put new components here.**
 
-### Chat Data Flow
+### Messaging Architecture
 
-The app uses `ChatInputEventArgs` (defined in `app/page.tsx`) to handle three input modes:
+Communication with the backend uses a unified WebSocket channel (`WebSocketChatTransport`) that multiplexes two types of data:
 
-- `normal_input` — standard user messages
-- `deferred_tools` — interactive tool question responses (tool ID → answer mapping)
-- `exception_input` — error handling with continue/stop
+1. **AI Generation Stream**: Standard Vercel AI SDK parts (`text-*`, `tool-*`, `finish`) flow directly into the chat thread UI.
+2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
+   - `cmd-input-request`: Prompts the UI to render an input form (`ChatInputEventArgs`: normal_input, deferred_tools, exception_input).
+   - `cmd-user-turn`: Delivers backend event anchors (`eventId`) mapped to UI `messageId` for forking/branching.
+   - `cmd-agent-info`: Broadcasts live subagent state changes, dynamically updating the agent tabs.
+   - `stream-close`: Explicit control frame that closes the current AI SDK generation stream independently of business logic.
 
-User input is JSON-serialized as `ChatInputEventResult` and sent via `AssistantChatTransport` to the backend.
+User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket.
 
 ### State Management
 

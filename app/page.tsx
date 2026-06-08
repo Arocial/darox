@@ -26,7 +26,7 @@ export type ChatInputEventResult = {
 };
 
 export default function Chat() {
-  const { tabs, activeId, loading, loadAgents, loadSessions } = useAgentTabs();
+  const { tabs, activeId, loading, loadSessions } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
   const [mounted, setMounted] = useState(false);
@@ -51,10 +51,9 @@ export default function Chat() {
 
   useEffect(() => {
     if (backendStatus === "connected") {
-      loadAgents();
       loadSessions();
     }
-  }, [backendStatus, loadAgents, loadSessions]);
+  }, [backendStatus, loadSessions]);
 
   if (!mounted) {
     return null;

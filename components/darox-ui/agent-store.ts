@@ -35,7 +35,7 @@ type AgentTabsState = {
     agentName: string,
     streaming: boolean,
   ) => void;
-  loadAgents: () => Promise<void>;
+
   createAgent: (workspace: string) => Promise<AgentTab | null>;
   deleteAgent: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<boolean>;
@@ -45,6 +45,7 @@ type AgentTabsState = {
     sessionId: string,
     workspace?: string,
   ) => Promise<AgentTab | null>;
+  updateAgent: (agent: AgentTab) => void;
   clearAgents: () => void;
 };
 
@@ -100,24 +101,6 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
         },
       };
     }),
-
-  loadAgents: async () => {
-    set({ loading: true });
-    try {
-      const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/agents`);
-      if (!res.ok) throw new Error("Failed to load agents");
-      const tabs: AgentTab[] = await res.json();
-      set({
-        tabs,
-        activeId: tabs.length > 0 ? tabs[0].id : null,
-      });
-    } catch (e) {
-      console.error("Failed to load agents", e);
-    } finally {
-      set({ loading: false });
-    }
-  },
 
   createAgent: async (workspace: string) => {
     try {
@@ -245,6 +228,11 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       return null;
     }
   },
+
+  updateAgent: (agent) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === agent.id ? agent : t)),
+    })),
 
   clearAgents: () =>
     set({ tabs: [], activeId: null, needsInput: {}, isStreaming: {} }),

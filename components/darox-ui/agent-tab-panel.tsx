@@ -9,7 +9,7 @@ import {
   ChatInputContext,
   defaultInputArgs,
 } from "@/components/darox-ui/chat-input-context";
-import { useAgentTabs } from "@/components/darox-ui/agent-store";
+import { useAgentTabs, type AgentTab } from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
 import { WorkspaceContext } from "@/components/darox-ui/workspace-context";
@@ -66,6 +66,7 @@ function AgentChat({
   const setNeedsInput = useAgentTabs((s) => s.setNeedsInput);
   const clearNeedsInput = useAgentTabs((s) => s.clearNeedsInput);
   const setStreaming = useAgentTabs((s) => s.setStreaming);
+  const updateAgent = useAgentTabs((s) => s.updateAgent);
   const isActive = useAgentTabs((s) => s.activeId === agentId);
   const lastReqIdRef = useRef<string>("");
 
@@ -156,6 +157,8 @@ function AgentChat({
           };
         }),
       );
+    } else if (cmd.type === "cmd-agent-info") {
+      updateAgent(cmd.payload as AgentTab);
     }
   });
 
