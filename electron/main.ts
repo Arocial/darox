@@ -7,14 +7,61 @@ import {
   net,
   Menu,
   clipboard,
+  screen,
 } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { BackendManager } from "./backend";
 
 const isDev = !!process.env.ELECTRON_DEV;
 const mgr = new BackendManager();
 let mainWindow: BrowserWindow | null = null;
+
+interface WindowState {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+  isMaximized?: boolean;
+}
+
+const DEFAULT_WIDTH = 800;
+const DEFAULT_HEIGHT = 600;
+let saveTimeout: NodeJS.Timeout | null = null;
+
+function getWindowStatePath(): string {
+  return path.join(app.getPath("userData"), "window-state.json");
+}
+
+function loadWindowState(): WindowState {
+  try {
+    const filePath = getWindowStatePath();
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error("Failed to load window state:", e);
+  }
+  return { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+}
+
+function saveWindowState(state: WindowState) {
+  try {
+    const filePath = getWindowStatePath();
+    fs.writeFileSync(filePath, JSON.stringify(state), "utf-8");
+  } catch (e) {
+    console.error("Failed to save window state:", e);
+  }
+}
+
+function saveWindowStateDebounced(state: WindowState) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    saveWindowState(state);
+  }, 500);
+}
 
 // Register the custom protocol used to serve the static Next.js export in prod.
 // Must be called before app.whenReady().
@@ -83,11 +130,35 @@ function buildContextMenu(
 }
 
 async function createWindow() {
+  const state = loadWindowState();
+
+  const savedX = state.x;
+  const savedY = state.y;
+  let x = savedX;
+  let y = savedY;
+  if (savedX !== undefined && savedY !== undefined) {
+    const visible = screen.getAllDisplays().some((display) => {
+      const bounds = display.bounds;
+      return (
+        savedX >= bounds.x &&
+        savedY >= bounds.y &&
+        savedX < bounds.x + bounds.width &&
+        savedY < bounds.y + bounds.height
+      );
+    });
+    if (!visible) {
+      x = undefined;
+      y = undefined;
+    }
+  }
+
   mainWindow = new BrowserWindow({
     title: "darox",
     icon: path.join(__dirname, "..", "..", "resources", "icon.png"),
-    width: 800,
-    height: 600,
+    width: state.width,
+    height: state.height,
+    x,
+    y,
     resizable: true,
     fullscreen: false,
     autoHideMenuBar: true,
@@ -99,8 +170,62 @@ async function createWindow() {
     },
   });
 
+  if (state.isMaximized) {
+    mainWindow.maximize();
+  }
+
   mainWindow.setMenuBarVisibility(false);
   mgr.attach(mainWindow);
+
+  const saveState = () => {
+    if (!mainWindow) return;
+    try {
+      const isMaximized = mainWindow.isMaximized();
+      if (isMaximized) {
+        const current = loadWindowState();
+        current.isMaximized = true;
+        saveWindowStateDebounced(current);
+      } else {
+        const bounds = mainWindow.getBounds();
+        saveWindowStateDebounced({
+          width: bounds.width,
+          height: bounds.height,
+          x: bounds.x,
+          y: bounds.y,
+          isMaximized: false,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to save window state:", e);
+    }
+  };
+
+  mainWindow.on("resize", saveState);
+  mainWindow.on("move", saveState);
+  mainWindow.on("close", () => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    try {
+      const isMaximized = mainWindow?.isMaximized() ?? false;
+      if (isMaximized) {
+        const current = loadWindowState();
+        current.isMaximized = true;
+        saveWindowState(current);
+      } else if (mainWindow) {
+        const bounds = mainWindow.getBounds();
+        saveWindowState({
+          width: bounds.width,
+          height: bounds.height,
+          x: bounds.x,
+          y: bounds.y,
+          isMaximized: false,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to save window state on close:", e);
+    }
+  });
 
   mainWindow.webContents.on("context-menu", (_e, params) => {
     if (!mainWindow) return;
@@ -192,6 +317,29 @@ app.on("before-quit", async (e) => {
   if (quitting) return;
   e.preventDefault();
   quitting = true;
+
+  try {
+    if (mainWindow) {
+      const isMaximized = mainWindow.isMaximized();
+      if (isMaximized) {
+        const current = loadWindowState();
+        current.isMaximized = true;
+        saveWindowState(current);
+      } else {
+        const bounds = mainWindow.getBounds();
+        saveWindowState({
+          width: bounds.width,
+          height: bounds.height,
+          x: bounds.x,
+          y: bounds.y,
+          isMaximized: false,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to save window state during quit:", err);
+  }
+
   try {
     await mgr.stop();
   } finally {
