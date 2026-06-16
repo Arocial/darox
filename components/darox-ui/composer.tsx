@@ -36,7 +36,6 @@ export const Composer: FC = () => {
   const [deferredTools, setDeferredTools] = useState<Record<string, string>>(
     {},
   );
-  const [retry, setRetry] = useState<boolean | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -66,11 +65,15 @@ export const Composer: FC = () => {
     const result: ChatInputEventResult = {
       req_id: inputArgs.req_id,
       normal_input: {
-        user_input: inputArgs.normal_input?.request ? text : null,
+        user_input:
+          inputArgs.normal_input?.request ||
+          inputArgs.exception_input?.exception
+            ? text
+            : null,
       },
       deferred_tools: deferredTools,
       exception_input: {
-        retry: retry ?? true,
+        retry: true,
       },
     };
 
@@ -82,7 +85,6 @@ export const Composer: FC = () => {
     });
     aui.composer().reset();
     setDeferredTools({});
-    setRetry(null);
     setInputArgs(defaultInputArgs);
   };
 
@@ -96,28 +98,6 @@ export const Composer: FC = () => {
         <div className="mx-2 mt-2 mb-2 flex flex-col gap-2 rounded-md bg-destructive/10 p-3 text-destructive">
           <p className="font-medium text-sm">Exception Occurred</p>
           <p className="text-sm">{inputArgs.exception_input.exception}</p>
-          <div className="mt-2 flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="retry"
-                checked={retry === true}
-                onChange={() => setRetry(true)}
-                required
-              />
-              Continue
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="retry"
-                checked={retry === false}
-                onChange={() => setRetry(false)}
-                required
-              />
-              Stop
-            </label>
-          </div>
         </div>
       )}
 
@@ -160,7 +140,12 @@ export const Composer: FC = () => {
 
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
-        <ComposerWithCommandMenu disabled={!inputArgs.normal_input?.request} />
+        <ComposerWithCommandMenu
+          disabled={
+            !inputArgs.normal_input?.request &&
+            !inputArgs.exception_input?.exception
+          }
+        />
         <ComposerAction />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
