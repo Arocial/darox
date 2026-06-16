@@ -62,7 +62,7 @@ export const Composer: FC = () => {
       window.dispatchEvent(new Event("cmd_history_updated"));
     }
 
-    const result: ChatInputEventResult = {
+    const result: ChatInputEventResult & { _isExceptionReply?: boolean } = {
       req_id: inputArgs.req_id,
       normal_input: {
         user_input:
@@ -75,6 +75,9 @@ export const Composer: FC = () => {
       exception_input: {
         retry: true,
       },
+      ...(inputArgs.exception_input?.exception
+        ? { _isExceptionReply: true }
+        : {}),
     };
 
     aui.thread().append({

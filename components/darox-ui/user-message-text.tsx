@@ -27,6 +27,10 @@ const UserMessageTextImpl: FC = () => {
   const hasException =
     parsed.exception_input && "retry" in parsed.exception_input;
 
+  const isExceptionReply =
+    (parsed as any)._isExceptionReply === true ||
+    (!hasNormalInput && !hasDeferredTools && hasException);
+
   return (
     <div className="flex flex-col gap-2">
       {hasNormalInput && (
@@ -47,7 +51,7 @@ const UserMessageTextImpl: FC = () => {
         </div>
       )}
 
-      {hasException && (
+      {isExceptionReply && (
         <div className="flex items-center gap-2 text-sm">
           <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />
           <span>Retry</span>
