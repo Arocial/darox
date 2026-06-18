@@ -14,7 +14,7 @@ function getBackendCommand(): string {
   const argv = process.argv;
   const i = argv.indexOf("--backend");
   if (i >= 0 && argv[i + 1]) return argv[i + 1];
-  return "arox-coder";
+  return "arox --profile coder";
 }
 
 function findPort(): Promise<number> {
