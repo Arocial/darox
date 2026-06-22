@@ -1,23 +1,50 @@
 "use client";
 
-import { type FC, useEffect, useState, useMemo } from "react";
 import {
-  PlusIcon,
-  XIcon,
-  TrashIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  MessageSquareIcon,
   FolderIcon,
-  SquarePenIcon,
+  MessageSquareIcon,
+  PlusIcon,
   RotateCwIcon,
+  SquarePenIcon,
+  XIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+  TrashIcon,
 } from "lucide-react";
-import {
-  useAgentTabs,
-  type SessionInfo,
-} from "@/components/darox-ui/agent-store";
-import { useBackendStore } from "@/components/darox-ui/backend-store";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { useAgentTabs } from "@/components/darox-ui/agent-store";
+import { useBackendStore } from "@/components/darox-ui/backend-store";
+import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
+
+function formatRelativeTime(dateString?: string) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "just now";
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function formatTabLabel(workspaceStr?: string) {
+  const ws = workspaceStr || "";
+  const separator = ws.includes("\\") ? "\\" : "/";
+  const parts = ws.split(separator).filter(Boolean);
+  if (parts.length === 0) return { dirName: "Untitled", parentPath: "" };
+
+  const dirName = parts[parts.length - 1];
+  const parentPath =
+    parts.length > 1 ? parts.slice(0, parts.length - 1).join(separator) : "";
+
+  return { dirName, parentPath };
+}
 
 async function pickDirectory(): Promise<string | null> {
   const api = typeof window !== "undefined" ? window.darox : undefined;
@@ -37,45 +64,179 @@ async function pickDirectory(): Promise<string | null> {
   return dir || null;
 }
 
-function formatTabLabel(workspace?: string | null) {
-  if (!workspace || typeof workspace !== "string") {
-    return { dirName: "Unknown", parentPath: "Unknown" };
-  }
-  const parts = workspace.replace(/\/+$/, "").split("/");
-  const dirName = parts[parts.length - 1] || workspace;
-  const parentPath = parts.length > 1 ? parts.slice(-2).join("/") : dirName;
-  return { dirName, parentPath };
-}
+const ActiveTabItem = ({
+  tab,
+  activeId,
+  needsInput,
+  onSelect,
+  onReset,
+  onClose,
+}: {
+  tab: AgentTab;
+  activeId: string | null;
+  needsInput: Record<string, boolean>;
+  onSelect: (id: string) => void;
+  onReset: (e: React.MouseEvent, id: string, workspace: string) => void;
+  onClose: (e: React.MouseEvent, id: string) => void;
+}) => {
+  const { dirName, parentPath } = formatTabLabel(tab.workspace);
+  const hasInputRequest = Object.values(needsInput || {}).some((v) => v);
+  const isActive = activeId === tab.id;
 
-function formatRelativeTime(isoDate: string): string {
-  const date = new Date(isoDate);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
+  return (
+    <button
+      onClick={() => onSelect(tab.id)}
+      className={`group relative flex w-full items-start gap-2 border-r-2 px-3 py-2 text-left transition-colors ${
+        isActive
+          ? "border-primary bg-accent text-foreground shadow-sm"
+          : "border-transparent text-foreground/80 hover:bg-muted/50 hover:text-foreground"
+      }`}
+    >
+      <MessageSquareIcon
+        className={`mt-0.5 size-4 shrink-0 ${isActive ? "text-primary" : "opacity-70"}`}
+      />
+      <div className="min-w-0 flex-1">
+        <div
+          className={`flex items-center gap-1.5 truncate text-sm ${isActive ? "font-bold" : "font-medium"}`}
+          title={tab.workspace}
+        >
+          <span className="truncate">{dirName}</span>
+          {hasInputRequest && (
+            <span
+              className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+              title="Input required"
+            />
+          )}
+        </div>
+        <div
+          className={`truncate text-xs ${isActive ? "text-muted-foreground/80" : "text-muted-foreground"}`}
+          title={`${tab.workspace} ${tab.id}`}
+        >
+          {parentPath}
+        </div>
+      </div>
+      <div className="mt-0.5 flex shrink-0 items-center gap-1">
+        <span
+          onClick={(e) => onReset(e, tab.id, tab.workspace)}
+          className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-foreground/20 hover:text-foreground ${
+            isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+          title="New chat in workspace"
+        >
+          <SquarePenIcon className="size-3.5" />
+        </span>
+        <span
+          onClick={(e) => onClose(e, tab.id)}
+          className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-destructive/20 hover:text-destructive ${
+            isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+          title="Close tab"
+        >
+          <XIcon className="size-3.5" />
+        </span>
+      </div>
+    </button>
+  );
+};
 
-export const AgentTabBar: FC = () => {
+const WorkspaceItem = ({
+  workspace,
+  onSelect,
+}: {
+  workspace: string;
+  onSelect: (ws: string) => void;
+}) => {
+  const { dirName, parentPath } = formatTabLabel(workspace);
+  return (
+    <button
+      onClick={() => onSelect(workspace)}
+      className="flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+    >
+      <FolderIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm" title={workspace}>
+          {dirName}
+        </div>
+        <div
+          className="truncate text-muted-foreground text-xs"
+          title={parentPath}
+        >
+          {parentPath}
+        </div>
+      </div>
+    </button>
+  );
+};
+
+const SessionItem = ({
+  session,
+  onSelect,
+  onDelete,
+}: {
+  session: SessionInfo;
+  onSelect: (session: SessionInfo) => void;
+  onDelete: (e: React.MouseEvent, id: string) => void;
+}) => {
+  const workspace = session.workspace;
+  const { dirName } = formatTabLabel(workspace);
+  const lastMessages = session.metadata?.last_user_messages as
+    | string[]
+    | undefined;
+  const tooltipText =
+    lastMessages && lastMessages.length > 0
+      ? lastMessages.join("\n")
+      : workspace;
+
+  return (
+    <button
+      onClick={() => onSelect(session)}
+      className="group flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+      title={tooltipText}
+    >
+      <MessageSquareIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm">
+          {dirName || session.id.slice(0, 8)}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
+          <span className="flex-1 truncate">
+            {lastMessages && lastMessages.length > 0
+              ? lastMessages[0]
+              : "Empty session"}
+          </span>
+          <span className="shrink-0 text-[10px] opacity-70">
+            {formatRelativeTime(session.updated_at)}
+          </span>
+        </div>
+      </div>
+      <span
+        onClick={(e) => onDelete(e, session.id)}
+        className="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+        title="Delete session"
+      >
+        <TrashIcon className="size-3.5" />
+      </span>
+    </button>
+  );
+};
+
+export const AgentTabBar = () => {
   const {
     tabs,
     activeId,
     setActiveId,
     createAgent,
     deleteAgent,
-    deleteSession,
+    needsInput,
     sessions,
     loadSessions,
+    deleteSession,
     openSession,
-    needsInput,
   } = useAgentTabs();
-  const [showSessions, setShowSessions] = useState(true);
+
   const [showWorkspaces, setShowWorkspaces] = useState(true);
+  const [showSessions, setShowSessions] = useState(true);
+
   const backendStatus = useBackendStore((s) => s.status);
   const restartBackend = useBackendStore((s) => s.restartBackend);
   const [restarting, setRestarting] = useState(false);
@@ -86,50 +247,64 @@ export const AgentTabBar: FC = () => {
     }
   }, [backendStatus, loadSessions]);
 
-  const handleAdd = async () => {
+  const handleAdd = useCallback(async () => {
     const workspace = await pickDirectory();
     if (!workspace) return;
     await createAgent(workspace);
-  };
+  }, [createAgent]);
 
-  const handleClose = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await deleteAgent(id);
-  };
-
-  const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const success = await deleteSession(id);
-    if (success) {
-      toast.success("Session deleted successfully");
-    } else {
-      toast.error("Failed to delete session");
-    }
-  };
-
-  const handleReset = async (
-    e: React.MouseEvent,
-    id: string,
-    workspace: string,
-  ) => {
-    e.stopPropagation();
-    const newTab = await createAgent(workspace);
-    if (newTab) {
+  const handleClose = useCallback(
+    async (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
       await deleteAgent(id);
-    }
-  };
+    },
+    [deleteAgent],
+  );
 
-  const handleNewInWorkspace = async (workspace: string) => {
-    await createAgent(workspace);
-  };
+  const handleDeleteSession = useCallback(
+    async (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      const success = await deleteSession(id);
+      if (success) {
+        toast.success("Session deleted successfully");
+      } else {
+        toast.error("Failed to delete session");
+      }
+    },
+    [deleteSession],
+  );
 
-  const handleOpenSession = async (session: SessionInfo) => {
-    await openSession(session.id, session.workspace);
-  };
+  const handleReset = useCallback(
+    async (e: React.MouseEvent, id: string, workspace: string) => {
+      e.stopPropagation();
+      const newTab = await createAgent(workspace);
+      if (newTab) {
+        await deleteAgent(id);
+      }
+    },
+    [createAgent, deleteAgent],
+  );
+
+  const handleNewInWorkspace = useCallback(
+    async (workspace: string) => {
+      await createAgent(workspace);
+    },
+    [createAgent],
+  );
+
+  const handleOpenSession = useCallback(
+    async (session: SessionInfo) => {
+      await openSession(session.id, session.workspace);
+    },
+    [openSession],
+  );
 
   // Filter out sessions that are already open as tabs
-  const openSessionIds = new Set(tabs.map((t) => t.id));
-  const availableSessions = sessions.filter((s) => !openSessionIds.has(s.id));
+  const openSessionIds = useMemo(() => new Set(tabs.map((t) => t.id)), [tabs]);
+  const availableSessions = useMemo(
+    () => sessions.filter((s) => !openSessionIds.has(s.id)),
+    [sessions, openSessionIds],
+  );
 
   // Extract unique workspaces from sessions
   const recentWorkspaces = useMemo(() => {
@@ -153,71 +328,17 @@ export const AgentTabBar: FC = () => {
             <div className="px-3 py-1.5 font-bold text-primary text-xs uppercase tracking-wider">
               Active
             </div>
-            {tabs.map((tab) => {
-              const { dirName, parentPath } = formatTabLabel(tab.workspace);
-              const hasInputRequest = Object.values(
-                needsInput[tab.id] || {},
-              ).some((v) => v);
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveId(tab.id)}
-                  className={`group relative flex w-full items-start gap-2 border-r-2 px-3 py-2 text-left transition-colors ${
-                    activeId === tab.id
-                      ? "border-primary bg-accent text-foreground shadow-sm"
-                      : "border-transparent text-foreground/80 hover:bg-muted/50 hover:text-foreground"
-                  }`}
-                >
-                  <MessageSquareIcon
-                    className={`mt-0.5 size-4 shrink-0 ${activeId === tab.id ? "text-primary" : "opacity-70"}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className={`flex items-center gap-1.5 truncate text-sm ${activeId === tab.id ? "font-bold" : "font-medium"}`}
-                      title={tab.workspace}
-                    >
-                      <span className="truncate">{dirName}</span>
-                      {hasInputRequest && (
-                        <span
-                          className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                          title="Input required"
-                        />
-                      )}
-                    </div>
-                    <div
-                      className={`truncate text-xs ${activeId === tab.id ? "text-muted-foreground/80" : "text-muted-foreground"}`}
-                      title={`${tab.workspace} ${tab.id}`}
-                    >
-                      {parentPath}
-                    </div>
-                  </div>
-                  <div className="mt-0.5 flex shrink-0 items-center gap-1">
-                    <span
-                      onClick={(e) => handleReset(e, tab.id, tab.workspace)}
-                      className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-foreground/20 hover:text-foreground ${
-                        activeId === tab.id
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100"
-                      }`}
-                      title="New chat in workspace"
-                    >
-                      <SquarePenIcon className="size-3.5" />
-                    </span>
-                    <span
-                      onClick={(e) => handleClose(e, tab.id)}
-                      className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-destructive/20 hover:text-destructive ${
-                        activeId === tab.id
-                          ? "opacity-100"
-                          : "opacity-0 group-hover:opacity-100"
-                      }`}
-                      title="Close tab"
-                    >
-                      <XIcon className="size-3.5" />
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+            {tabs.map((tab) => (
+              <ActiveTabItem
+                key={tab.id}
+                tab={tab}
+                activeId={activeId}
+                needsInput={needsInput[tab.id]}
+                onSelect={setActiveId}
+                onReset={handleReset}
+                onClose={handleClose}
+              />
+            ))}
           </div>
         )}
 
@@ -257,29 +378,13 @@ export const AgentTabBar: FC = () => {
                   <div className="truncate text-sm">New (Choose Workspace)</div>
                 </div>
               </button>
-              {recentWorkspaces.map(({ workspace }) => {
-                const { dirName, parentPath } = formatTabLabel(workspace);
-                return (
-                  <button
-                    key={workspace}
-                    onClick={() => handleNewInWorkspace(workspace)}
-                    className="flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <FolderIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm" title={workspace}>
-                        {dirName}
-                      </div>
-                      <div
-                        className="truncate text-muted-foreground text-xs"
-                        title={parentPath}
-                      >
-                        {parentPath}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+              {recentWorkspaces.map(({ workspace }) => (
+                <WorkspaceItem
+                  key={workspace}
+                  workspace={workspace}
+                  onSelect={handleNewInWorkspace}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -316,50 +421,14 @@ export const AgentTabBar: FC = () => {
                   No recent sessions
                 </div>
               ) : (
-                availableSessions.map((session) => {
-                  const workspace = session.workspace;
-                  const { dirName } = formatTabLabel(workspace);
-                  const lastMessages = session.metadata?.last_user_messages as
-                    | string[]
-                    | undefined;
-                  const tooltipText =
-                    lastMessages && lastMessages.length > 0
-                      ? lastMessages.join("\n")
-                      : workspace;
-
-                  return (
-                    <button
-                      key={session.id}
-                      onClick={() => handleOpenSession(session)}
-                      className="group flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                      title={tooltipText}
-                    >
-                      <MessageSquareIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">
-                          {dirName || session.id.slice(0, 8)}
-                        </div>
-                        <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
-                          <span className="flex-1 truncate">
-                            {lastMessages && lastMessages.length > 0
-                              ? lastMessages[0]
-                              : "Empty session"}
-                          </span>
-                          <span className="shrink-0 text-[10px] opacity-70">
-                            {formatRelativeTime(session.updated_at)}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        onClick={(e) => handleDeleteSession(e, session.id)}
-                        className="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
-                        title="Delete session"
-                      >
-                        <TrashIcon className="size-3.5" />
-                      </span>
-                    </button>
-                  );
-                })
+                availableSessions.map((session) => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    onSelect={handleOpenSession}
+                    onDelete={handleDeleteSession}
+                  />
+                ))
               )}
             </div>
           )}

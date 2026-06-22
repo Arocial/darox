@@ -1,7 +1,14 @@
 "use client";
 
 import { Command } from "cmdk";
-import { type FC, useState, useEffect, useRef, useContext } from "react";
+import {
+  type FC,
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  useMemo,
+} from "react";
 import { ComposerPrimitive, useAuiState, useAui } from "@assistant-ui/react";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
@@ -10,29 +17,10 @@ import {
   historyKey,
 } from "@/components/darox-ui/workspace-context";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
-
 import type { SuggestionItem } from "@/types/chat";
-export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
-  disabled,
-}) => {
-  const agentId = useContext(AgentIdContext);
-  const agentName = useContext(AgentNameContext);
-  const workspace = useWorkspace();
-  const apiBase = useBackendStore((s) => s.apiBase);
-  const text = useAuiState((s) => s.composer.text);
-  const aui = useAui();
-  const [open, setOpen] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const [search, setSearch] = useState("");
-  const [command, setCommand] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
-  const [historySuggestions, setHistorySuggestions] = useState<
-    SuggestionItem[]
-  >([]);
+
+function useCommandHistory(workspace: string, text: string) {
   const [history, setHistory] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedValue, setSelectedValue] = useState("");
-  const justSelected = useRef(false);
 
   useEffect(() => {
     const key = historyKey(workspace);
@@ -53,37 +41,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     return () => window.removeEventListener("cmd_history_updated", loadHistory);
   }, [workspace]);
 
-  useEffect(() => {
-    if (historySuggestions.length > 0) {
-      setSelectedValue(historySuggestions[0].id);
-    } else if (suggestions.length > 0) {
-      setSelectedValue(suggestions[0].id);
-    }
-  }, [suggestions, historySuggestions]);
-
-  useEffect(() => {
-    let currentCommand = null;
-    let currentSearch = text;
-
-    if (text.startsWith("/")) {
-      const parts = text.split(" ");
-      if (parts.length > 1) {
-        currentCommand = parts[0];
-        currentSearch = parts.slice(1).join(" ");
-      } else {
-        currentCommand = null;
-        currentSearch = text.slice(1);
-      }
-    } else {
-      currentCommand = null;
-      currentSearch = text;
-    }
-
-    setCommand(currentCommand);
-    setSearch(currentSearch);
-
-    // Filter history
-    const matchedHistory = history
+  const historySuggestions = useMemo(() => {
+    return history
       .filter((h) => h.toLowerCase().includes(text.toLowerCase()) && h !== text)
       .map((h) => ({
         id: `history-${h}`,
@@ -92,20 +51,26 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
         description: "History",
         source: "history" as const,
       }));
-    setHistorySuggestions(matchedHistory);
+  }, [history, text]);
 
-    if (justSelected.current) {
-      justSelected.current = false;
-      setOpen(false);
-    } else if (text.length === 0) {
-      setOpen(false);
-    } else {
-      setOpen(true);
-    }
-  }, [text, history]);
+  return historySuggestions;
+}
+
+function useSuggestions(
+  command: string | null,
+  search: string,
+  open: boolean,
+  agentId: string | null,
+  agentName: string | null,
+  apiBase: string,
+) {
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+
+    const controller = new AbortController();
 
     const fetchSuggestions = async () => {
       setLoading(true);
@@ -128,7 +93,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
           }
         }
 
-        const res = await fetch(url.toString());
+        const res = await fetch(url.toString(), { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           const items = data.items || [];
@@ -136,7 +101,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
         } else {
           setSuggestions([]);
         }
-      } catch (e) {
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === "AbortError") return;
         console.error("Failed to fetch suggestions", e);
         setSuggestions([]);
       } finally {
@@ -145,8 +111,90 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     };
 
     const debounce = setTimeout(fetchSuggestions, 150);
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [command, search, open, agentId, agentName, apiBase]);
+
+  return { suggestions, loading };
+}
+
+const SuggestionItemRenderer: FC<{
+  item: SuggestionItem;
+  onSelect: (item: SuggestionItem) => void;
+}> = ({ item, onSelect }) => (
+  <Command.Item
+    value={item.id}
+    onSelect={() => onSelect(item)}
+    className="flex w-full cursor-pointer flex-col items-start overflow-hidden rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+  >
+    <span className="w-full truncate text-left">{item.label}</span>
+    {item.description && (
+      <span className="mt-0.5 w-full truncate text-left text-muted-foreground text-xs">
+        {item.description}
+      </span>
+    )}
+  </Command.Item>
+);
+
+export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
+  disabled,
+}) => {
+  const agentId = useContext(AgentIdContext);
+  const agentName = useContext(AgentNameContext);
+  const workspace = useWorkspace();
+  const apiBase = useBackendStore((s) => s.apiBase);
+  const text = useAuiState((s) => s.composer.text);
+  const aui = useAui();
+
+  const [open, setOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [selectedValue, setSelectedValue] = useState("");
+  const justSelected = useRef(false);
+
+  // Derive command/search synchronously from text
+  const { command, search } = useMemo(() => {
+    if (text.startsWith("/")) {
+      const parts = text.split(" ");
+      if (parts.length > 1) {
+        return { command: parts[0], search: parts.slice(1).join(" ") };
+      }
+      return { command: null, search: text.slice(1) };
+    }
+    return { command: null, search: text };
+  }, [text]);
+
+  const historySuggestions = useCommandHistory(workspace, text);
+
+  // Decide whether the menu should be open based on text
+  useEffect(() => {
+    if (justSelected.current) {
+      justSelected.current = false;
+      setOpen(false);
+    } else if (text.length === 0) {
+      setOpen(false);
+    } else {
+      setOpen(true);
+    }
+  }, [text]);
+
+  const { suggestions, loading } = useSuggestions(
+    command,
+    search,
+    open,
+    agentId,
+    agentName,
+    apiBase,
+  );
+
+  useEffect(() => {
+    if (historySuggestions.length > 0) {
+      setSelectedValue(historySuggestions[0].id);
+    } else if (suggestions.length > 0) {
+      setSelectedValue(suggestions[0].id);
+    }
+  }, [suggestions, historySuggestions]);
 
   const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;
@@ -166,9 +214,6 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     setOpen(false);
   };
 
-  const groupClassName =
-    "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground";
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing) return;
     if (!open) return;
@@ -176,28 +221,26 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
-    } else if (e.key === "Tab") {
+    } else if (e.key === "Tab" || e.key === "ArrowRight") {
+      const isArrowRight = e.key === "ArrowRight";
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+
+      if (isArrowRight) {
+        if (
+          !target ||
+          typeof target.selectionStart !== "number" ||
+          target.selectionStart !== target.value.length
+        ) {
+          return;
+        }
+      }
+
       e.preventDefault();
       const selectedEl = document.querySelector(
         '[cmdk-item][aria-selected="true"]',
       ) as HTMLElement;
       if (selectedEl) {
         selectedEl.click();
-      }
-    } else if (e.key === "ArrowRight") {
-      const target = e.target as HTMLInputElement | HTMLTextAreaElement;
-      if (
-        target &&
-        typeof target.selectionStart === "number" &&
-        target.selectionStart === target.value.length
-      ) {
-        e.preventDefault();
-        const selectedEl = document.querySelector(
-          '[cmdk-item][aria-selected="true"]',
-        ) as HTMLElement;
-        if (selectedEl) {
-          selectedEl.click();
-        }
       }
     }
   };
@@ -206,6 +249,9 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     open &&
     isFocused &&
     (historySuggestions.length > 0 || suggestions.length > 0);
+
+  const groupClassName =
+    "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground";
 
   return (
     <Command
@@ -227,21 +273,11 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
             {historySuggestions.length > 0 && (
               <Command.Group heading="History" className={groupClassName}>
                 {historySuggestions.map((item) => (
-                  <Command.Item
+                  <SuggestionItemRenderer
                     key={item.id}
-                    value={item.id}
-                    onSelect={() => handleSelect(item)}
-                    className="flex w-full cursor-pointer flex-col items-start overflow-hidden rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <span className="w-full truncate text-left">
-                      {item.label}
-                    </span>
-                    {item.description && (
-                      <span className="mt-0.5 w-full truncate text-left text-muted-foreground text-xs">
-                        {item.description}
-                      </span>
-                    )}
-                  </Command.Item>
+                    item={item}
+                    onSelect={handleSelect}
+                  />
                 ))}
               </Command.Group>
             )}
@@ -251,21 +287,11 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
                 className={groupClassName}
               >
                 {suggestions.map((item) => (
-                  <Command.Item
+                  <SuggestionItemRenderer
                     key={item.id}
-                    value={item.id}
-                    onSelect={() => handleSelect(item)}
-                    className="flex w-full cursor-pointer flex-col items-start overflow-hidden rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <span className="w-full truncate text-left">
-                      {item.label}
-                    </span>
-                    {item.description && (
-                      <span className="mt-0.5 w-full truncate text-left text-muted-foreground text-xs">
-                        {item.description}
-                      </span>
-                    )}
-                  </Command.Item>
+                    item={item}
+                    onSelect={handleSelect}
+                  />
                 ))}
               </Command.Group>
             )}
@@ -282,13 +308,9 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
         submitMode={showMenu ? "none" : "enter"}
         onFocus={() => {
           setIsFocused(true);
-          if (text.length > 0) {
-            setOpen(true);
-          }
+          if (text.length > 0) setOpen(true);
         }}
-        onBlur={() => {
-          setIsFocused(false);
-        }}
+        onBlur={() => setIsFocused(false)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.altKey) {
             e.preventDefault();
@@ -305,37 +327,21 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
           }
 
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
+          const cmdkKeys = [
+            "Enter",
+            "ArrowUp",
+            "ArrowDown",
+            "PageUp",
+            "PageDown",
+            "Home",
+            "End",
+            "Escape",
+          ];
+
           if (!showMenu) {
-            // Prevent cmdk from intercepting keys when the menu is closed,
-            // allowing normal textarea behavior (e.g., multi-line input, cursor movement).
-            const cmdkKeys = [
-              "Enter",
-              "ArrowUp",
-              "ArrowDown",
-              "PageUp",
-              "PageDown",
-              "Home",
-              "End",
-              "Escape",
-            ];
-            if (cmdkKeys.includes(e.key)) {
-              e.stopPropagation();
-            }
+            if (cmdkKeys.includes(e.key)) e.stopPropagation();
           } else {
-            // When open, allow cmdk to handle Enter to select an item,
-            // but prevent it if a modifier key is pressed (to allow newlines).
-            if (
-              isModifier &&
-              [
-                "Enter",
-                "ArrowUp",
-                "ArrowDown",
-                "PageUp",
-                "PageDown",
-                "Home",
-                "End",
-              ].includes(e.key)
-            ) {
+            if (isModifier && cmdkKeys.includes(e.key)) {
               e.stopPropagation();
             }
           }
