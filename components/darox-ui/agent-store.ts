@@ -41,6 +41,7 @@ type AgentTabsState = {
   deleteAgent: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
+  loadAgents: () => Promise<void>;
   openSession: (
     sessionId: string,
     workspace?: string,
@@ -177,6 +178,29 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       set({ sessions });
     } catch (e) {
       console.error("Failed to load sessions", e);
+    }
+  },
+
+  loadAgents: async () => {
+    try {
+      const apiBase = useBackendStore.getState().apiBase;
+      const res = await daroxFetch(`${apiBase}/api/agents`);
+      if (!res.ok) throw new Error("Failed to load agents");
+      const agents: AgentTab[] = await res.json();
+      set((state) => {
+        // preserve activeId if it's still in the list, otherwise select first
+        let newActiveId = state.activeId;
+        if (agents.length > 0) {
+          if (!newActiveId || !agents.some((a) => a.id === newActiveId)) {
+            newActiveId = agents[0].id;
+          }
+        } else {
+          newActiveId = null;
+        }
+        return { tabs: agents, activeId: newActiveId };
+      });
+    } catch (e) {
+      console.error("Failed to load agents", e);
     }
   },
 
