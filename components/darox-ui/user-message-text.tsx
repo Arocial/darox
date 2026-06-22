@@ -4,7 +4,7 @@ import { useMessagePartText } from "@assistant-ui/react";
 import { AlertTriangleIcon, WrenchIcon } from "lucide-react";
 import { type FC, memo } from "react";
 
-import type { ChatInputEventResult } from "@/app/page";
+import type { ChatInputEventResult } from "@/types/chat";
 
 const UserMessageTextImpl: FC = () => {
   const { text } = useMessagePartText();

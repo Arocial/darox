@@ -26,7 +26,7 @@ import {
 } from "@/components/darox-ui/user-turn-anchors-context";
 import { sendAgentCommand } from "@/components/darox-ui/agent-command";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
-import type { ChatInputEventArgs } from "@/app/page";
+import type { ChatInputEventArgs } from "@/types/chat";
 import type { UIMessage } from "ai";
 
 function AgentChat({

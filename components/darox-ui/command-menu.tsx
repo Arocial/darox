@@ -11,14 +11,7 @@ import {
 } from "@/components/darox-ui/workspace-context";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 
-type SuggestionItem = {
-  id: string;
-  value: string;
-  label: string;
-  description: string | null;
-  source?: "history" | "dynamic";
-};
-
+import type { SuggestionItem } from "@/types/chat";
 export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
   disabled,
 }) => {

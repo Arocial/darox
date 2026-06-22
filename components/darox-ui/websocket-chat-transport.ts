@@ -1,5 +1,5 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
-import type { ChatInputEventResult } from "@/app/page";
+import type { ChatInputEventResult } from "@/types/chat";
 
 type WsServerFrame =
   | { type: "ack"; status: string }

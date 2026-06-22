@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { ChatInputEventArgs } from "@/app/page";
+import type { ChatInputEventArgs } from "@/types/chat";
 
 export const defaultInputArgs: ChatInputEventArgs = {
   req_id: "",

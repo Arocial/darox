@@ -10,13 +10,7 @@ import {
   httpBaseToWsUrl,
 } from "@/components/darox-ui/websocket-chat-transport";
 
-type SuggestionItem = {
-  id: string;
-  value: string;
-  label: string;
-  description?: string | null;
-};
-
+import type { SuggestionItem } from "@/types/chat";
 export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
   agentId,
   agentName,

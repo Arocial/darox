@@ -26,7 +26,7 @@ import {
   useWorkspace,
   historyKey,
 } from "@/components/darox-ui/workspace-context";
-import type { ChatInputEventResult } from "@/app/page";
+import type { ChatInputEventResult } from "@/types/chat";
 
 export const Composer: FC = () => {
   const { inputArgs, setInputArgs } = useChatInput();
