@@ -11,7 +11,7 @@ Darox is a chatbot UI built with Next.js (static export) and Electron for cross-
 ```bash
 npm run dev           # Next dev server on http://localhost:3140
 npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
-npm run lint          # ESLint
+npm run lint          # Biome check
 npm run electron:dev  # Run Next dev + Electron shell together
 npm run electron:build # Static export + electron-builder package
 ```

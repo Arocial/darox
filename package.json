@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3140",
     "build": "next build",
-    "build:check": "NEXT_DIST_DIR=.next-check next build",
+    "build:check": "cross-env NEXT_DIST_DIR=.next-check next build",
     "start": "next start -p 3140",
     "lint": "biome check",
     "format": "biome format --write .",
