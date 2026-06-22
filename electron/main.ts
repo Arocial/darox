@@ -64,6 +64,22 @@ function saveWindowStateDebounced(state: WindowState) {
   }, 500);
 }
 
+/** Read current bounds + maximized flag from a window. When maximized the
+ *  previous (restored) geometry is preserved so un-maximising restores it. */
+function captureWindowState(win: BrowserWindow): WindowState {
+  if (win.isMaximized()) {
+    return { ...loadWindowState(), isMaximized: true };
+  }
+  const bounds = win.getBounds();
+  return {
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    isMaximized: false,
+  };
+}
+
 // Register the custom protocol used to serve the static Next.js export in prod.
 // Must be called before app.whenReady().
 protocol.registerSchemesAsPrivileged([
@@ -181,21 +197,7 @@ async function createWindow() {
   const saveState = () => {
     if (!mainWindow) return;
     try {
-      const isMaximized = mainWindow.isMaximized();
-      if (isMaximized) {
-        const current = loadWindowState();
-        current.isMaximized = true;
-        saveWindowStateDebounced(current);
-      } else {
-        const bounds = mainWindow.getBounds();
-        saveWindowStateDebounced({
-          width: bounds.width,
-          height: bounds.height,
-          x: bounds.x,
-          y: bounds.y,
-          isMaximized: false,
-        });
-      }
+      saveWindowStateDebounced(captureWindowState(mainWindow));
     } catch (e) {
       console.error("Failed to save window state:", e);
     }
@@ -207,22 +209,9 @@ async function createWindow() {
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
+    if (!mainWindow) return;
     try {
-      const isMaximized = mainWindow?.isMaximized() ?? false;
-      if (isMaximized) {
-        const current = loadWindowState();
-        current.isMaximized = true;
-        saveWindowState(current);
-      } else if (mainWindow) {
-        const bounds = mainWindow.getBounds();
-        saveWindowState({
-          width: bounds.width,
-          height: bounds.height,
-          x: bounds.x,
-          y: bounds.y,
-          isMaximized: false,
-        });
-      }
+      saveWindowState(captureWindowState(mainWindow));
     } catch (e) {
       console.error("Failed to save window state on close:", e);
     }
@@ -344,21 +333,7 @@ app.on("before-quit", async (e) => {
 
   try {
     if (mainWindow) {
-      const isMaximized = mainWindow.isMaximized();
-      if (isMaximized) {
-        const current = loadWindowState();
-        current.isMaximized = true;
-        saveWindowState(current);
-      } else {
-        const bounds = mainWindow.getBounds();
-        saveWindowState({
-          width: bounds.width,
-          height: bounds.height,
-          x: bounds.x,
-          y: bounds.y,
-          isMaximized: false,
-        });
-      }
+      saveWindowState(captureWindowState(mainWindow));
     }
   } catch (err) {
     console.error("Failed to save window state during quit:", err);
