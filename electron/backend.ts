@@ -82,7 +82,8 @@ export class BackendManager {
   private instances = new Map<string, InstanceData>();
   private activeProfile: string | null = null;
   private win: BrowserWindow | null = null;
-  private apiToken = randomBytes(32).toString("hex");
+  private apiToken =
+    process.env.AROX_API_TOKEN || randomBytes(32).toString("hex");
 
   getApiToken(): string {
     return this.apiToken;
@@ -149,7 +150,7 @@ export class BackendManager {
     console.log(`[backend] spawn: ${bin} ${args.join(" ")}`);
     const child = spawn(bin, args, {
       stdio: "inherit",
-      env: { ...process.env, DAROX_API_TOKEN: this.apiToken },
+      env: { ...process.env, AROX_API_TOKEN: this.apiToken },
     });
     child.on("error", (err) => {
       console.error(`[backend] spawn error for ${profile}:`, err);
@@ -182,7 +183,10 @@ export class BackendManager {
     }
 
     inst.restartCount = 0;
-    inst.port = await findPort();
+    const envPort = process.env.DAROX_PORT
+      ? parseInt(process.env.DAROX_PORT, 10)
+      : NaN;
+    inst.port = !Number.isNaN(envPort) ? envPort : await findPort();
     inst.child = this.spawnProc(profile, inst.port);
     inst.status = { status: "Starting" };
 

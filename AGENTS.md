@@ -38,10 +38,12 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 ### Backend (external)
 
-- Chat endpoint: `http://localhost:8000/api/chat`
-- Suggestions endpoint: `http://localhost:8000/api/suggestions`
-- The backend is not part of this repo
-
+- Chat endpoint: typically dynamic port (e.g., `http://localhost:<port>/api/chat`)
+- The backend binary (`arox`) is spawned and managed automatically by the Electron main process.
+- **Environment Variables**:
+  - `AROX_API_TOKEN`: Overrides the auto-generated Bearer token for API authentication.
+  - `DAROX_PORT`: Overrides the auto-generated random port for the backend server.
+  
 ### Component Layers
 
 1. **`/components/ui`** — shadcn/ui Radix primitives. Minimize modifications (third-party origin).
