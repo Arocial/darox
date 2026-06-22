@@ -5,6 +5,7 @@ import {
   dialog,
   protocol,
   net,
+  session,
   Menu,
   clipboard,
   screen,
@@ -166,7 +167,7 @@ async function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -257,8 +258,31 @@ app.whenReady().then(async () => {
     const url = new URL(request.url);
     let pathname = decodeURIComponent(url.pathname);
     if (pathname === "/" || pathname === "") pathname = "/index.html";
-    const filePath = path.join(resolveOutDir(), pathname);
+    const outDir = resolveOutDir();
+    const filePath = path.resolve(outDir, pathname.replace(/^\//, ""));
+    // Prevent path traversal — resolved path must stay inside the out/ dir.
+    if (!filePath.startsWith(outDir + path.sep) && filePath !== outDir) {
+      return new Response("Forbidden", { status: 403 });
+    }
     return net.fetch(pathToFileURL(filePath).toString());
+  });
+
+  // Content-Security-Policy: only allow same-origin resources and inline styles
+  // (needed for Tailwind), plus WebSocket connections to the local backend.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          "default-src 'self' app:;",
+          "script-src 'self' app:;",
+          "style-src 'self' app: 'unsafe-inline';",
+          "img-src 'self' app: data: blob:;",
+          "font-src 'self' app: data:;",
+          "connect-src 'self' app: http://127.0.0.1:* ws://127.0.0.1:*;",
+        ].join(" "),
+      },
+    });
   });
 
   ipcMain.handle("start_backend", () => mgr.start());
