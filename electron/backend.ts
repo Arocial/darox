@@ -130,7 +130,7 @@ export class BackendManager {
       this.emit();
       console.warn(`[backend] exited with code ${code}`);
 
-      const delaySec = Math.min(1 << this.restartCount, 30);
+      const delaySec = Math.min(2 ** this.restartCount, 30);
       this.restartCount++;
       await new Promise((r) => setTimeout(r, delaySec * 1000));
       if (this.shutdown) return;
@@ -141,6 +141,7 @@ export class BackendManager {
         this.status = { status: "Starting" };
         this.emit();
         this.attachMonitor(next);
+        this.healthLoop();
       } catch (e) {
         console.error("[backend] failed to restart:", e);
       }
