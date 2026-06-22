@@ -138,8 +138,10 @@ export const useBackendStore = create<BackendState>((set, get) => ({
         const statusStr =
           typeof status === "string"
             ? status
-            : (status as Record<string, unknown>).status || "Stopped";
-        applyProcessStatus(statusStr as string, set);
+            : typeof status === "object" && status !== null && "status" in status && typeof (status as { status?: unknown }).status === "string"
+            ? (status as { status: string }).status
+            : "Stopped";
+        applyProcessStatus(statusStr, set);
 
         if (port > 0 && (statusStr === "Running" || statusStr === "Starting")) {
           await probeBackend(set, get);

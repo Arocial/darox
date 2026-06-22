@@ -16,10 +16,25 @@ export default function Chat() {
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
   const [mounted, setMounted] = useState(false);
+  const [renderedTabs, setRenderedTabs] = useState<string[]>([]);
+  const MAX_TABS = 5;
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (activeId) {
+      setRenderedTabs((prev) => {
+        const filtered = prev.filter((id) => id !== activeId);
+        const updated = [...filtered, activeId];
+        if (updated.length > MAX_TABS) {
+          return updated.slice(updated.length - MAX_TABS);
+        }
+        return updated;
+      });
+    }
+  }, [activeId]);
 
   useEffect(() => {
     const backend = useBackendStore.getState();
@@ -73,21 +88,24 @@ export default function Chat() {
       <WindowTitleUpdater />
       <AgentTabBar />
       <div className="relative min-h-0 flex-1">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={`absolute inset-0 ${
-              activeId === tab.id ? "visible z-10" : "invisible z-0"
-            }`}
-          >
-            <AgentTabPanel
-              agentId={tab.id}
-              workspace={tab.workspace}
-              mainAgent={tab.main_agent}
-              subagents={tab.subagents}
-            />
-          </div>
-        ))}
+        {tabs.map((tab) => {
+          if (!renderedTabs.includes(tab.id)) return null;
+          return (
+            <div
+              key={tab.id}
+              className={`absolute inset-0 ${
+                activeId === tab.id ? "visible z-10" : "invisible z-0"
+              }`}
+            >
+              <AgentTabPanel
+                agentId={tab.id}
+                workspace={tab.workspace}
+                mainAgent={tab.main_agent}
+                subagents={tab.subagents}
+              />
+            </div>
+          );
+        })}
         {tabs.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             No agents open. Click &quot;New&quot; to create one.

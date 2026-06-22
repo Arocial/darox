@@ -17,6 +17,32 @@ function getBackendCommand(): string {
   return "arox --profile coder";
 }
 
+function parseArgs(str: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    } else if (char === " " && !inDoubleQuote && !inSingleQuote) {
+      if (current.length > 0) {
+        result.push(current);
+        current = "";
+      }
+    } else {
+      current += char;
+    }
+  }
+  if (current.length > 0) {
+    result.push(current);
+  }
+  return result;
+}
+
 function findPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
@@ -75,7 +101,7 @@ export class BackendManager {
 
   private spawnProc(port: number): ChildProcess {
     const cmd = getBackendCommand();
-    const parts = cmd.split(/\s+/).filter(Boolean);
+    const parts = parseArgs(cmd);
     const [bin, ...rest] = parts;
     const args = [
       ...rest,
