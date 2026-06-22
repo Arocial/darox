@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, createConnection } from "node:net";
 import type { BrowserWindow } from "electron";
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
 
 export type ProcessStatus =
   | { status: "Stopped" }
@@ -9,13 +12,6 @@ export type ProcessStatus =
   | { status: "Crashed"; exit_code: number | null };
 
 const HOST = "127.0.0.1";
-
-function getBackendCommand(): string {
-  const argv = process.argv;
-  const i = argv.indexOf("--backend");
-  if (i >= 0 && argv[i + 1]) return argv[i + 1];
-  return "arox --profile coder";
-}
 
 function parseArgs(str: string): string[] {
   const result: string[] = [];
@@ -73,34 +69,61 @@ function checkHealth(port: number): Promise<boolean> {
   });
 }
 
+export interface InstanceData {
+  child: ChildProcess | null;
+  status: ProcessStatus;
+  port: number;
+  restartCount: number;
+  shutdown: boolean;
+}
+
 export class BackendManager {
-  private child: ChildProcess | null = null;
-  private status: ProcessStatus = { status: "Stopped" };
-  private port = 0;
-  private restartCount = 0;
-  private shutdown = false;
+  private instances = new Map<string, InstanceData>();
+  private activeProfile: string | null = null;
   private win: BrowserWindow | null = null;
 
   attach(win: BrowserWindow) {
     this.win = win;
   }
 
-  getStatus(): [ProcessStatus, number] {
-    return [this.status, this.port];
+  getAvailableProfiles(): string[] {
+    try {
+      const dir = path.join(os.homedir(), ".config/arox/profiles/chat");
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const profiles = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
+        .map((e) => e.name);
+      if (profiles.length === 0) return ["coder"];
+      return profiles;
+    } catch {
+      return ["coder"];
+    }
+  }
+
+  getStatus(): any {
+    const map: Record<string, any> = {};
+    for (const [profile, inst] of this.instances.entries()) {
+      map[profile] =
+        inst.status.status === "Crashed"
+          ? { status: "Crashed", exit_code: (inst.status as any).exit_code, port: inst.port }
+          : { status: inst.status.status, port: inst.port };
+    }
+    const profiles = this.getAvailableProfiles();
+    const active = this.activeProfile || (profiles.length > 0 ? profiles[0] : "coder");
+    return {
+      activeProfile: active,
+      instances: map,
+      profiles,
+    };
   }
 
   private emit() {
     if (!this.win || this.win.isDestroyed()) return;
-    const s = this.status;
-    const payload =
-      s.status === "Crashed"
-        ? { status: "Crashed", exit_code: s.exit_code, port: this.port }
-        : { status: s.status, port: this.port };
-    this.win.webContents.send("backend-status", payload);
+    this.win.webContents.send("backend-status", this.getStatus());
   }
 
-  private spawnProc(port: number): ChildProcess {
-    const cmd = getBackendCommand();
+  private spawnProc(profile: string, port: number): ChildProcess {
+    const cmd = `arox --profile ${profile}`;
     const parts = parseArgs(cmd);
     const [bin, ...rest] = parts;
     const args = [
@@ -115,70 +138,102 @@ export class BackendManager {
     console.log(`[backend] spawn: ${bin} ${args.join(" ")}`);
     const child = spawn(bin, args, { stdio: "inherit" });
     child.on("error", (err) => {
-      console.error("[backend] spawn error:", err);
+      console.error(`[backend] spawn error for ${profile}:`, err);
     });
     return child;
   }
 
-  async start(): Promise<number> {
-    await this.stop();
-    this.shutdown = false;
-    this.restartCount = 0;
-    this.port = await findPort();
-    this.child = this.spawnProc(this.port);
-    this.status = { status: "Starting" };
+  async startProfile(profile: string): Promise<number> {
+    let inst = this.instances.get(profile);
+    if (!inst) {
+      inst = {
+        child: null,
+        status: { status: "Stopped" },
+        port: 0,
+        restartCount: 0,
+        shutdown: false,
+      };
+      this.instances.set(profile, inst);
+    } else {
+      if (inst.status.status === "Running" || inst.status.status === "Starting") {
+        this.activeProfile = profile;
+        this.emit();
+        return inst.port;
+      }
+      await this.stopProfile(profile);
+      inst.shutdown = false;
+    }
+
+    inst.restartCount = 0;
+    inst.port = await findPort();
+    inst.child = this.spawnProc(profile, inst.port);
+    inst.status = { status: "Starting" };
+
+    this.activeProfile = profile;
     this.emit();
-    this.attachMonitor(this.child);
-    this.healthLoop();
-    return this.port;
+    this.attachMonitor(profile, inst);
+    this.healthLoop(profile, inst);
+    return inst.port;
   }
 
-  private async healthLoop() {
-    const targetPort = this.port;
-    while (!this.shutdown && this.port === targetPort) {
+  async start(): Promise<number> {
+    const profiles = this.getAvailableProfiles();
+    const profile = profiles.length > 0 ? profiles[0] : "coder";
+    return this.startProfile(profile);
+  }
+
+  private async healthLoop(profile: string, inst: InstanceData) {
+    const targetPort = inst.port;
+    while (!inst.shutdown && inst.port === targetPort) {
       await new Promise((r) => setTimeout(r, 2000));
-      if (this.shutdown || this.port !== targetPort) break;
-      if (this.status.status === "Starting" && (await checkHealth(this.port))) {
-        this.status = { status: "Running" };
-        this.restartCount = 0;
+      if (inst.shutdown || inst.port !== targetPort) break;
+      if (inst.status.status === "Starting" && (await checkHealth(inst.port))) {
+        inst.status = { status: "Running" };
+        inst.restartCount = 0;
+        if (this.activeProfile === profile) {
+          console.log(`[backend] ${profile} running on ${HOST}:${inst.port}`);
+        }
         this.emit();
-        console.log(`[backend] running on ${HOST}:${this.port}`);
       }
     }
   }
 
-  private attachMonitor(child: ChildProcess) {
+  private attachMonitor(profile: string, inst: InstanceData) {
+    const child = inst.child;
+    if (!child) return;
     child.on("exit", async (code) => {
-      if (this.shutdown) return;
-      if (this.child !== child) return; // superseded by a newer process
-      this.child = null;
-      this.status = { status: "Crashed", exit_code: code };
+      if (inst.shutdown) return;
+      if (inst.child !== child) return;
+      inst.child = null;
+      inst.status = { status: "Crashed", exit_code: code };
       this.emit();
-      console.warn(`[backend] exited with code ${code}`);
+      console.warn(`[backend] ${profile} exited with code ${code}`);
 
-      const delaySec = Math.min(2 ** this.restartCount, 30);
-      this.restartCount++;
+      const delaySec = Math.min(2 ** inst.restartCount, 30);
+      inst.restartCount++;
       await new Promise((r) => setTimeout(r, delaySec * 1000));
-      if (this.shutdown) return;
+      if (inst.shutdown) return;
 
       try {
-        const next = this.spawnProc(this.port);
-        this.child = next;
-        this.status = { status: "Starting" };
+        const next = this.spawnProc(profile, inst.port);
+        inst.child = next;
+        inst.status = { status: "Starting" };
         this.emit();
-        this.attachMonitor(next);
-        this.healthLoop();
+        this.attachMonitor(profile, inst);
+        this.healthLoop(profile, inst);
       } catch (e) {
-        console.error("[backend] failed to restart:", e);
+        console.error(`[backend] ${profile} failed to restart:`, e);
       }
     });
   }
 
-  async stop(): Promise<void> {
-    this.shutdown = true;
-    const child = this.child;
-    this.child = null;
-    this.status = { status: "Stopped" };
+  async stopProfile(profile: string): Promise<void> {
+    const inst = this.instances.get(profile);
+    if (!inst) return;
+    inst.shutdown = true;
+    const child = inst.child;
+    inst.child = null;
+    inst.status = { status: "Stopped" };
     this.emit();
     if (!child) return;
 
@@ -200,17 +255,28 @@ export class BackendManager {
         if (!done) {
           try {
             child.kill("SIGKILL");
-          } catch {
-            // ignore
-          }
+          } catch { }
           finish();
         }
       }, 5000);
     });
   }
 
+  async stop(): Promise<void> {
+    const promises = [];
+    for (const profile of this.instances.keys()) {
+      promises.push(this.stopProfile(profile));
+    }
+    await Promise.all(promises);
+  }
+
   async restart(): Promise<number> {
-    await this.stop();
-    return this.start();
+    if (!this.activeProfile) return this.start();
+    await this.stopProfile(this.activeProfile);
+    return this.startProfile(this.activeProfile);
+  }
+
+  async closeBackend(profile: string): Promise<void> {
+    await this.stopProfile(profile);
   }
 }

@@ -9,6 +9,8 @@ import {
   XIcon,
   ChevronRightIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronsUpDownIcon,
   TrashIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -239,7 +241,14 @@ export const AgentTabBar = () => {
 
   const backendStatus = useBackendStore((s) => s.status);
   const restartBackend = useBackendStore((s) => s.restartBackend);
+  const switchBackend = useBackendStore((s) => s.switchBackend);
+  const closeBackend = useBackendStore((s) => s.closeBackend);
+  const activeProfile = useBackendStore((s) => s.activeProfile);
+  const profiles = useBackendStore((s) => s.profiles);
+  const instances = useBackendStore((s) => s.instances);
+
   const [restarting, setRestarting] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   useEffect(() => {
     if (backendStatus === "connected") {
@@ -434,10 +443,14 @@ export const AgentTabBar = () => {
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between border-t px-3 py-2">
-        <div className="flex items-center gap-2 text-muted-foreground text-xs">
+      <div className="flex items-center justify-between border-t px-2 py-2 relative gap-1">
+        <button
+          onClick={() => setShowProfileMenu(!showProfileMenu)}
+          className="flex flex-1 items-center gap-2 text-muted-foreground text-xs hover:bg-muted/50 hover:text-foreground transition-colors text-left min-w-0 rounded-md p-1 -ml-1 group"
+          title="Switch Backend Profile"
+        >
           <span
-            className={`inline-block size-2 rounded-full ${
+            className={`inline-block size-2 rounded-full shrink-0 ${
               backendStatus === "connected"
                 ? "bg-green-500"
                 : backendStatus === "connecting"
@@ -445,14 +458,61 @@ export const AgentTabBar = () => {
                   : "bg-red-500"
             }`}
           />
-          <span>
-            {backendStatus === "connected"
-              ? "Connected"
-              : backendStatus === "connecting"
-                ? "Connecting..."
-                : "Disconnected"}
-          </span>
-        </div>
+          <div className="min-w-0 flex-1 truncate font-medium">
+            {activeProfile || "Unknown"}
+            <span className="opacity-70 ml-1 font-normal hidden xl:inline">
+              ({backendStatus === "connected" ? "Connected" : backendStatus === "connecting" ? "Connecting" : "Disconnected"})
+            </span>
+          </div>
+          <ChevronUpIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
+        </button>
+
+        {showProfileMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
+            <div className="absolute bottom-full left-2 mb-2 w-48 rounded-md border bg-popover text-popover-foreground shadow-md z-50 overflow-hidden flex flex-col py-1 text-xs">
+              <div className="px-2 py-1.5 font-semibold text-muted-foreground opacity-70 border-b mb-1">
+                Backend Profiles
+              </div>
+              {profiles.map((p) => {
+                const isActive = p === activeProfile;
+                const instStatus = instances[p]?.status || "Stopped";
+                const isRunning = instStatus === "Running" || instStatus === "Starting";
+                return (
+                  <div
+                    key={p}
+                    className={`flex items-center justify-between px-2 py-1.5 hover:bg-accent hover:text-accent-foreground cursor-pointer ${isActive ? "bg-accent/50" : ""}`}
+                    onClick={async () => {
+                      if (!isActive) await switchBackend(p);
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`inline-block size-1.5 rounded-full shrink-0 ${isRunning ? "bg-green-500" : "bg-transparent"}`} />
+                      <span className="truncate">{p}</span>
+                    </div>
+                    {isRunning && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await closeBackend(p);
+                        }}
+                        className="rounded p-0.5 hover:bg-destructive/20 hover:text-destructive opacity-70 hover:opacity-100"
+                        title="Stop Instance"
+                      >
+                        <XIcon className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {profiles.length === 0 && (
+                <div className="px-2 py-1.5 opacity-50">No profiles found</div>
+              )}
+            </div>
+          </>
+        )}
+
         <button
           onClick={async () => {
             setRestarting(true);
@@ -460,8 +520,8 @@ export const AgentTabBar = () => {
             setRestarting(false);
           }}
           disabled={restarting}
-          className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
-          title="Restart Backend"
+          className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50 shrink-0 ml-1"
+          title="Restart Active Backend"
         >
           <RotateCwIcon
             className={`size-4 ${restarting ? "animate-spin" : ""}`}

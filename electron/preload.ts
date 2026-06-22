@@ -38,19 +38,19 @@ interface FoundInPageResult {
   finalUpdate: boolean;
 }
 
-interface BackendStatusPayload {
-  status: string;
-  port: number;
-  exit_code?: number | null;
+export interface BackendStatusPayload {
+  activeProfile: string;
+  instances: Record<string, { status: string; port: number; exit_code?: number | null }>;
+  profiles: string[];
 }
-
-type BackendStatusTuple = [string | { status?: string }, number];
 
 const darox = {
   // ── Backend lifecycle ──────────────────────────────────────────────
   restartBackend: (): Promise<number> => ipcRenderer.invoke("restart_backend"),
+  switchBackend: (profile: string): Promise<number> => ipcRenderer.invoke("start_backend", profile),
+  closeBackend: (profile: string): Promise<void> => ipcRenderer.invoke("close_backend", profile),
 
-  getBackendStatus: (): Promise<BackendStatusTuple> =>
+  getBackendStatus: (): Promise<BackendStatusPayload> =>
     ipcRenderer.invoke("get_backend_status"),
 
   onBackendStatus: (cb: (payload: BackendStatusPayload) => void): Unsub => {

@@ -9,7 +9,17 @@ export type BackendProcessStatus =
   | "running"
   | "crashed";
 
+export interface InstanceState {
+  status: string;
+  port: number;
+  exit_code?: number | null;
+}
+
 type BackendState = {
+  activeProfile: string;
+  profiles: string[];
+  instances: Record<string, InstanceState>;
+
   apiBase: string;
   port: number;
   status: BackendStatus;
@@ -21,6 +31,8 @@ type BackendState = {
   setProcessStatus: (status: BackendProcessStatus) => void;
   probeBackend: () => Promise<void>;
   restartBackend: () => Promise<void>;
+  switchBackend: (profile: string) => Promise<void>;
+  closeBackend: (profile: string) => Promise<void>;
   setupDesktopListeners: () => Promise<(() => void) | undefined>;
 };
 
@@ -36,7 +48,6 @@ export const isDesktop =
 type SetState = (partial: Partial<BackendState>) => void;
 type GetState = () => BackendState;
 
-/** Try to reach the backend HTTP endpoint. Updates store status accordingly. */
 async function probeBackend(set: SetState, get: GetState) {
   const apiBase = get().apiBase;
   if (!apiBase || apiBase.endsWith(":0")) return;
@@ -61,27 +72,44 @@ async function probeBackend(set: SetState, get: GetState) {
   }
 }
 
-function applyProcessStatus(
-  statusStr: string,
-  set: (partial: Partial<BackendState>) => void,
-) {
+function processStatusFromStr(statusStr: string): BackendProcessStatus {
   switch (statusStr) {
-    case "Starting":
-      set({ processStatus: "starting", status: "connecting" });
-      break;
-    case "Running":
-      set({ processStatus: "running" });
-      break;
-    case "Stopped":
-      set({ processStatus: "stopped", status: "disconnected" });
-      break;
-    case "Crashed":
-      set({ processStatus: "crashed", status: "disconnected" });
-      break;
+    case "Starting": return "starting";
+    case "Running": return "running";
+    case "Crashed": return "crashed";
+    default: return "stopped";
+  }
+}
+
+function applyPayload(payload: any, set: SetState, get: GetState) {
+  const { activeProfile, instances, profiles } = payload;
+  const inst = instances[activeProfile];
+  const port = inst?.port || 0;
+  const statusStr = inst?.status || "Stopped";
+  const procStatus = processStatusFromStr(statusStr);
+
+  const prevPort = get().port;
+
+  set({
+    activeProfile,
+    instances,
+    profiles,
+    port,
+    apiBase: makeApiBase(port),
+    processStatus: procStatus,
+    status: procStatus === "running" ? "connecting" : "disconnected"
+  });
+
+  if (procStatus === "running" && port > 0) {
+    probeBackend(set, get);
   }
 }
 
 export const useBackendStore = create<BackendState>((set, get) => ({
+  activeProfile: "coder",
+  profiles: [],
+  instances: {},
+
   apiBase: makeApiBase(0),
   port: 0,
   status: "disconnected",
@@ -89,7 +117,6 @@ export const useBackendStore = create<BackendState>((set, get) => ({
 
   setPort: (port) => set({ port, apiBase: makeApiBase(port) }),
   setApiBase: (apiBase) => set({ apiBase }),
-
   setStatus: (status) => set({ status }),
   setProcessStatus: (processStatus) => set({ processStatus }),
 
@@ -102,11 +129,32 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     if (!api) return;
     try {
       set({ processStatus: "starting", status: "connecting" });
-      const port = await api.restartBackend();
-      set({ port, apiBase: makeApiBase(port) });
+      await api.restartBackend();
+      // payload will be pushed via onBackendStatus
     } catch (e) {
       console.error("Failed to restart backend", e);
       set({ processStatus: "crashed" });
+    }
+  },
+
+  switchBackend: async (profile: string) => {
+    const api = typeof window !== "undefined" ? window.darox : undefined;
+    if (!api) return;
+    try {
+      set({ processStatus: "starting", status: "connecting" });
+      await api.switchBackend(profile);
+    } catch (e) {
+      console.error("Failed to switch backend", e);
+    }
+  },
+
+  closeBackend: async (profile: string) => {
+    const api = typeof window !== "undefined" ? window.darox : undefined;
+    if (!api) return;
+    try {
+      await api.closeBackend(profile);
+    } catch (e) {
+      console.error("Failed to close backend", e);
     }
   },
 
@@ -115,37 +163,12 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     if (!api) return;
     try {
       const unlisten = api.onBackendStatus((payload) => {
-        const { status, port } = payload;
-        if (port > 0) {
-          set({ port, apiBase: makeApiBase(port) });
-        }
-        applyProcessStatus(status, set);
-        if (status === "Running" && port > 0) {
-          probeBackend(set, get);
-        }
+        applyPayload(payload, set, get);
       });
 
       try {
-        const result = await api.getBackendStatus();
-        console.log(
-          "[backend-store] get_backend_status result:",
-          JSON.stringify(result),
-        );
-        const [status, port] = result;
-        if (port > 0) {
-          set({ port, apiBase: makeApiBase(port) });
-        }
-        const statusStr =
-          typeof status === "string"
-            ? status
-            : typeof status === "object" && status !== null && "status" in status && typeof (status as { status?: unknown }).status === "string"
-            ? (status as { status: string }).status
-            : "Stopped";
-        applyProcessStatus(statusStr, set);
-
-        if (port > 0 && (statusStr === "Running" || statusStr === "Starting")) {
-          await probeBackend(set, get);
-        }
+        const payload = await api.getBackendStatus();
+        applyPayload(payload, set, get);
       } catch (e) {
         console.error("Failed to get initial backend status", e);
       }

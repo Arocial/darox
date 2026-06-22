@@ -280,11 +280,17 @@ app.whenReady().then(async () => {
     });
   });
 
-  ipcMain.handle("start_backend", () => mgr.start());
+  ipcMain.handle("start_backend", (_e, profile?: string) => {
+    if (profile) return mgr.startProfile(profile);
+    return mgr.start();
+  });
   ipcMain.handle("stop_backend", async () => {
     await mgr.stop();
   });
   ipcMain.handle("restart_backend", () => mgr.restart());
+  ipcMain.handle("close_backend", (_e, profile: string) => {
+    return mgr.closeBackend(profile);
+  });
   ipcMain.handle("get_backend_status", () => mgr.getStatus());
   ipcMain.handle("dialog:open", async (_e, opts) => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
