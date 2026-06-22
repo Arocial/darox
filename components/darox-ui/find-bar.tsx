@@ -93,7 +93,7 @@ export function FindBar() {
         value={query}
         onChange={(e) => onInputChange(e.target.value)}
         onKeyDown={onInputKeyDown}
-        placeholder="查找"
+        placeholder="Find"
         className="h-7 w-48 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
       />
       <span
@@ -108,7 +108,7 @@ export function FindBar() {
         size="icon-xs"
         disabled={!hasQuery}
         onClick={() => find(query, { findNext: true, forward: false })}
-        aria-label="上一个"
+        aria-label="Previous match"
       >
         <ChevronUpIcon />
       </Button>
@@ -117,11 +117,11 @@ export function FindBar() {
         size="icon-xs"
         disabled={!hasQuery}
         onClick={() => find(query, { findNext: true, forward: true })}
-        aria-label="下一个"
+        aria-label="Next match"
       >
         <ChevronDownIcon />
       </Button>
-      <Button variant="ghost" size="icon-xs" onClick={close} aria-label="关闭">
+      <Button variant="ghost" size="icon-xs" onClick={close} aria-label="Close">
         <XIcon />
       </Button>
     </div>
