@@ -38,19 +38,14 @@ interface FoundInPageResult {
   finalUpdate: boolean;
 }
 
-interface BackendStatusPayload {
-  status: string;
-  port: number;
-  exit_code?: number | null;
-}
-
-type BackendStatusTuple = [string | { status?: string }, number];
-
 interface DaroxApi {
   // Backend lifecycle
+  getAuthToken(): string | undefined;
   restartBackend(): Promise<number>;
-  getBackendStatus(): Promise<BackendStatusTuple>;
-  onBackendStatus(cb: (payload: BackendStatusPayload) => void): Unsub;
+  switchBackend(profile: string): Promise<number>;
+  closeBackend(profile: string): Promise<void>;
+  getBackendStatus(): Promise<any>;
+  onBackendStatus(cb: (payload: any) => void): Unsub;
 
   // Find in page
   findInPage(opts: FindInPageOptions): Promise<unknown>;

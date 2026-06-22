@@ -1,4 +1,5 @@
 "use client";
+import { daroxFetch } from "@/lib/api";
 
 import { Command } from "cmdk";
 import {
@@ -93,7 +94,9 @@ function useSuggestions(
           }
         }
 
-        const res = await fetch(url.toString(), { signal: controller.signal });
+        const res = await daroxFetch(url.toString(), {
+          signal: controller.signal,
+        });
         if (res.ok) {
           const data = await res.json();
           const items = data.items || [];

@@ -165,11 +165,17 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       throw new Error("No user message to send");
     }
     const parts =
-      "parts" in lastUser && Array.isArray((lastUser as { parts?: unknown }).parts)
-        ? ((lastUser as { parts?: unknown }).parts as Array<{ type: string; text?: string }>)
+      "parts" in lastUser &&
+      Array.isArray((lastUser as { parts?: unknown }).parts)
+        ? ((lastUser as { parts?: unknown }).parts as Array<{
+            type: string;
+            text?: string;
+          }>)
         : undefined;
     const textPart = parts?.find((p) => p.type === "text");
-    const text = textPart?.text ?? ("content" in lastUser ? (lastUser as { content: string }).content : "");
+    const text =
+      textPart?.text ??
+      ("content" in lastUser ? (lastUser as { content: string }).content : "");
     let base: ChatInputEventResult;
     try {
       base = JSON.parse(text) as ChatInputEventResult;
@@ -184,7 +190,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     // Carry the UI message id up to the server so it can pair the resulting
     // user_input session event with this specific message — letting the
     // client later look up its absolute event index by id.
-    const id = "id" in lastUser && typeof (lastUser as { id?: unknown }).id === "string" ? (lastUser as { id: string }).id : undefined;
+    const id =
+      "id" in lastUser && typeof (lastUser as { id?: unknown }).id === "string"
+        ? (lastUser as { id: string }).id
+        : undefined;
     return id ? { ...base, client_message_id: id } : base;
   }
 
@@ -337,13 +346,15 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   }
 }
 
+import { appendWsToken } from "@/lib/api";
+
 export function httpBaseToWsUrl(
   apiBase: string,
   agentId: string,
   agentName: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/api/agents/${agentId}/${agentName}/ws`;
+  return appendWsToken(`${wsBase}/api/agents/${agentId}/${agentName}/ws`);
 }
 
 // Module-level cache keyed by URL. Lets StrictMode's unmount→remount reuse

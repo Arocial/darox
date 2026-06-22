@@ -40,15 +40,22 @@ interface FoundInPageResult {
 
 export interface BackendStatusPayload {
   activeProfile: string;
-  instances: Record<string, { status: string; port: number; exit_code?: number | null }>;
+  instances: Record<
+    string,
+    { status: string; port: number; exit_code?: number | null }
+  >;
   profiles: string[];
 }
 
 const darox = {
   // ── Backend lifecycle ──────────────────────────────────────────────
+  getAuthToken: (): string | undefined =>
+    ipcRenderer.sendSync("get_auth_token"),
   restartBackend: (): Promise<number> => ipcRenderer.invoke("restart_backend"),
-  switchBackend: (profile: string): Promise<number> => ipcRenderer.invoke("start_backend", profile),
-  closeBackend: (profile: string): Promise<void> => ipcRenderer.invoke("close_backend", profile),
+  switchBackend: (profile: string): Promise<number> =>
+    ipcRenderer.invoke("start_backend", profile),
+  closeBackend: (profile: string): Promise<void> =>
+    ipcRenderer.invoke("close_backend", profile),
 
   getBackendStatus: (): Promise<BackendStatusPayload> =>
     ipcRenderer.invoke("get_backend_status"),

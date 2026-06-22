@@ -9,13 +9,15 @@ export type AgentCommandAck = {
   output?: string;
 };
 
+import { appendWsToken } from "@/lib/api";
+
 export function agentWsUrl(
   apiBase: string,
   agentId: string,
   mainAgentName: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/api/agents/${agentId}/${mainAgentName}/ws`;
+  return appendWsToken(`${wsBase}/api/agents/${agentId}/${mainAgentName}/ws`);
 }
 
 export function sendAgentCommand(

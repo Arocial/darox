@@ -8,7 +8,7 @@
     "build": "next build",
     "build:check": "cross-env NEXT_DIST_DIR=.next-check next build",
     "start": "next start -p 3140",
-    "lint": "biome check",
+    "lint": "biome check --write .",
     "format": "biome format --write .",
     "electron:compile": "tsc -p electron",
     "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",

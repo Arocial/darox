@@ -291,6 +291,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("close_backend", (_e, profile: string) => {
     return mgr.closeBackend(profile);
   });
+  ipcMain.on("get_auth_token", (event) => {
+    event.returnValue = mgr.getApiToken();
+  });
   ipcMain.handle("get_backend_status", () => mgr.getStatus());
   ipcMain.handle("dialog:open", async (_e, opts) => {
     if (!mainWindow) return { canceled: true, filePaths: [] };

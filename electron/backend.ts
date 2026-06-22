@@ -4,6 +4,7 @@ import type { BrowserWindow } from "electron";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 
 export type ProcessStatus =
   | { status: "Stopped" }
@@ -81,6 +82,11 @@ export class BackendManager {
   private instances = new Map<string, InstanceData>();
   private activeProfile: string | null = null;
   private win: BrowserWindow | null = null;
+  private apiToken = randomBytes(32).toString("hex");
+
+  getApiToken(): string {
+    return this.apiToken;
+  }
 
   attach(win: BrowserWindow) {
     this.win = win;
@@ -105,11 +111,16 @@ export class BackendManager {
     for (const [profile, inst] of this.instances.entries()) {
       map[profile] =
         inst.status.status === "Crashed"
-          ? { status: "Crashed", exit_code: (inst.status as any).exit_code, port: inst.port }
+          ? {
+              status: "Crashed",
+              exit_code: (inst.status as any).exit_code,
+              port: inst.port,
+            }
           : { status: inst.status.status, port: inst.port };
     }
     const profiles = this.getAvailableProfiles();
-    const active = this.activeProfile || (profiles.length > 0 ? profiles[0] : "coder");
+    const active =
+      this.activeProfile || (profiles.length > 0 ? profiles[0] : "coder");
     return {
       activeProfile: active,
       instances: map,
@@ -136,7 +147,10 @@ export class BackendManager {
       String(port),
     ];
     console.log(`[backend] spawn: ${bin} ${args.join(" ")}`);
-    const child = spawn(bin, args, { stdio: "inherit" });
+    const child = spawn(bin, args, {
+      stdio: "inherit",
+      env: { ...process.env, DAROX_API_TOKEN: this.apiToken },
+    });
     child.on("error", (err) => {
       console.error(`[backend] spawn error for ${profile}:`, err);
     });
@@ -155,7 +169,10 @@ export class BackendManager {
       };
       this.instances.set(profile, inst);
     } else {
-      if (inst.status.status === "Running" || inst.status.status === "Starting") {
+      if (
+        inst.status.status === "Running" ||
+        inst.status.status === "Starting"
+      ) {
         this.activeProfile = profile;
         this.emit();
         return inst.port;
@@ -255,7 +272,7 @@ export class BackendManager {
         if (!done) {
           try {
             child.kill("SIGKILL");
-          } catch { }
+          } catch {}
           finish();
         }
       }, 5000);

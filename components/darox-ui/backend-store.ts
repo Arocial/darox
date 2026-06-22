@@ -1,4 +1,5 @@
 "use client";
+import { daroxFetch } from "@/lib/api";
 
 import { create } from "zustand";
 
@@ -54,7 +55,7 @@ async function probeBackend(set: SetState, get: GetState) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiBase}/api/health`, {
+    const res = await daroxFetch(`${apiBase}/api/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -74,10 +75,14 @@ async function probeBackend(set: SetState, get: GetState) {
 
 function processStatusFromStr(statusStr: string): BackendProcessStatus {
   switch (statusStr) {
-    case "Starting": return "starting";
-    case "Running": return "running";
-    case "Crashed": return "crashed";
-    default: return "stopped";
+    case "Starting":
+      return "starting";
+    case "Running":
+      return "running";
+    case "Crashed":
+      return "crashed";
+    default:
+      return "stopped";
   }
 }
 
@@ -88,8 +93,6 @@ function applyPayload(payload: any, set: SetState, get: GetState) {
   const statusStr = inst?.status || "Stopped";
   const procStatus = processStatusFromStr(statusStr);
 
-  const prevPort = get().port;
-
   set({
     activeProfile,
     instances,
@@ -97,7 +100,7 @@ function applyPayload(payload: any, set: SetState, get: GetState) {
     port,
     apiBase: makeApiBase(port),
     processStatus: procStatus,
-    status: procStatus === "running" ? "connecting" : "disconnected"
+    status: procStatus === "running" ? "connecting" : "disconnected",
   });
 
   if (procStatus === "running" && port > 0) {

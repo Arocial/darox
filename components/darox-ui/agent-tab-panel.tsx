@@ -1,4 +1,5 @@
 "use client";
+import { daroxFetch } from "@/lib/api";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
@@ -219,7 +220,7 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
+    daroxFetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         // Each user message already carries its fork anchor under

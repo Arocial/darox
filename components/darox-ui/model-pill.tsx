@@ -1,4 +1,5 @@
 "use client";
+import { daroxFetch } from "@/lib/api";
 
 import { useEffect, useMemo, useRef, useState, type FC } from "react";
 import { ChevronDownIcon, CheckIcon } from "lucide-react";
@@ -33,7 +34,7 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
   // Fetch initial model from /state.
   useEffect(() => {
     let cancelled = false;
-    fetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
+    daroxFetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && typeof data?.model === "string") {
@@ -72,7 +73,7 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
         );
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);
-        const res = await fetch(url.toString());
+        const res = await daroxFetch(url.toString());
         if (!cancelled) {
           if (res.ok) {
             const data = await res.json();

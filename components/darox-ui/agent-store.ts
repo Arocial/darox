@@ -1,4 +1,5 @@
 "use client";
+import { daroxFetch } from "@/lib/api";
 
 import { create } from "zustand";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
@@ -104,7 +105,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   createAgent: async (workspace: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/agents`, {
+      const res = await daroxFetch(`${apiBase}/api/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),
@@ -125,7 +126,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   deleteAgent: async (id: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      await fetch(`${apiBase}/api/agents/${id}`, { method: "DELETE" });
+      await daroxFetch(`${apiBase}/api/agents/${id}`, { method: "DELETE" });
     } catch (e) {
       console.error("Failed to delete agent", e);
     }
@@ -155,7 +156,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   deleteSession: async (id: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/sessions/${id}`, {
+      const res = await daroxFetch(`${apiBase}/api/sessions/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete session");
@@ -170,7 +171,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   loadSessions: async () => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/sessions`);
+      const res = await daroxFetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error("Failed to load sessions");
       const sessions: SessionInfo[] = await res.json();
       set({ sessions });
@@ -182,7 +183,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   openSession: async (sessionId: string, workspace?: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/agents`, {
+      const res = await daroxFetch(`${apiBase}/api/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
