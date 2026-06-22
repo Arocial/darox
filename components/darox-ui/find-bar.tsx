@@ -6,13 +6,6 @@ import { ChevronUpIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isDesktop } from "@/components/darox-ui/backend-store";
 
-type FoundInPageResult = {
-  requestId: number;
-  activeMatchOrdinal: number;
-  matches: number;
-  finalUpdate: boolean;
-};
-
 export function FindBar() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -27,18 +20,18 @@ export function FindBar() {
       const api = typeof window !== "undefined" ? window.darox : undefined;
       if (!api) return;
       if (!text) {
-        api.invoke("find:stop", "clearSelection");
+        api.stopFindInPage("clearSelection");
         setResult(null);
         return;
       }
-      api.invoke("find:start", { text, ...opts });
+      api.findInPage({ text, ...opts });
     },
     [],
   );
 
   const stop = useCallback(() => {
     const api = typeof window !== "undefined" ? window.darox : undefined;
-    api?.invoke("find:stop", "clearSelection");
+    api?.stopFindInPage("clearSelection");
     setResult(null);
   }, []);
 
@@ -48,12 +41,10 @@ export function FindBar() {
     stop();
   }, [stop]);
 
-  // Subscribe to native find results for the match counter.
   useEffect(() => {
     const api = typeof window !== "undefined" ? window.darox : undefined;
     if (!api) return;
-    return api.on("found-in-page", (payload) => {
-      const r = payload as FoundInPageResult;
+    return api.onFoundInPage((r) => {
       setResult({ active: r.activeMatchOrdinal, total: r.matches });
     });
   }, []);

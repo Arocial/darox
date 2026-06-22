@@ -81,12 +81,6 @@ function applyProcessStatus(
   }
 }
 
-type StatusPayload = {
-  status: string;
-  port: number;
-  exit_code?: number | null;
-};
-
 export const useBackendStore = create<BackendState>((set, get) => ({
   apiBase: makeApiBase(0),
   port: 0,
@@ -108,7 +102,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     if (!api) return;
     try {
       set({ processStatus: "starting", status: "connecting" });
-      const port = await api.invoke<number>("restart_backend");
+      const port = await api.restartBackend();
       set({ port, apiBase: makeApiBase(port) });
     } catch (e) {
       console.error("Failed to restart backend", e);
@@ -120,8 +114,8 @@ export const useBackendStore = create<BackendState>((set, get) => ({
     const api = typeof window !== "undefined" ? window.darox : undefined;
     if (!api) return;
     try {
-      const unlisten = api.on("backend-status", (payload) => {
-        const { status, port } = payload as StatusPayload;
+      const unlisten = api.onBackendStatus((payload) => {
+        const { status, port } = payload;
         if (port > 0) {
           set({ port, apiBase: makeApiBase(port) });
         }
@@ -132,10 +126,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       });
 
       try {
-        const result =
-          await api.invoke<[string | Record<string, unknown>, number]>(
-            "get_backend_status",
-          );
+        const result = await api.getBackendStatus();
         console.log(
           "[backend-store] get_backend_status result:",
           JSON.stringify(result),
