@@ -254,7 +254,7 @@ const UserActionBar: FC = () => {
   );
   const anchor = typeof anchorValue === "string" ? anchorValue : null;
   const workspace = useWorkspace();
-  const openSessionById = useAgentTabs((s) => s.openSessionById);
+  const openSession = useAgentTabs((s) => s.openSession);
 
   const onFork = async () => {
     if (anchorsCtx === null || anchor === null) {
@@ -273,7 +273,7 @@ const UserActionBar: FC = () => {
         toast.error(ack.output || "Fork succeeded but no session id returned.");
         return;
       }
-      const tab = await openSessionById(newSessionId, workspace);
+      const tab = await openSession(newSessionId, workspace);
       if (!tab) {
         toast.error("Forked, but failed to open new session.");
       }

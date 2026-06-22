@@ -124,7 +124,7 @@ export const AgentTabBar: FC = () => {
   };
 
   const handleOpenSession = async (session: SessionInfo) => {
-    await openSession(session);
+    await openSession(session.id, session.workspace);
   };
 
   // Filter out sessions that are already open as tabs

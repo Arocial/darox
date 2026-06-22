@@ -40,8 +40,7 @@ type AgentTabsState = {
   deleteAgent: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
-  openSession: (session: SessionInfo) => Promise<AgentTab | null>;
-  openSessionById: (
+  openSession: (
     sessionId: string,
     workspace?: string,
   ) => Promise<AgentTab | null>;
@@ -180,32 +179,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     }
   },
 
-  openSession: async (session: SessionInfo) => {
-    const workspace = session.workspace;
-    try {
-      const apiBase = useBackendStore.getState().apiBase;
-      const res = await fetch(`${apiBase}/api/agents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspace: workspace || undefined,
-          session_id: session.id,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to open session");
-      const tab: AgentTab = await res.json();
-      set((state) => ({
-        tabs: [...state.tabs, tab],
-        activeId: tab.id,
-      }));
-      return tab;
-    } catch (e) {
-      console.error("Failed to open session", e);
-      return null;
-    }
-  },
-
-  openSessionById: async (sessionId: string, workspace?: string) => {
+  openSession: async (sessionId: string, workspace?: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
       const res = await fetch(`${apiBase}/api/agents`, {
