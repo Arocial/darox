@@ -259,17 +259,23 @@ app.whenReady().then(async () => {
   // Content-Security-Policy: only allow same-origin resources and inline styles
   // (needed for Tailwind), plus WebSocket connections to the local backend.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [
+    const csp = isDev
+      ? [
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: app: http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;",
+        ].join(" ")
+      : [
           "default-src 'self' app:;",
           "script-src 'self' app:;",
           "style-src 'self' app: 'unsafe-inline';",
           "img-src 'self' app: data: blob:;",
           "font-src 'self' app: data:;",
           "connect-src 'self' app: http://127.0.0.1:* ws://127.0.0.1:*;",
-        ].join(" "),
+        ].join(" ");
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": csp,
       },
     });
   });
