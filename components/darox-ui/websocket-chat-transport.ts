@@ -1,5 +1,4 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
-import type { ChatInputEventResult } from "@/types/chat";
 
 type WsServerFrame =
   | { type: "ack"; status: string }
@@ -157,44 +156,12 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
   }
 
-  private extractReply(
-    messages: UI_MESSAGE[],
-  ): ChatInputEventResult & { client_message_id?: string } {
+  private extractReply(messages: UI_MESSAGE[]): UI_MESSAGE {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUser) {
       throw new Error("No user message to send");
     }
-    const parts =
-      "parts" in lastUser &&
-      Array.isArray((lastUser as { parts?: unknown }).parts)
-        ? ((lastUser as { parts?: unknown }).parts as Array<{
-            type: string;
-            text?: string;
-          }>)
-        : undefined;
-    const textPart = parts?.find((p) => p.type === "text");
-    const text =
-      textPart?.text ??
-      ("content" in lastUser ? (lastUser as { content: string }).content : "");
-    let base: ChatInputEventResult;
-    try {
-      base = JSON.parse(text) as ChatInputEventResult;
-    } catch {
-      base = {
-        req_id: "",
-        normal_input: { user_input: text },
-        deferred_tools: {},
-        exception_input: { retry: true },
-      };
-    }
-    // Carry the UI message id up to the server so it can pair the resulting
-    // user_input session event with this specific message — letting the
-    // client later look up its absolute event index by id.
-    const id =
-      "id" in lastUser && typeof (lastUser as { id?: unknown }).id === "string"
-        ? (lastUser as { id: string }).id
-        : undefined;
-    return id ? { ...base, client_message_id: id } : base;
+    return lastUser;
   }
 
   sendMessages: ChatTransport<UI_MESSAGE>["sendMessages"] = async (options) => {

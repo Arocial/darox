@@ -135,17 +135,30 @@ function AgentChat({
     if (cmd.type === "cmd-input-request") {
       setInputArgs(cmd.payload as ChatInputEventArgs);
     } else if (cmd.type === "cmd-user-turn") {
-      const { eventId, messageId } = cmd.payload as {
+      const { eventId, client_message_id } = cmd.payload as {
         eventId?: string;
-        messageId?: string;
+        client_message_id?: string;
       };
-      if (typeof eventId !== "string" || typeof messageId !== "string") return;
+      if (typeof eventId !== "string" || typeof client_message_id !== "string")
+        return;
       // Stamp the fork anchor onto the user message's own metadata, in the
       // same place /state delivers it on reload (metadata.custom). No
       // separate message-id -> event-id map to maintain.
       chat.setMessages((prev) =>
         prev.map((m) => {
-          if (m.id !== messageId) return m;
+          if (m.role !== "user") return m;
+          let foundClientMessageId = "";
+          try {
+            const textContent = Array.isArray(m.content)
+              ? m.content.find((c: any) => c.type === "text")?.text
+              : m.content;
+            if (typeof textContent === "string") {
+              foundClientMessageId = JSON.parse(textContent).client_message_id;
+            }
+          } catch (_e) {
+            // ignore
+          }
+          if (foundClientMessageId !== client_message_id) return m;
           const custom = (m.metadata as { custom?: Record<string, unknown> })
             ?.custom;
           if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;

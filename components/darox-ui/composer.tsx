@@ -62,7 +62,10 @@ export const Composer: FC = () => {
       window.dispatchEvent(new Event("cmd_history_updated"));
     }
 
+    const clientMessageId = crypto.randomUUID();
+
     const result: ChatInputEventResult & { _isExceptionReply?: boolean } = {
+      client_message_id: clientMessageId,
       req_id: inputArgs.req_id,
       normal_input: {
         user_input:

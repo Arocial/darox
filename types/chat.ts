@@ -6,6 +6,7 @@ export type ChatInputEventArgs = {
 };
 
 export type ChatInputEventResult = {
+  client_message_id: string;
   req_id: string;
   deferred_tools: Record<string, string>; // id: answer
   exception_input: { retry: boolean };
