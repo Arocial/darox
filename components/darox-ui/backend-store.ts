@@ -87,7 +87,7 @@ function processStatusFromStr(statusStr: string): BackendProcessStatus {
 }
 
 function applyPayload(payload: any, set: SetState, get: GetState) {
-  const { activeProfile, instances, profiles } = payload;
+  const { activeProfile, instances, profiles, externalUrl } = payload;
   const inst = instances[activeProfile];
   const port = inst?.port || 0;
   const statusStr = inst?.status || "Stopped";
@@ -98,12 +98,12 @@ function applyPayload(payload: any, set: SetState, get: GetState) {
     instances,
     profiles,
     port,
-    apiBase: makeApiBase(port),
+    apiBase: externalUrl || makeApiBase(port),
     processStatus: procStatus,
     status: procStatus === "running" ? "connecting" : "disconnected",
   });
 
-  if (procStatus === "running" && port > 0) {
+  if (procStatus === "running" && (port > 0 || externalUrl)) {
     probeBackend(set, get);
   }
 }

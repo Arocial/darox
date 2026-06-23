@@ -84,6 +84,34 @@ export class BackendManager {
   private win: BrowserWindow | null = null;
   private apiToken =
     process.env.AROX_API_TOKEN || randomBytes(32).toString("hex");
+  private externalBackend?: {
+    url: string;
+    apikey?: string;
+  };
+
+  constructor() {
+    const ext = process.env.DAROX_EXTERNAL_BACKEND;
+    if (ext) {
+      try {
+        const u = new URL(ext);
+        const apikey =
+          u.searchParams.get("apikey") || process.env.DAROX_API_TOKEN;
+        u.searchParams.delete("apikey");
+        this.externalBackend = {
+          url: u.toString().replace(/\/$/, ""),
+          apikey: apikey || "",
+        };
+        if (this.externalBackend.apikey) {
+          this.apiToken = this.externalBackend.apikey;
+        }
+        console.log(
+          `[backend] using external backend: ${this.externalBackend.url}`,
+        );
+      } catch (e) {
+        console.error("[backend] Invalid DAROX_EXTERNAL_BACKEND format", e);
+      }
+    }
+  }
 
   getApiToken(): string {
     return this.apiToken;
@@ -94,6 +122,7 @@ export class BackendManager {
   }
 
   getAvailableProfiles(): string[] {
+    if (this.externalBackend) return ["external"];
     try {
       const dir = path.join(os.homedir(), ".config/arox/profiles/chat");
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -108,6 +137,23 @@ export class BackendManager {
   }
 
   getStatus(): any {
+    if (this.externalBackend) {
+      const portStr = new URL(this.externalBackend.url).port;
+      const port = portStr
+        ? parseInt(portStr, 10)
+        : this.externalBackend.url.startsWith("https")
+          ? 443
+          : 80;
+      return {
+        activeProfile: "external",
+        instances: {
+          external: { status: "Running", port },
+        },
+        profiles: ["external"],
+        externalUrl: this.externalBackend.url,
+      };
+    }
+
     const map: Record<string, any> = {};
     for (const [profile, inst] of this.instances.entries()) {
       map[profile] =
@@ -159,6 +205,17 @@ export class BackendManager {
   }
 
   async startProfile(profile: string): Promise<number> {
+    if (this.externalBackend) {
+      this.activeProfile = "external";
+      this.emit();
+      const portStr = new URL(this.externalBackend.url).port;
+      return portStr
+        ? parseInt(portStr, 10)
+        : this.externalBackend.url.startsWith("https")
+          ? 443
+          : 80;
+    }
+
     let inst = this.instances.get(profile);
     if (!inst) {
       inst = {
@@ -249,6 +306,7 @@ export class BackendManager {
   }
 
   async stopProfile(profile: string): Promise<void> {
+    if (this.externalBackend) return;
     const inst = this.instances.get(profile);
     if (!inst) return;
     inst.shutdown = true;
@@ -284,6 +342,7 @@ export class BackendManager {
   }
 
   async stop(): Promise<void> {
+    if (this.externalBackend) return;
     const promises = [];
     for (const profile of this.instances.keys()) {
       promises.push(this.stopProfile(profile));
@@ -292,6 +351,7 @@ export class BackendManager {
   }
 
   async restart(): Promise<number> {
+    if (this.externalBackend) return this.startProfile("external");
     if (!this.activeProfile) return this.start();
     await this.stopProfile(this.activeProfile);
     return this.startProfile(this.activeProfile);
