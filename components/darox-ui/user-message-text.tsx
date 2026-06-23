@@ -1,6 +1,6 @@
 "use client";
 
-import { useMessagePartText } from "@assistant-ui/react";
+import { useMessage, useMessagePartText } from "@assistant-ui/react";
 import { AlertTriangleIcon, WrenchIcon } from "lucide-react";
 import { type FC, memo } from "react";
 
@@ -8,14 +8,11 @@ import type { ChatInputEventResult } from "@/types/chat";
 
 const UserMessageTextImpl: FC = () => {
   const { text } = useMessagePartText();
+  const message = useMessage();
 
-  let parsed: ChatInputEventResult | null = null;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    // Not JSON — render as plain text
-    return <p className="whitespace-pre-wrap">{text}</p>;
-  }
+  const parsed = (message.metadata?.custom as any)?.chatInputEventResult as
+    | ChatInputEventResult
+    | undefined;
 
   if (!parsed) {
     return <p className="whitespace-pre-wrap">{text}</p>;
@@ -33,9 +30,7 @@ const UserMessageTextImpl: FC = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      {hasNormalInput && (
-        <p className="whitespace-pre-wrap">{parsed.normal_input.user_input}</p>
-      )}
+      {text && <p className="whitespace-pre-wrap">{text}</p>}
 
       {hasDeferredTools && (
         <div className="flex flex-col gap-1.5">

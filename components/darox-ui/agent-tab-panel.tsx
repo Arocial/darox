@@ -147,20 +147,12 @@ function AgentChat({
       chat.setMessages((prev) =>
         prev.map((m) => {
           if (m.role !== "user") return m;
-          let foundClientMessageId = "";
-          try {
-            const textContent = Array.isArray(m.content)
-              ? m.content.find((c: any) => c.type === "text")?.text
-              : m.content;
-            if (typeof textContent === "string") {
-              foundClientMessageId = JSON.parse(textContent).client_message_id;
-            }
-          } catch (_e) {
-            // ignore
-          }
-          if (foundClientMessageId !== client_message_id) return m;
-          const custom = (m.metadata as { custom?: Record<string, unknown> })
+          const custom = (m.metadata as { custom?: Record<string, any> })
             ?.custom;
+          const foundClientMessageId =
+            custom?.chatInputEventResult?.client_message_id;
+
+          if (foundClientMessageId !== client_message_id) return m;
           if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;
           return {
             ...m,

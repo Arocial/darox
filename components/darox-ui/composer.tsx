@@ -17,7 +17,6 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
-import { ComposerJsonUnwrapper } from "@/components/darox-ui/composer-json-unwrapper";
 import {
   useChatInput,
   defaultInputArgs,
@@ -85,7 +84,10 @@ export const Composer: FC = () => {
 
     aui.thread().append({
       role: "user",
-      content: [{ type: "text", text: JSON.stringify(result) }],
+      content: result.normal_input.user_input
+        ? [{ type: "text", text: result.normal_input.user_input }]
+        : [],
+      metadata: { custom: { chatInputEventResult: result } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attachments: attachments as any,
     });
@@ -99,7 +101,6 @@ export const Composer: FC = () => {
       className="aui-composer-root relative flex w-full flex-col"
       onSubmit={handleSubmit}
     >
-      <ComposerJsonUnwrapper />
       {inputArgs.exception_input?.exception && (
         <div className="mx-2 mt-2 mb-2 flex flex-col gap-2 rounded-md bg-destructive/10 p-3 text-destructive">
           <p className="font-medium text-sm">Exception Occurred</p>
