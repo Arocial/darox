@@ -136,12 +136,16 @@
   },
   "overrides": [
     {
-      "includes": [
-        "components/ui/**",
-        "components/assistant-ui/**",
-        "components/darox-ui/**",
-        "components/icons/**"
-      ],
+      "includes": ["components/ui/**", "components/assistant-ui/**"],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["components/darox-ui/**", "components/icons/**"],
       "linter": {
         "rules": {
           "correctness": {
