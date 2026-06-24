@@ -1,11 +1,9 @@
-import { useState, type FC } from "react";
+import type { FC } from "react";
 import {
   ComposerPrimitive,
   useAui,
   useAuiState,
   AuiIf,
-  TextMessagePartProvider,
-  MessageProvider,
 } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 
@@ -13,7 +11,6 @@ import {
   ComposerAddAttachment,
   ComposerAttachments,
 } from "@/components/assistant-ui/attachment";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
@@ -31,10 +28,6 @@ export const Composer: FC = () => {
   const { inputArgs, setInputArgs } = useChatInput();
   const workspace = useWorkspace();
   const aui = useAui();
-
-  const [deferredTools, setDeferredTools] = useState<Record<string, string>>(
-    {},
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -54,9 +47,7 @@ export const Composer: FC = () => {
           });
           return {
             name: att.name || att.file.name,
-            content: [
-              { type: "file", data: url, mimeType: att.file.type },
-            ],
+            content: [{ type: "file", data: url, mimeType: att.file.type }],
           };
         }
         return att;
@@ -93,7 +84,6 @@ export const Composer: FC = () => {
             ? text
             : null,
       },
-      deferred_tools: deferredTools,
       exception_input: {
         retry: true,
       },
@@ -112,7 +102,6 @@ export const Composer: FC = () => {
       attachments: processedAttachments as any,
     });
     aui.composer().reset();
-    setDeferredTools({});
     setInputArgs(defaultInputArgs);
   };
 
@@ -127,43 +116,6 @@ export const Composer: FC = () => {
           <p className="text-sm">{inputArgs.exception_input.exception}</p>
         </div>
       )}
-
-      {Object.entries(inputArgs.deferred_tools || {}).map(([id, question]) => (
-        <div key={id} className="mx-2 mt-2 mb-2 flex flex-col gap-2">
-          <div className="font-medium text-foreground text-sm">
-            <MessageProvider
-              message={{
-                id: "mock",
-                role: "assistant",
-                content: [],
-                createdAt: new Date(),
-                status: { type: "complete", reason: "stop" },
-                metadata: {
-                  unstable_state: null,
-                  unstable_annotations: [],
-                  unstable_data: [],
-                  steps: [],
-                  custom: {},
-                },
-              }}
-              index={0}
-            >
-              <TextMessagePartProvider text={question as string}>
-                <MarkdownText />
-              </TextMessagePartProvider>
-            </MessageProvider>
-          </div>
-          <input
-            type="text"
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:font-medium file:text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            value={deferredTools[id] || ""}
-            onChange={(e) =>
-              setDeferredTools({ ...deferredTools, [id]: e.target.value })
-            }
-            required
-          />
-        </div>
-      ))}
 
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
@@ -182,10 +134,7 @@ export const Composer: FC = () => {
 const ComposerAction: FC = () => {
   const { inputArgs } = useChatInput();
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
-  const hasCustomInput =
-    inputArgs &&
-    (Object.keys(inputArgs.deferred_tools || {}).length > 0 ||
-      inputArgs.exception_input?.exception);
+  const hasCustomInput = inputArgs && !!inputArgs.exception_input?.exception;
   const isDisabled = isEmpty && !hasCustomInput;
 
   return (
