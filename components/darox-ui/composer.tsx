@@ -36,12 +36,32 @@ export const Composer: FC = () => {
     {},
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
 
     const state = aui.composer().getState();
     const text = state.text;
-    const attachments = state.attachments;
+    const rawAttachments = state.attachments;
+
+    const processedAttachments = await Promise.all(
+      rawAttachments.map(async (att) => {
+        if (att.file instanceof File) {
+          const url = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(att.file as File);
+          });
+          return {
+            name: att.name || att.file.name,
+            content: [
+              { type: "file", data: url, mimeType: att.file.type },
+            ],
+          };
+        }
+        return att;
+      }),
+    );
 
     const trimmed = text.trim();
     if (trimmed) {
@@ -89,7 +109,7 @@ export const Composer: FC = () => {
         : [],
       metadata: { custom: { chatInputEventResult: result } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      attachments: attachments as any,
+      attachments: processedAttachments as any,
     });
     aui.composer().reset();
     setDeferredTools({});
