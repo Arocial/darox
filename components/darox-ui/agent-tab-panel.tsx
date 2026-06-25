@@ -139,7 +139,10 @@ function AgentChat({
         server_message_id?: string;
         client_message_id?: string;
       };
-      if (typeof server_message_id !== "string" || typeof client_message_id !== "string")
+      if (
+        typeof server_message_id !== "string" ||
+        typeof client_message_id !== "string"
+      )
         return;
       // Stamp the fork anchor onto the user message's own metadata, in the
       // same place /state delivers it on reload (metadata.custom). No

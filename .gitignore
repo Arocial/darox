@@ -42,3 +42,5 @@ next-env.d.ts
 # persistence
 .chats
 .streams
+
+certificates
