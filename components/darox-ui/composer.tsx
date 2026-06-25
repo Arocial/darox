@@ -74,28 +74,16 @@ export const Composer: FC = () => {
 
     const clientMessageId = crypto.randomUUID();
 
-    const result: ChatInputEventResult & { _isExceptionReply?: boolean } = {
+    const result: ChatInputEventResult = {
       client_message_id: clientMessageId,
       req_id: inputArgs.req_id,
-      normal_input: {
-        user_input:
-          inputArgs.normal_input?.request ||
-          inputArgs.exception_input?.exception
-            ? text
-            : null,
-      },
-      exception_input: {
-        retry: true,
-      },
-      ...(inputArgs.exception_input?.exception
-        ? { _isExceptionReply: true }
-        : {}),
+      user_input: inputArgs.normal_input ? text : null,
     };
 
     aui.thread().append({
       role: "user",
-      content: result.normal_input.user_input
-        ? [{ type: "text", text: result.normal_input.user_input }]
+      content: result.user_input
+        ? [{ type: "text", text: result.user_input }]
         : [],
       metadata: { custom: { chatInputEventResult: result } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,21 +98,9 @@ export const Composer: FC = () => {
       className="aui-composer-root relative flex w-full flex-col"
       onSubmit={handleSubmit}
     >
-      {inputArgs.exception_input?.exception && (
-        <div className="mx-2 mt-2 mb-2 flex flex-col gap-2 rounded-md bg-destructive/10 p-3 text-destructive">
-          <p className="font-medium text-sm">Exception Occurred</p>
-          <p className="text-sm">{inputArgs.exception_input.exception}</p>
-        </div>
-      )}
-
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
-        <ComposerWithCommandMenu
-          disabled={
-            !inputArgs.normal_input?.request &&
-            !inputArgs.exception_input?.exception
-          }
-        />
+        <ComposerWithCommandMenu disabled={!inputArgs.normal_input} />
         <ComposerAction />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
@@ -132,10 +108,8 @@ export const Composer: FC = () => {
 };
 
 const ComposerAction: FC = () => {
-  const { inputArgs } = useChatInput();
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
-  const hasCustomInput = inputArgs && !!inputArgs.exception_input?.exception;
-  const isDisabled = isEmpty && !hasCustomInput;
+  const isDisabled = isEmpty;
 
   return (
     <div className="aui-composer-action-wrapper relative mx-2 mb-2 flex items-center justify-between">

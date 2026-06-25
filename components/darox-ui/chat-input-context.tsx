@@ -5,8 +5,7 @@ import type { ChatInputEventArgs } from "@/types/chat";
 
 export const defaultInputArgs: ChatInputEventArgs = {
   req_id: "",
-  normal_input: { request: false, user_input: null },
-  exception_input: { exception: null, retry: true },
+  normal_input: false,
 };
 
 export const ChatInputContext = createContext<{
