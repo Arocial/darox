@@ -135,11 +135,11 @@ function AgentChat({
     if (cmd.type === "cmd-input-request") {
       setInputArgs(cmd as unknown as ChatInputEventArgs);
     } else if (cmd.type === "cmd-user-turn") {
-      const { eventId, client_message_id } = cmd as unknown as {
-        eventId?: string;
+      const { server_message_id, client_message_id } = cmd as unknown as {
+        server_message_id?: string;
         client_message_id?: string;
       };
-      if (typeof eventId !== "string" || typeof client_message_id !== "string")
+      if (typeof server_message_id !== "string" || typeof client_message_id !== "string")
         return;
       // Stamp the fork anchor onto the user message's own metadata, in the
       // same place /state delivers it on reload (metadata.custom). No
@@ -153,12 +153,12 @@ function AgentChat({
             custom?.chatInputEventResult?.client_message_id;
 
           if (foundClientMessageId !== client_message_id) return m;
-          if (custom?.[USER_INPUT_ID_KEY] === eventId) return m;
+          if (custom?.[USER_INPUT_ID_KEY] === server_message_id) return m;
           return {
             ...m,
             metadata: {
               ...(m.metadata as object | undefined),
-              custom: { ...custom, [USER_INPUT_ID_KEY]: eventId },
+              custom: { ...custom, [USER_INPUT_ID_KEY]: server_message_id },
             },
           };
         }),
@@ -176,10 +176,10 @@ function AgentChat({
 
   const anchorsValue = useMemo(
     () => ({
-      forkAt: (eventId: string) =>
+      forkAt: (server_message_id: string) =>
         sendAgentCommand(apiBase, agentId, mainAgent, {
           type: "ForkEvent",
-          event_id: eventId,
+          event_id: server_message_id,
         }),
     }),
     [apiBase, agentId, mainAgent],

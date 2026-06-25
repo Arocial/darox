@@ -12,7 +12,7 @@ export const USER_INPUT_ID_KEY = "user_input_id";
 export type UserTurnAnchorsContextValue = {
   // Fork the current session at the given event id. Returns the server ack
   // carrying the new session id in `output`.
-  forkAt: (eventId: string) => Promise<AgentCommandAck>;
+  forkAt: (server_message_id: string) => Promise<AgentCommandAck>;
 };
 
 export const UserTurnAnchorsContext =

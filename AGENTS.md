@@ -57,7 +57,7 @@ Communication with the backend uses a unified WebSocket channel (`WebSocketChatT
 1. **AI Generation Stream**: Standard Vercel AI SDK parts (`text-*`, `tool-*`, `finish`) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
    - `cmd-input-request`: Prompts the UI to render an input form (`ChatInputEventArgs`: normal_input).
-   - `cmd-user-turn`: Delivers backend event anchors (`eventId`) mapped to UI `messageId` for forking/branching.
+   - `cmd-user-turn`: Delivers backend event anchors (`server_message_id`) mapped to UI `messageId` for forking/branching.
    - `cmd-agent-info`: Broadcasts live subagent state changes, dynamically updating the agent tabs.
    - `stream-close`: Explicit control frame that closes the current AI SDK generation stream independently of business logic.
 
