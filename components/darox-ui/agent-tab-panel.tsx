@@ -133,9 +133,9 @@ function AgentChat({
 
   useBackendCommands(url, (cmd) => {
     if (cmd.type === "cmd-input-request") {
-      setInputArgs(cmd.payload as ChatInputEventArgs);
+      setInputArgs(cmd as unknown as ChatInputEventArgs);
     } else if (cmd.type === "cmd-user-turn") {
-      const { eventId, client_message_id } = cmd.payload as {
+      const { eventId, client_message_id } = cmd as unknown as {
         eventId?: string;
         client_message_id?: string;
       };
@@ -164,7 +164,7 @@ function AgentChat({
         }),
       );
     } else if (cmd.type === "cmd-agent-info") {
-      updateAgent(cmd.payload as AgentTab);
+      updateAgent(cmd as unknown as AgentTab);
     }
   });
 

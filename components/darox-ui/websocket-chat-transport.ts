@@ -8,7 +8,6 @@ type WsServerFrame =
 
 export type BackendCommand = {
   type: string;
-  payload?: unknown;
   [key: string]: unknown;
 };
 
