@@ -6,14 +6,15 @@ import { useBackendStore } from "@/components/darox-ui/backend-store";
 
 export type AgentTab = {
   id: string;
+  name: string;
+  status: string;
   workspace: string;
-  main_agent: string;
-  subagents: string[];
+  subagents: AgentTab[];
 };
 
 export type SessionInfo = {
   id: string;
-  main_agent: string;
+  name: string;
   workspace: string;
   created_at: string;
   updated_at: string;

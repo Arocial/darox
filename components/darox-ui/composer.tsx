@@ -6,6 +6,7 @@ import {
   AuiIf,
 } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import { useAgentStatus } from "@/components/darox-ui/agent-status-context";
 
 import {
   ComposerAddAttachment,
@@ -28,6 +29,9 @@ export const Composer: FC = () => {
   const { inputArgs, setInputArgs } = useChatInput();
   const workspace = useWorkspace();
   const aui = useAui();
+  const status = useAgentStatus();
+
+  const isDisabled = status === "closed" || !inputArgs.normal_input;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -107,16 +111,16 @@ export const Composer: FC = () => {
     >
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
-        <ComposerWithCommandMenu disabled={!inputArgs.normal_input} />
-        <ComposerAction />
+        <ComposerWithCommandMenu disabled={isDisabled} />
+        <ComposerAction disabled={status === "closed"} />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
-  const isDisabled = isEmpty;
+  const isDisabled = disabled || isEmpty;
 
   return (
     <div className="aui-composer-action-wrapper relative mx-2 mb-2 flex items-center justify-between">

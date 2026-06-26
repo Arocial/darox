@@ -12,9 +12,9 @@ import {
 } from "@/components/darox-ui/websocket-chat-transport";
 
 import type { SuggestionItem } from "@/types/chat";
-export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
+export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
   agentId,
-  agentName,
+  subagentId,
 }) => {
   const apiBase = useBackendStore((s) => s.apiBase);
 
@@ -27,14 +27,14 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const wsUrl = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, agentName),
-    [apiBase, agentId, agentName],
+    () => httpBaseToWsUrl(apiBase, agentId, subagentId),
+    [apiBase, agentId, subagentId],
   );
 
   // Fetch initial model from /state.
   useEffect(() => {
     let cancelled = false;
-    daroxFetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
+    daroxFetch(`${apiBase}/api/agents/${agentId}/${subagentId}/state`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && typeof data?.model === "string") {
@@ -47,7 +47,7 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, agentId, agentName]);
+  }, [apiBase, agentId, subagentId]);
 
   // Close on outside click.
   useEffect(() => {
@@ -69,7 +69,7 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
     const t = setTimeout(async () => {
       try {
         const url = new URL(
-          `${apiBase}/api/agents/${agentId}/${agentName}/suggestions`,
+          `${apiBase}/api/agents/${agentId}/${subagentId}/suggestions`,
         );
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);
@@ -92,7 +92,7 @@ export const ModelPill: FC<{ agentId: string; agentName: string }> = ({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, query, apiBase, agentId, agentName]);
+  }, [open, query, apiBase, agentId, subagentId]);
 
   const handleSelect = async (modelRef: string) => {
     if (!modelRef) return;

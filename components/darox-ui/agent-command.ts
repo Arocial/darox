@@ -14,19 +14,19 @@ import { appendWsToken } from "@/lib/api";
 export function agentWsUrl(
   apiBase: string,
   agentId: string,
-  mainAgentName: string,
+  subagentId: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return appendWsToken(`${wsBase}/api/agents/${agentId}/${mainAgentName}/ws`);
+  return appendWsToken(`${wsBase}/api/agents/${agentId}/${subagentId}/ws`);
 }
 
 export function sendAgentCommand(
   apiBase: string,
   agentId: string,
-  mainAgentName: string,
+  subagentId: string,
   event: { type: string; [key: string]: unknown },
 ): Promise<AgentCommandAck> {
-  const url = agentWsUrl(apiBase, agentId, mainAgentName);
+  const url = agentWsUrl(apiBase, agentId, subagentId);
   return new Promise<AgentCommandAck>((resolve, reject) => {
     let settled = false;
     let ws: WebSocket;

@@ -12,7 +12,7 @@ import {
 } from "react";
 import { ComposerPrimitive, useAuiState, useAui } from "@assistant-ui/react";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
-import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
+import { SubagentIdContext } from "@/components/darox-ui/subagent-id-context";
 import {
   useWorkspace,
   historyKey,
@@ -62,7 +62,7 @@ function useSuggestions(
   search: string,
   open: boolean,
   agentId: string | null,
-  agentName: string | null,
+  subagentId: string | null,
   apiBase: string,
 ) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -77,8 +77,8 @@ function useSuggestions(
       setLoading(true);
       try {
         const base =
-          agentId && agentName
-            ? `${apiBase}/api/agents/${agentId}/${agentName}/suggestions`
+          agentId && subagentId
+            ? `${apiBase}/api/agents/${agentId}/${subagentId}/suggestions`
             : `${apiBase}/api/suggestions`;
         const url = new URL(base);
         if (command) {
@@ -118,7 +118,7 @@ function useSuggestions(
       clearTimeout(debounce);
       controller.abort();
     };
-  }, [command, search, open, agentId, agentName, apiBase]);
+  }, [command, search, open, agentId, subagentId, apiBase]);
 
   return { suggestions, loading };
 }
@@ -145,7 +145,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
   disabled,
 }) => {
   const agentId = useContext(AgentIdContext);
-  const agentName = useContext(AgentNameContext);
+  const subagentId = useContext(SubagentIdContext);
   const workspace = useWorkspace();
   const apiBase = useBackendStore((s) => s.apiBase);
   const text = useAuiState((s) => s.composer.text);
@@ -187,7 +187,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
     search,
     open,
     agentId,
-    agentName,
+    subagentId,
     apiBase,
   );
 

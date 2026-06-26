@@ -100,8 +100,7 @@ export default function Chat() {
               <AgentTabPanel
                 agentId={tab.id}
                 workspace={tab.workspace}
-                mainAgent={tab.main_agent}
-                subagents={tab.subagents}
+                agentTab={tab}
               />
             </div>
           );

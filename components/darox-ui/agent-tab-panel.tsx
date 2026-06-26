@@ -12,7 +12,9 @@ import {
 } from "@/components/darox-ui/chat-input-context";
 import { useAgentTabs, type AgentTab } from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
+import { SubagentIdContext } from "@/components/darox-ui/subagent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
+import { AgentStatusContext } from "@/components/darox-ui/agent-status-context";
 import { WorkspaceContext } from "@/components/darox-ui/workspace-context";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 import {
@@ -32,14 +34,16 @@ import type { UIMessage } from "ai";
 
 function AgentChat({
   agentId,
+  subagentId,
   agentName,
-  mainAgent,
+  status,
   workspace,
   initialMessages,
 }: {
   agentId: string;
+  subagentId: string;
   agentName: string;
-  mainAgent: string;
+  status: string;
   workspace: string;
   initialMessages: UIMessage[];
 }) {
@@ -48,8 +52,8 @@ function AgentChat({
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, agentName),
-    [apiBase, agentId, agentName],
+    () => httpBaseToWsUrl(apiBase, agentId, subagentId),
+    [apiBase, agentId, subagentId],
   );
   const transport = useMemo(() => acquireTransport(url), [url]);
 
@@ -180,32 +184,36 @@ function AgentChat({
   const anchorsValue = useMemo(
     () => ({
       forkAt: (server_message_id: string) =>
-        sendAgentCommand(apiBase, agentId, mainAgent, {
+        sendAgentCommand(apiBase, agentId, subagentId, {
           type: "ForkEvent",
           event_id: server_message_id,
         }),
     }),
-    [apiBase, agentId, mainAgent],
+    [apiBase, agentId, subagentId],
   );
 
   return (
     <WorkspaceContext.Provider value={workspace}>
       <AgentIdContext.Provider value={agentId}>
-        <AgentNameContext.Provider value={agentName}>
-          <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
-            <UserTurnAnchorsContext.Provider value={anchorsValue}>
-              <AssistantRuntimeProvider runtime={runtime}>
-                <div
-                  className="h-full"
-                  onMouseDown={() => isActive && clearNeedsInput(agentId)}
-                  onKeyDown={() => isActive && clearNeedsInput(agentId)}
-                >
-                  <Thread />
-                </div>
-              </AssistantRuntimeProvider>
-            </UserTurnAnchorsContext.Provider>
-          </ChatInputContext.Provider>
-        </AgentNameContext.Provider>
+        <SubagentIdContext.Provider value={subagentId}>
+          <AgentNameContext.Provider value={agentName}>
+            <AgentStatusContext.Provider value={status}>
+              <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
+                <UserTurnAnchorsContext.Provider value={anchorsValue}>
+                  <AssistantRuntimeProvider runtime={runtime}>
+                    <div
+                      className="h-full"
+                      onMouseDown={() => isActive && clearNeedsInput(agentId)}
+                      onKeyDown={() => isActive && clearNeedsInput(agentId)}
+                    >
+                      <Thread />
+                    </div>
+                  </AssistantRuntimeProvider>
+                </UserTurnAnchorsContext.Provider>
+              </ChatInputContext.Provider>
+            </AgentStatusContext.Provider>
+          </AgentNameContext.Provider>
+        </SubagentIdContext.Provider>
       </AgentIdContext.Provider>
     </WorkspaceContext.Provider>
   );
@@ -213,13 +221,15 @@ function AgentChat({
 
 function AgentChatLoader({
   agentId,
+  subagentId,
   agentName,
-  mainAgent,
+  status,
   workspace,
 }: {
   agentId: string;
+  subagentId: string;
   agentName: string;
-  mainAgent: string;
+  status: string;
   workspace: string;
 }) {
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
@@ -228,7 +238,7 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    daroxFetch(`${apiBase}/api/agents/${agentId}/${agentName}/state`)
+    daroxFetch(`${apiBase}/api/agents/${agentId}/${subagentId}/state`)
       .then((res) => res.json())
       .then((data) => {
         // Each user message already carries its fork anchor under
@@ -242,7 +252,7 @@ function AgentChatLoader({
         console.error("Failed to fetch history", err);
         setInitialMessages([]);
       });
-  }, [agentId, agentName]);
+  }, [agentId, subagentId]);
 
   if (initialMessages === null) {
     return (
@@ -255,8 +265,9 @@ function AgentChatLoader({
   return (
     <AgentChat
       agentId={agentId}
+      subagentId={subagentId}
       agentName={agentName}
-      mainAgent={mainAgent}
+      status={status}
       workspace={workspace}
       initialMessages={initialMessages}
     />
@@ -266,29 +277,27 @@ function AgentChatLoader({
 export function AgentTabPanel({
   agentId,
   workspace,
-  mainAgent,
-  subagents,
+  agentTab,
 }: {
   agentId: string;
   workspace: string;
-  mainAgent: string;
-  subagents: string[];
+  agentTab: AgentTab;
 }) {
   const agents = useMemo(
-    () => [mainAgent, ...subagents],
-    [mainAgent, subagents],
+    () => [agentTab, ...(agentTab.subagents || [])],
+    [agentTab],
   );
-  const [activeAgent, setActiveAgent] = useState(mainAgent);
+  const [activeSubagentId, setActiveSubagentId] = useState(agentTab.id);
   const [mounted, setMounted] = useState<Set<string>>(
-    () => new Set([mainAgent]),
+    () => new Set([agentTab.id]),
   );
 
-  const handleSelect = (name: string) => {
-    setActiveAgent(name);
-    if (!mounted.has(name)) {
+  const handleSelect = (id: string) => {
+    setActiveSubagentId(id);
+    if (!mounted.has(id)) {
       setMounted((prev) => {
         const next = new Set(prev);
-        next.add(name);
+        next.add(id);
         return next;
       });
     }
@@ -296,42 +305,49 @@ export function AgentTabPanel({
 
   return (
     <div className="relative h-full">
-      {Array.from(mounted).map((name) => (
-        <div
-          key={name}
-          className={`absolute inset-0 ${
-            activeAgent === name ? "visible z-10" : "invisible z-0"
-          }`}
-        >
-          <AgentChatLoader
-            agentId={agentId}
-            agentName={name}
-            mainAgent={mainAgent}
-            workspace={workspace}
-          />
-        </div>
-      ))}
+      {Array.from(mounted).map((id) => {
+        const agent = agents.find((a) => a.id === id);
+        if (!agent) return null;
+        return (
+          <div
+            key={id}
+            className={`absolute inset-0 ${
+              activeSubagentId === id ? "visible z-10" : "invisible z-0"
+            }`}
+          >
+            <AgentChatLoader
+              agentId={agentId}
+              subagentId={agent.id}
+              agentName={agent.name}
+              status={agent.status}
+              workspace={workspace}
+            />
+          </div>
+        );
+      })}
       <div className="absolute top-3 left-3 z-20">
-        <ModelPill agentId={agentId} agentName={activeAgent} />
+        <ModelPill agentId={agentId} subagentId={activeSubagentId} />
       </div>
       {agents.length > 1 && (
         <div className="absolute top-3 right-3 z-20 flex min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm">
           <div className="mb-2 rounded-t-md border-border border-b bg-muted/60 px-3 py-1.5 font-semibold text-foreground/80 text-xs uppercase tracking-wider">
             Agents
           </div>
-          {agents.map((name) => (
+          {agents.map((agent) => (
             <button
-              key={name}
-              onClick={() => handleSelect(name)}
+              key={agent.id}
+              onClick={() => handleSelect(agent.id)}
               className={`mx-1 flex items-center gap-2 rounded-sm px-3 py-1.5 text-left text-sm transition-colors ${
-                activeAgent === name
+                activeSubagentId === agent.id
                   ? "bg-accent font-semibold text-foreground"
                   : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
               }`}
-              title={name === mainAgent ? `${name} (main)` : name}
+              title={
+                agent.id === agentTab.id ? `${agent.name} (main)` : agent.name
+              }
             >
-              <span className="flex-1 truncate">{name}</span>
-              {name === mainAgent && (
+              <span className="flex-1 truncate">{agent.name}</span>
+              {agent.id === agentTab.id && (
                 <span className="shrink-0 text-[10px] text-muted-foreground">
                   main
                 </span>
