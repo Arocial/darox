@@ -120,12 +120,14 @@ export const Composer: FC = () => {
 
 const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   const isDisabled = disabled || isEmpty;
+  const showCancel = isRunning && !disabled;
 
   return (
     <div className="aui-composer-action-wrapper relative mx-2 mb-2 flex items-center justify-between">
       <ComposerAddAttachment />
-      <AuiIf condition={(s) => !s.thread.isRunning}>
+      {!showCancel ? (
         <TooltipIconButton
           tooltip="Send message"
           side="bottom"
@@ -138,8 +140,7 @@ const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
         >
           <ArrowUpIcon className="aui-composer-send-icon size-4" />
         </TooltipIconButton>
-      </AuiIf>
-      <AuiIf condition={(s) => s.thread.isRunning}>
+      ) : (
         <ComposerPrimitive.Cancel asChild>
           <Button
             type="button"
@@ -151,7 +152,7 @@ const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
             <SquareIcon className="aui-composer-cancel-icon size-3 fill-current" />
           </Button>
         </ComposerPrimitive.Cancel>
-      </AuiIf>
+      )}
     </div>
   );
 };

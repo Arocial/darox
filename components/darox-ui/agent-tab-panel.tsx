@@ -63,8 +63,18 @@ function AgentChat({
     messages: initialMessages,
     // resume: true triggers transport.reconnectToStream() on mount so we
     // start draining server-pushed events before the user submits anything.
-    resume: true,
+    resume: status !== "closed",
   });
+
+  useEffect(() => {
+    if (status === "closed") {
+      transport.close();
+      setInputArgs(defaultInputArgs);
+      if (chat.status === "submitted" || chat.status === "streaming") {
+        chat.stop();
+      }
+    }
+  }, [status, transport, chat.status, chat.stop]);
 
   const runtime = useAISDKRuntime(chat);
 

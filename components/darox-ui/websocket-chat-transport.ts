@@ -285,6 +285,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     const ws = this.ws;
     this.ws = null;
     this.openPromise = null;
+    this.closeController();
+
     if (!ws) return;
 
     if (ws.readyState === WebSocket.CLOSED) {
