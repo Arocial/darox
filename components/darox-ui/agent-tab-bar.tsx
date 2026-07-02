@@ -202,7 +202,7 @@ const SessionItem = ({
         <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
           <span className="flex-1 truncate">
             {lastMessages && lastMessages.length > 0
-              ? lastMessages[0]
+              ? lastMessages[lastMessages.length - 1]
               : "Empty session"}
           </span>
           <span className="shrink-0 text-[10px] opacity-70">
