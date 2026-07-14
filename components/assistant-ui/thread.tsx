@@ -90,11 +90,10 @@ const EMPTY_COMPONENTS: ThreadComponents = {};
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
 
-// Startup exposes a loading placeholder thread; treat it as a new chat so
-// the composer mounts centered. Loads after startup keep the docked layout.
+// Resume can briefly add an assistant indicator before removing it again.
+// Keep the new-chat layout until the user actually starts the conversation.
 const isNewChatView = (s: AssistantState) =>
-  s.thread.messages.length === 0 &&
-  (!s.thread.isLoading || s.threads.isLoading);
+  !s.thread.messages.some((message) => message.role === "user");
 
 export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const isEmpty = useAuiState(isNewChatView);
@@ -137,7 +136,10 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
 
           <div
             data-slot="aui_message-group"
-            className="mb-14 flex flex-col gap-y-6 empty:hidden"
+            className={cn(
+              "mb-14 flex flex-col gap-y-6 empty:hidden",
+              isEmpty && "hidden",
+            )}
           >
             <ThreadPrimitive.Messages>
               {() => <ThreadMessage />}
