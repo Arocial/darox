@@ -42,7 +42,8 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 - The backend binary (`arox`) is spawned and managed automatically by the Electron main process.
 - **Environment Variables**:
   - `AROX_API_TOKEN`: Overrides the auto-generated Bearer token for API authentication.
-  - `DAROX_PORT`: Overrides the auto-generated random port for the backend server.
+  - `DAROX_BACKEND_HOST`: Overrides the default backend host (`127.0.0.1`).
+  - `DAROX_BACKEND_PORT`: Overrides the auto-generated random port for the backend server.
   
 ### Component Layers
 

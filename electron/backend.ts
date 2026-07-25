@@ -12,7 +12,7 @@ export type ProcessStatus =
   | { status: "Running" }
   | { status: "Crashed"; exit_code: number | null };
 
-const HOST = "127.0.0.1";
+const HOST = process.env.DAROX_BACKEND_HOST || "127.0.0.1";
 
 function parseArgs(str: string): string[] {
   const result: string[] = [];
@@ -240,8 +240,8 @@ export class BackendManager {
     }
 
     inst.restartCount = 0;
-    const envPort = process.env.DAROX_PORT
-      ? parseInt(process.env.DAROX_PORT, 10)
+    const envPort = process.env.DAROX_BACKEND_PORT
+      ? parseInt(process.env.DAROX_BACKEND_PORT, 10)
       : NaN;
     inst.port = !Number.isNaN(envPort) ? envPort : await findPort();
     inst.child = this.spawnProc(profile, inst.port);
