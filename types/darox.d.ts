@@ -41,7 +41,7 @@ interface FoundInPageResult {
 interface DaroxApi {
   // Backend lifecycle
   getAuthToken(): string | undefined;
-  restartBackend(): Promise<number>;
+  restartBackend(profile: string): Promise<number>;
   switchBackend(profile: string): Promise<number>;
   closeBackend(profile: string): Promise<void>;
   getBackendStatus(): Promise<any>;

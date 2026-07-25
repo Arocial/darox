@@ -21,6 +21,14 @@ export type SessionInfo = {
   metadata: Record<string, unknown>;
 };
 
+type AgentWorkspace = {
+  tabs: AgentTab[];
+  activeId: string | null;
+  sessions: SessionInfo[];
+  needsInput: Record<string, Record<string, boolean>>;
+  isStreaming: Record<string, Record<string, boolean>>;
+};
+
 type AgentTabsState = {
   tabs: AgentTab[];
   activeId: string | null;
@@ -28,6 +36,7 @@ type AgentTabsState = {
   sessions: SessionInfo[];
   needsInput: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
   isStreaming: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
+  backendWorkspaces: Record<string, AgentWorkspace>;
 
   setActiveId: (id: string) => void;
   setNeedsInput: (sessionId: string, agentName: string, needs: boolean) => void;
@@ -58,6 +67,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   sessions: [],
   needsInput: {},
   isStreaming: {},
+  backendWorkspaces: {},
 
   setActiveId: (id) =>
     set((state) => {
@@ -239,10 +249,30 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 }));
 
 useBackendStore.subscribe((state, prevState) => {
-  if (
-    state.processStatus === "starting" &&
-    prevState.processStatus !== "starting"
-  ) {
-    useAgentTabs.getState().clearAgents();
-  }
+  if (state.activeBackendId === prevState.activeBackendId) return;
+
+  useAgentTabs.setState((agentState) => {
+    const backendWorkspaces = { ...agentState.backendWorkspaces };
+    if (prevState.activeBackendId) {
+      backendWorkspaces[prevState.activeBackendId] = {
+        tabs: agentState.tabs,
+        activeId: agentState.activeId,
+        sessions: agentState.sessions,
+        needsInput: agentState.needsInput,
+        isStreaming: agentState.isStreaming,
+      };
+    }
+    const next = state.activeBackendId
+      ? backendWorkspaces[state.activeBackendId]
+      : undefined;
+    return {
+      backendWorkspaces,
+      tabs: next?.tabs || [],
+      activeId: next?.activeId || null,
+      sessions: next?.sessions || [],
+      needsInput: next?.needsInput || {},
+      isStreaming: next?.isStreaming || {},
+      loading: false,
+    };
+  });
 });

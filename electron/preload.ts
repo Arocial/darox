@@ -51,7 +51,8 @@ const darox = {
   // ── Backend lifecycle ──────────────────────────────────────────────
   getAuthToken: (): string | undefined =>
     ipcRenderer.sendSync("get_auth_token"),
-  restartBackend: (): Promise<number> => ipcRenderer.invoke("restart_backend"),
+  restartBackend: (profile: string): Promise<number> =>
+    ipcRenderer.invoke("restart_backend", profile),
   switchBackend: (profile: string): Promise<number> =>
     ipcRenderer.invoke("start_backend", profile),
   closeBackend: (profile: string): Promise<void> =>

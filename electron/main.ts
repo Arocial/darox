@@ -261,7 +261,8 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const csp = isDev
       ? [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: app: http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;",
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: app: http://localhost:* ws://localhost:*;",
+          "connect-src http: https: ws: wss:;",
         ].join(" ")
       : [
           "default-src 'self' app:;",
@@ -269,7 +270,7 @@ app.whenReady().then(async () => {
           "style-src 'self' app: 'unsafe-inline';",
           "img-src 'self' app: data: blob:;",
           "font-src 'self' app: data:;",
-          "connect-src 'self' app: http://127.0.0.1:* ws://127.0.0.1:*;",
+          "connect-src 'self' app: http: https: ws: wss:;",
         ].join(" ");
 
     callback({
@@ -287,7 +288,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("stop_backend", async () => {
     await mgr.stop();
   });
-  ipcMain.handle("restart_backend", () => mgr.restart());
+  ipcMain.handle("restart_backend", (_e, profile: string) =>
+    mgr.restartProfile(profile),
+  );
   ipcMain.handle("close_backend", (_e, profile: string) => {
     return mgr.closeBackend(profile);
   });

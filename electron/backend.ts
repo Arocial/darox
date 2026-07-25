@@ -357,6 +357,12 @@ export class BackendManager {
     return this.startProfile(this.activeProfile);
   }
 
+  async restartProfile(profile: string): Promise<number> {
+    if (this.externalBackend) return this.startProfile("external");
+    await this.stopProfile(profile);
+    return this.startProfile(profile);
+  }
+
   async closeBackend(profile: string): Promise<void> {
     await this.stopProfile(profile);
   }

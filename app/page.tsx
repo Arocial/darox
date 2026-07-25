@@ -15,6 +15,7 @@ export default function Chat() {
   const { tabs, activeId, loading, loadSessions } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
+  const activeBackendId = useBackendStore((s) => s.activeBackendId);
   const [mounted, setMounted] = useState(false);
   const [renderedTabs, setRenderedTabs] = useState<string[]>([]);
   const MAX_TABS = 5;
@@ -39,11 +40,12 @@ export default function Chat() {
   useEffect(() => {
     const backend = useBackendStore.getState();
     let unlisten: (() => void) | undefined;
+    backend.hydrateCustomBackend();
     backend.setupDesktopListeners().then((fn) => {
       unlisten = fn;
     });
     if (!isDesktop) {
-      backend.probeBackend();
+      useBackendStore.getState().selectCustomBackend();
     }
     return () => {
       if (unlisten) unlisten();
@@ -60,7 +62,7 @@ export default function Chat() {
     return null;
   }
 
-  if (!isDesktop && backendStatus !== "connected") {
+  if (!isDesktop && !activeBackendId) {
     return <BrowserApiPrompt />;
   }
 
@@ -88,24 +90,30 @@ export default function Chat() {
       <WindowTitleUpdater />
       <AgentTabBar />
       <div className="relative min-h-0 flex-1">
-        {tabs.map((tab) => {
-          if (!renderedTabs.includes(tab.id)) return null;
-          return (
-            <div
-              key={tab.id}
-              className={`absolute inset-0 ${
-                activeId === tab.id ? "visible z-10" : "invisible z-0"
-              }`}
-            >
-              <AgentTabPanel
-                agentId={tab.id}
-                workspace={tab.workspace}
-                agentTab={tab}
-              />
-            </div>
-          );
-        })}
-        {tabs.length === 0 && (
+        {backendStatus === "connected" &&
+          tabs.map((tab) => {
+            if (!renderedTabs.includes(tab.id)) return null;
+            return (
+              <div
+                key={`${activeBackendId}:${tab.id}`}
+                className={`absolute inset-0 ${
+                  activeId === tab.id ? "visible z-10" : "invisible z-0"
+                }`}
+              >
+                <AgentTabPanel
+                  agentId={tab.id}
+                  workspace={tab.workspace}
+                  agentTab={tab}
+                />
+              </div>
+            );
+          })}
+        {backendStatus !== "connected" && (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            Backend disconnected. Use the Backend menu to reconnect or switch.
+          </div>
+        )}
+        {backendStatus === "connected" && tabs.length === 0 && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             No agents open. Click &quot;New&quot; to create one.
           </div>

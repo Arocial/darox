@@ -11,11 +11,17 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   TrashIcon,
+  SettingsIcon,
+  PowerIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
-import { useBackendStore } from "@/components/darox-ui/backend-store";
+import {
+  isDesktop,
+  useBackendStore,
+} from "@/components/darox-ui/backend-store";
+import { CustomBackendDialog } from "@/components/darox-ui/browser-api-prompt";
 import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
 
 function formatRelativeTime(dateString?: string) {
@@ -246,9 +252,16 @@ export const AgentTabBar = () => {
   const activeProfile = useBackendStore((s) => s.activeProfile);
   const profiles = useBackendStore((s) => s.profiles);
   const instances = useBackendStore((s) => s.instances);
+  const activeBackendId = useBackendStore((s) => s.activeBackendId);
+  const customBackend = useBackendStore((s) => s.customBackend);
+  const selectCustomBackend = useBackendStore((s) => s.selectCustomBackend);
+  const disconnectCustomBackend = useBackendStore(
+    (s) => s.disconnectCustomBackend,
+  );
 
   const [restarting, setRestarting] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showCustomDialog, setShowCustomDialog] = useState(false);
 
   useEffect(() => {
     if (backendStatus === "connected") {
@@ -448,7 +461,7 @@ export const AgentTabBar = () => {
         <button
           onClick={() => setShowProfileMenu(!showProfileMenu)}
           className="group -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left text-muted-foreground text-xs transition-colors hover:bg-muted/50 hover:text-foreground"
-          title="Switch Backend Profile"
+          title="Switch Backend"
         >
           <span
             className={`inline-block size-2 shrink-0 rounded-full ${
@@ -460,7 +473,9 @@ export const AgentTabBar = () => {
             }`}
           />
           <div className="min-w-0 flex-1 truncate font-medium">
-            {activeProfile || "Unknown"}
+            {activeBackendId === "custom:default"
+              ? customBackend?.url || "Custom Backend"
+              : activeProfile || "No Backend"}
             <span className="ml-1 hidden font-normal opacity-70 xl:inline">
               (
               {backendStatus === "connected"
@@ -480,48 +495,128 @@ export const AgentTabBar = () => {
               className="fixed inset-0 z-40"
               onClick={() => setShowProfileMenu(false)}
             />
-            <div className="absolute bottom-full left-2 z-50 mb-2 flex w-48 flex-col overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground text-xs shadow-md">
-              <div className="mb-1 border-b px-2 py-1.5 font-semibold text-muted-foreground opacity-70">
-                Backend Profiles
-              </div>
-              {profiles.map((p) => {
-                const isActive = p === activeProfile;
-                const instStatus = instances[p]?.status || "Stopped";
-                const isRunning =
-                  instStatus === "Running" || instStatus === "Starting";
-                return (
-                  <div
-                    key={p}
-                    className={`flex cursor-pointer items-center justify-between px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${isActive ? "bg-accent/50" : ""}`}
-                    onClick={async () => {
-                      if (!isActive) await switchBackend(p);
-                      setShowProfileMenu(false);
-                    }}
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`inline-block size-1.5 shrink-0 rounded-full ${isRunning ? "bg-green-500" : "bg-transparent"}`}
-                      />
-                      <span className="truncate">{p}</span>
+            <div className="absolute bottom-full left-2 z-50 mb-2 flex w-64 flex-col overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground text-xs shadow-md">
+              {isDesktop && (
+                <div className="border-b px-2 py-1.5 font-semibold text-muted-foreground">
+                  Automatic Profiles
+                </div>
+              )}
+              {isDesktop &&
+                profiles.map((p) => {
+                  const instStatus = instances[p]?.status || "Stopped";
+                  const isRunning =
+                    instStatus === "Running" || instStatus === "Starting";
+                  return (
+                    <div
+                      key={p}
+                      className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${activeBackendId === `profile:${p}` ? "bg-accent/50" : ""}`}
+                      onClick={async () => {
+                        if (activeBackendId !== `profile:${p}` || !isRunning)
+                          await switchBackend(p);
+                        setShowProfileMenu(false);
+                      }}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`inline-block size-1.5 shrink-0 rounded-full ${isRunning ? "bg-green-500" : "bg-transparent"}`}
+                        />
+                        <span className="truncate">{p}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {isRunning && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await restartBackend(p);
+                            }}
+                            className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
+                            title={`Restart ${p}`}
+                          >
+                            <RotateCwIcon className="size-3" />
+                          </button>
+                        )}
+                        {isRunning && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await closeBackend(p);
+                            }}
+                            className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
+                            title={`Close ${p}`}
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {isRunning && (
+                  );
+                })}
+              {isDesktop && profiles.length === 0 && (
+                <div className="px-2 py-1.5 opacity-50">No profiles found</div>
+              )}
+              <div className="border-y px-2 py-1.5 font-semibold text-muted-foreground">
+                Custom Backend
+              </div>
+              {customBackend && (
+                <div
+                  className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${
+                    activeBackendId === "custom:default" ? "bg-accent/50" : ""
+                  }`}
+                  onClick={async () => {
+                    await selectCustomBackend();
+                    setShowProfileMenu(false);
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={`inline-block size-1.5 shrink-0 rounded-full ${
+                        activeBackendId === "custom:default" &&
+                        backendStatus === "connected"
+                          ? "bg-green-500"
+                          : "bg-transparent"
+                      }`}
+                    />
+                    <span className="truncate">{customBackend.url}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        await selectCustomBackend();
+                      }}
+                      className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
+                      title="Reconnect"
+                    >
+                      <RotateCwIcon className="size-3" />
+                    </button>
+                    {activeBackendId === "custom:default" && (
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await closeBackend(p);
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          disconnectCustomBackend();
                         }}
-                        className="rounded p-0.5 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
-                        title="Stop Instance"
+                        className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
+                        title="Disconnect"
                       >
-                        <XIcon className="size-3" />
+                        <PowerIcon className="size-3" />
                       </button>
                     )}
                   </div>
-                );
-              })}
-              {profiles.length === 0 && (
-                <div className="px-2 py-1.5 opacity-50">No profiles found</div>
+                </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileMenu(false);
+                  setShowCustomDialog(true);
+                }}
+                className="flex items-center gap-2 px-2 py-1.5 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <SettingsIcon className="size-3.5" />
+                {customBackend
+                  ? "Edit Custom Backend…"
+                  : "Configure Custom Backend…"}
+              </button>
             </div>
           </>
         )}
@@ -529,17 +624,29 @@ export const AgentTabBar = () => {
         <button
           onClick={async () => {
             setRestarting(true);
-            await restartBackend();
+            if (activeBackendId === "custom:default") {
+              await selectCustomBackend();
+            } else if (activeProfile) {
+              await restartBackend(activeProfile);
+            }
             setRestarting(false);
           }}
-          disabled={restarting}
+          disabled={restarting || !activeBackendId}
           className="ml-1 shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
-          title="Restart Active Backend"
+          title={
+            activeBackendId === "custom:default"
+              ? "Reconnect Custom Backend"
+              : "Restart Active Backend"
+          }
         >
           <RotateCwIcon
             className={`size-4 ${restarting ? "animate-spin" : ""}`}
           />
         </button>
+        <CustomBackendDialog
+          open={showCustomDialog}
+          onOpenChange={setShowCustomDialog}
+        />
       </div>
     </div>
   );

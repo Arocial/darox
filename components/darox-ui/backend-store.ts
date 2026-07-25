@@ -1,7 +1,10 @@
 "use client";
-import { daroxFetch } from "@/lib/api";
 
 import { create } from "zustand";
+import {
+  setCustomBackendAuth,
+  setManagedBackendAuth,
+} from "@/lib/backend-auth";
 
 export type BackendStatus = "disconnected" | "connecting" | "connected";
 export type BackendProcessStatus =
@@ -9,6 +12,7 @@ export type BackendProcessStatus =
   | "starting"
   | "running"
   | "crashed";
+export type BackendId = `profile:${string}` | "custom:default";
 
 export interface InstanceState {
   status: string;
@@ -16,26 +20,43 @@ export interface InstanceState {
   exit_code?: number | null;
 }
 
+export interface CustomBackendConfig {
+  url: string;
+  token: string;
+  rememberToken: boolean;
+}
+
 type BackendState = {
+  activeBackendId: BackendId | null;
   activeProfile: string;
   profiles: string[];
   instances: Record<string, InstanceState>;
+  customBackend: CustomBackendConfig | null;
+  managedExternalUrl: string;
 
   apiBase: string;
   port: number;
   status: BackendStatus;
   processStatus: BackendProcessStatus;
 
-  setPort: (port: number) => void;
-  setApiBase: (apiBase: string) => void;
-  setStatus: (status: BackendStatus) => void;
-  setProcessStatus: (status: BackendProcessStatus) => void;
   probeBackend: () => Promise<void>;
-  restartBackend: () => Promise<void>;
+  restartBackend: (profile?: string) => Promise<void>;
   switchBackend: (profile: string) => Promise<void>;
   closeBackend: (profile: string) => Promise<void>;
+  connectCustomBackend: (config: CustomBackendConfig) => Promise<boolean>;
+  selectCustomBackend: () => Promise<boolean>;
+  disconnectCustomBackend: () => void;
+  hydrateCustomBackend: () => void;
   setupDesktopListeners: () => Promise<(() => void) | undefined>;
 };
+
+const CUSTOM_URL_KEY = "darox_custom_backend_url";
+const CUSTOM_TOKEN_KEY = "darox_custom_backend_token";
+const CUSTOM_SESSION_TOKEN_KEY = "darox_custom_backend_session_token";
+const CUSTOM_REMEMBER_KEY = "darox_custom_backend_remember_token";
+
+export const isDesktop =
+  typeof window !== "undefined" && typeof window.darox !== "undefined";
 
 function makeApiBase(port: number): string {
   const hostname =
@@ -43,142 +64,231 @@ function makeApiBase(port: number): string {
   return `http://${hostname}:${port}`;
 }
 
-export const isDesktop =
-  typeof window !== "undefined" && typeof window.darox !== "undefined";
+function normalizeUrl(value: string): string {
+  let url = value.trim();
+  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
+  return new URL(url).toString().replace(/\/$/, "");
+}
 
-type SetState = (partial: Partial<BackendState>) => void;
-type GetState = () => BackendState;
+function processStatusFromStr(status: string): BackendProcessStatus {
+  if (status === "Starting") return "starting";
+  if (status === "Running") return "running";
+  if (status === "Crashed") return "crashed";
+  return "stopped";
+}
 
-async function probeBackend(set: SetState, get: GetState) {
-  const apiBase = get().apiBase;
-  if (!apiBase || apiBase.endsWith(":0")) return;
+async function checkBackend(url: string, token: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await daroxFetch(`${apiBase}/api/health`, {
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const response = await fetch(`${url}/api/health`, {
+      headers,
       signal: controller.signal,
     });
-    clearTimeout(timeout);
-    if (res.ok) {
-      set({ status: "connected" });
-    } else {
-      set({
-        status: get().status === "connecting" ? "connecting" : "disconnected",
-      });
-    }
+    return response.ok;
   } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+let probeVersion = 0;
+
+export const useBackendStore = create<BackendState>((set, get) => {
+  const activateProfile = (
+    profile: string,
+    instances: Record<string, InstanceState>,
+    externalUrl?: string,
+  ) => {
+    const instance = instances[profile];
+    const processStatus = processStatusFromStr(instance?.status || "Stopped");
+    setManagedBackendAuth();
     set({
-      status: get().status === "connecting" ? "connecting" : "disconnected",
+      activeBackendId: `profile:${profile}`,
+      activeProfile: profile,
+      apiBase:
+        externalUrl ||
+        (profile === "external" && get().managedExternalUrl
+          ? get().managedExternalUrl
+          : makeApiBase(instance?.port || 0)),
+      port: instance?.port || 0,
+      processStatus,
+      status: processStatus === "running" ? "connecting" : "disconnected",
     });
-  }
-}
+  };
 
-function processStatusFromStr(statusStr: string): BackendProcessStatus {
-  switch (statusStr) {
-    case "Starting":
-      return "starting";
-    case "Running":
-      return "running";
-    case "Crashed":
-      return "crashed";
-    default:
-      return "stopped";
-  }
-}
+  return {
+    activeBackendId: null,
+    activeProfile: "",
+    profiles: [],
+    instances: {},
+    customBackend: null,
+    managedExternalUrl: "",
+    apiBase: makeApiBase(0),
+    port: 0,
+    status: "disconnected",
+    processStatus: "stopped",
 
-function applyPayload(payload: any, set: SetState, get: GetState) {
-  const { activeProfile, instances, profiles, externalUrl } = payload;
-  const inst = instances[activeProfile];
-  const port = inst?.port || 0;
-  const statusStr = inst?.status || "Stopped";
-  const procStatus = processStatusFromStr(statusStr);
-
-  set({
-    activeProfile,
-    instances,
-    profiles,
-    port,
-    apiBase: externalUrl || makeApiBase(port),
-    processStatus: procStatus,
-    status: procStatus === "running" ? "connecting" : "disconnected",
-  });
-
-  if (procStatus === "running" && (port > 0 || externalUrl)) {
-    probeBackend(set, get);
-  }
-}
-
-export const useBackendStore = create<BackendState>((set, get) => ({
-  activeProfile: "coder",
-  profiles: [],
-  instances: {},
-
-  apiBase: makeApiBase(0),
-  port: 0,
-  status: "disconnected",
-  processStatus: "stopped",
-
-  setPort: (port) => set({ port, apiBase: makeApiBase(port) }),
-  setApiBase: (apiBase) => set({ apiBase }),
-  setStatus: (status) => set({ status }),
-  setProcessStatus: (processStatus) => set({ processStatus }),
-
-  probeBackend: async () => {
-    await probeBackend(set, get);
-  },
-
-  restartBackend: async () => {
-    const api = typeof window !== "undefined" ? window.darox : undefined;
-    if (!api) return;
-    try {
-      set({ processStatus: "starting", status: "connecting" });
-      await api.restartBackend();
-      // payload will be pushed via onBackendStatus
-    } catch (e) {
-      console.error("Failed to restart backend", e);
-      set({ processStatus: "crashed" });
-    }
-  },
-
-  switchBackend: async (profile: string) => {
-    const api = typeof window !== "undefined" ? window.darox : undefined;
-    if (!api) return;
-    try {
-      set({ processStatus: "starting", status: "connecting" });
-      await api.switchBackend(profile);
-    } catch (e) {
-      console.error("Failed to switch backend", e);
-    }
-  },
-
-  closeBackend: async (profile: string) => {
-    const api = typeof window !== "undefined" ? window.darox : undefined;
-    if (!api) return;
-    try {
-      await api.closeBackend(profile);
-    } catch (e) {
-      console.error("Failed to close backend", e);
-    }
-  },
-
-  setupDesktopListeners: async () => {
-    const api = typeof window !== "undefined" ? window.darox : undefined;
-    if (!api) return;
-    try {
-      const unlisten = api.onBackendStatus((payload) => {
-        applyPayload(payload, set, get);
-      });
-
-      try {
-        const payload = await api.getBackendStatus();
-        applyPayload(payload, set, get);
-      } catch (e) {
-        console.error("Failed to get initial backend status", e);
+    probeBackend: async () => {
+      const version = ++probeVersion;
+      const { apiBase, activeBackendId, customBackend } = get();
+      if (!activeBackendId || !apiBase || apiBase.endsWith(":0")) return;
+      set({ status: "connecting" });
+      const token =
+        activeBackendId === "custom:default"
+          ? customBackend?.token || ""
+          : window.darox?.getAuthToken?.() || "";
+      const ok = await checkBackend(apiBase, token);
+      if (
+        version === probeVersion &&
+        get().activeBackendId === activeBackendId
+      ) {
+        set({ status: ok ? "connected" : "disconnected" });
       }
+    },
 
+    restartBackend: async (profile) => {
+      const api = window.darox;
+      if (!api) return;
+      const activeBackendId = get().activeBackendId;
+      const target =
+        profile ||
+        (activeBackendId?.startsWith("profile:")
+          ? activeBackendId.slice("profile:".length)
+          : undefined);
+      if (!target) return;
+      if (get().activeBackendId === `profile:${target}`) {
+        set({ processStatus: "starting", status: "connecting" });
+      }
+      await api.restartBackend(target);
+    },
+
+    switchBackend: async (profile) => {
+      const api = window.darox;
+      if (!api) return;
+      probeVersion++;
+      activateProfile(profile, get().instances);
+      set({ processStatus: "starting", status: "connecting" });
+      try {
+        await api.switchBackend(profile);
+      } catch (error) {
+        console.error("Failed to switch backend", error);
+        set({ processStatus: "crashed", status: "disconnected" });
+      }
+    },
+
+    closeBackend: async (profile) => {
+      const api = window.darox;
+      if (!api) return;
+      await api.closeBackend(profile);
+      if (get().activeBackendId === `profile:${profile}`) {
+        set({ processStatus: "stopped", status: "disconnected" });
+      }
+    },
+
+    connectCustomBackend: async (config) => {
+      let url: string;
+      try {
+        url = normalizeUrl(config.url);
+      } catch {
+        return false;
+      }
+      const version = ++probeVersion;
+      const previousStatus = get().status;
+      const previousBackendId = get().activeBackendId;
+      if (!previousBackendId || previousStatus === "disconnected") {
+        set({ status: "connecting" });
+      }
+      const ok = await checkBackend(url, config.token);
+      if (version !== probeVersion) return false;
+      if (!ok) {
+        if (!previousBackendId || previousStatus === "disconnected") {
+          set({ status: "disconnected" });
+        }
+        return false;
+      }
+      const normalized = { ...config, url };
+      localStorage.setItem(CUSTOM_URL_KEY, url);
+      localStorage.setItem(CUSTOM_REMEMBER_KEY, String(config.rememberToken));
+      if (config.rememberToken) {
+        localStorage.setItem(CUSTOM_TOKEN_KEY, config.token);
+        sessionStorage.removeItem(CUSTOM_SESSION_TOKEN_KEY);
+      } else {
+        localStorage.removeItem(CUSTOM_TOKEN_KEY);
+        sessionStorage.setItem(CUSTOM_SESSION_TOKEN_KEY, config.token);
+      }
+      setCustomBackendAuth(config.token);
+      set({
+        customBackend: normalized,
+        activeBackendId: "custom:default",
+        activeProfile: "",
+        apiBase: url,
+        port:
+          Number(new URL(url).port) || (url.startsWith("https:") ? 443 : 80),
+        processStatus: "running",
+        status: "connected",
+      });
+      return true;
+    },
+
+    selectCustomBackend: async () => {
+      const config = get().customBackend;
+      if (!config) return false;
+      return get().connectCustomBackend(config);
+    },
+
+    disconnectCustomBackend: () => {
+      if (get().activeBackendId !== "custom:default") return;
+      probeVersion++;
+      set({ status: "disconnected", processStatus: "stopped" });
+    },
+
+    hydrateCustomBackend: () => {
+      const url = localStorage.getItem(CUSTOM_URL_KEY);
+      if (!url) return;
+      const rememberToken =
+        localStorage.getItem(CUSTOM_REMEMBER_KEY) === "true";
+      const token = rememberToken
+        ? localStorage.getItem(CUSTOM_TOKEN_KEY) || ""
+        : sessionStorage.getItem(CUSTOM_SESSION_TOKEN_KEY) || "";
+      set({ customBackend: { url, token, rememberToken } });
+    },
+
+    setupDesktopListeners: async () => {
+      const api = window.darox;
+      if (!api) return;
+      const applyPayload = (payload: any) => {
+        const profiles: string[] = payload.profiles || [];
+        const instances: Record<string, InstanceState> =
+          payload.instances || {};
+        set({
+          profiles,
+          instances,
+          managedExternalUrl: payload.externalUrl || "",
+        });
+        const activeId = get().activeBackendId;
+        if (activeId === "custom:default") return;
+        const profile = activeId?.startsWith("profile:")
+          ? activeId.slice("profile:".length)
+          : payload.activeProfile;
+        if (!profile) return;
+        activateProfile(profile, instances, payload.externalUrl);
+        if (
+          processStatusFromStr(instances[profile]?.status || "") === "running"
+        ) {
+          get().probeBackend();
+        }
+      };
+      const unlisten = api.onBackendStatus(applyPayload);
+      try {
+        applyPayload(await api.getBackendStatus());
+      } catch (error) {
+        console.error("Failed to get initial backend status", error);
+      }
       return unlisten;
-    } catch (e) {
-      console.error("Failed to setup desktop listeners", e);
-    }
-  },
-}));
+    },
+  };
+});
