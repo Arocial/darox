@@ -397,19 +397,19 @@ const UserMessage: FC = () => {
     >
       <UserMessageAttachments />
 
-      <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
-        <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
+      <div className="aui-user-message-content-wrapper col-start-2 min-w-0">
+        <div className="aui-user-message-content bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts components={{ Text: UserMessageText }} />
-        </div>
-        <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-          <UserActionBar />
         </div>
       </div>
 
-      <BranchPicker
-        data-slot="aui_user-branch-picker"
-        className="col-span-full col-start-1 row-start-3 -me-1 justify-end"
-      />
+      <div
+        data-slot="aui_user-message-footer"
+        className="relative z-10 col-start-2 -mt-2 flex min-h-7.5 items-center justify-end gap-1 pt-1.5"
+      >
+        <BranchPicker data-slot="aui_user-branch-picker" />
+        <UserActionBar />
+      </div>
     </MessagePrimitive.Root>
   );
 };

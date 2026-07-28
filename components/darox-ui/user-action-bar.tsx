@@ -49,11 +49,10 @@ export const UserActionBar: FC = () => {
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
-      autohideFloat="always"
-      className="aui-user-action-bar-root flex flex-col items-end"
+      className="aui-user-action-bar-root fade-in flex animate-in gap-1 text-muted-foreground duration-200"
     >
       <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="Copy" className="aui-user-action-copy p-4">
+        <TooltipIconButton tooltip="Copy" className="aui-user-action-copy">
           <AuiIf condition={(s) => s.message.isCopied}>
             <CheckIcon className="zoom-in-50 fade-in animate-in duration-200 ease-out" />
           </AuiIf>
@@ -63,13 +62,13 @@ export const UserActionBar: FC = () => {
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.Edit asChild>
-        <TooltipIconButton tooltip="Edit" className="aui-user-action-edit p-4">
+        <TooltipIconButton tooltip="Edit" className="aui-user-action-edit">
           <PencilIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
       <TooltipIconButton
         tooltip={anchor !== null ? "Fork from this turn" : "Fork unavailable"}
-        className="aui-user-action-fork p-4"
+        className="aui-user-action-fork"
         onClick={onFork}
         disabled={anchor === null}
       >
