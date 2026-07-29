@@ -24,20 +24,6 @@ interface OpenDialogResult {
   filePaths: string[];
 }
 
-interface FindInPageOptions {
-  text: string;
-  forward?: boolean;
-  findNext?: boolean;
-  matchCase?: boolean;
-}
-
-interface FoundInPageResult {
-  requestId: number;
-  activeMatchOrdinal: number;
-  matches: number;
-  finalUpdate: boolean;
-}
-
 export interface BackendStatusPayload {
   activeProfile: string;
   instances: Record<
@@ -66,21 +52,6 @@ const darox = {
       cb(payload as BackendStatusPayload);
     ipcRenderer.on("backend-status", listener);
     return () => ipcRenderer.off("backend-status", listener);
-  },
-
-  // ── Find in page ───────────────────────────────────────────────────
-  findInPage: (opts: FindInPageOptions): Promise<unknown> =>
-    ipcRenderer.invoke("find:start", opts),
-
-  stopFindInPage: (
-    action?: "clearSelection" | "keepSelection" | "activateSelection",
-  ): Promise<void> => ipcRenderer.invoke("find:stop", action),
-
-  onFoundInPage: (cb: (result: FoundInPageResult) => void): Unsub => {
-    const listener = (_e: unknown, payload: unknown) =>
-      cb(payload as FoundInPageResult);
-    ipcRenderer.on("found-in-page", listener);
-    return () => ipcRenderer.off("found-in-page", listener);
   },
 
   // ── Dialogs ────────────────────────────────────────────────────────

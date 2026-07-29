@@ -9,6 +9,7 @@ import {
   Menu,
   clipboard,
   screen,
+  WebContentsView,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -18,6 +19,9 @@ import { BackendManager } from "./backend";
 const isDev = !!process.env.ELECTRON_DEV;
 const mgr = new BackendManager();
 let mainWindow: BrowserWindow | null = null;
+let findView: WebContentsView | null = null;
+let findViewVisible = false;
+let activeFindRequestId: number | null = null;
 
 interface WindowState {
   width: number;
@@ -29,7 +33,42 @@ interface WindowState {
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
+const FIND_VIEW_WIDTH = 380;
+const FIND_VIEW_HEIGHT = 38;
+const FIND_VIEW_MARGIN = 16;
 let saveTimeout: NodeJS.Timeout | null = null;
+
+function positionFindView() {
+  if (!mainWindow || !findView) return;
+  const { width } = mainWindow.getContentBounds();
+  const viewWidth = Math.max(
+    1,
+    Math.min(FIND_VIEW_WIDTH, width - FIND_VIEW_MARGIN * 2),
+  );
+  findView.setBounds({
+    x: Math.max(0, width - viewWidth - FIND_VIEW_MARGIN),
+    y: 8,
+    width: viewWidth,
+    height: FIND_VIEW_HEIGHT,
+  });
+}
+
+function showFindView() {
+  if (!findView) return;
+  findViewVisible = true;
+  findView.setVisible(true);
+  findView.webContents.focus();
+  findView.webContents.send("find:show");
+}
+
+function closeFindView() {
+  if (!mainWindow || !findView) return;
+  mainWindow.webContents.stopFindInPage("clearSelection");
+  activeFindRequestId = null;
+  findViewVisible = false;
+  findView.setVisible(false);
+  mainWindow.webContents.focus();
+}
 
 function getWindowStatePath(): string {
   return path.join(app.getPath("userData"), "window-state.json");
@@ -194,6 +233,33 @@ async function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mgr.attach(mainWindow);
 
+  findView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "find-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  findView.setBackgroundColor("#00000000");
+  findView.setVisible(false);
+  mainWindow.contentView.addChildView(findView);
+  positionFindView();
+  await findView.webContents.loadURL(
+    "data:text/html;charset=UTF-8,<html></html>",
+  );
+
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.type === "keyDown" &&
+      (input.control || input.meta) &&
+      input.key.toLowerCase() === "f"
+    ) {
+      event.preventDefault();
+      showFindView();
+    }
+  });
+
   const saveState = () => {
     if (!mainWindow) return;
     try {
@@ -203,7 +269,10 @@ async function createWindow() {
     }
   };
 
-  mainWindow.on("resize", saveState);
+  mainWindow.on("resize", () => {
+    saveState();
+    positionFindView();
+  });
   mainWindow.on("move", saveState);
   mainWindow.on("close", () => {
     if (saveTimeout) {
@@ -223,9 +292,11 @@ async function createWindow() {
     menu.popup({ window: mainWindow });
   });
 
-  // Relay native find-in-page results (match count, active ordinal) to renderer.
   mainWindow.webContents.on("found-in-page", (_e, result) => {
-    mainWindow?.webContents.send("found-in-page", result);
+    if (!findViewVisible || result.requestId !== activeFindRequestId) return;
+    findView?.webContents.send("find:result", result);
+    // Chromium may focus the active match in the main page.
+    findView?.webContents.focus();
   });
 
   if (isDev) {
@@ -235,6 +306,10 @@ async function createWindow() {
   }
 
   mainWindow.on("closed", () => {
+    findView?.webContents.close();
+    findView = null;
+    findViewVisible = false;
+    activeFindRequestId = null;
     mainWindow = null;
   });
 }
@@ -302,10 +377,10 @@ app.whenReady().then(async () => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
     return dialog.showOpenDialog(mainWindow, opts ?? {});
   });
-  ipcMain.handle(
+  ipcMain.on(
     "find:start",
     (
-      _e,
+      event,
       args: {
         text: string;
         forward?: boolean;
@@ -313,20 +388,30 @@ app.whenReady().then(async () => {
         matchCase?: boolean;
       },
     ) => {
+      if (event.sender !== findView?.webContents) return;
       if (!mainWindow || !args?.text) return null;
-      return mainWindow.webContents.findInPage(args.text, {
+      activeFindRequestId = mainWindow.webContents.findInPage(args.text, {
         forward: args.forward ?? true,
-        findNext: args.findNext ?? false,
+        findNext: args.findNext ?? true,
         matchCase: args.matchCase ?? false,
       });
+      findView?.webContents.focus();
     },
   );
-  ipcMain.handle(
+  ipcMain.on(
     "find:stop",
-    (_e, action?: "clearSelection" | "keepSelection" | "activateSelection") => {
+    (
+      event,
+      action?: "clearSelection" | "keepSelection" | "activateSelection",
+    ) => {
+      if (event.sender !== findView?.webContents) return;
       mainWindow?.webContents.stopFindInPage(action ?? "clearSelection");
+      activeFindRequestId = null;
     },
   );
+  ipcMain.on("find:close", (event) => {
+    if (event.sender === findView?.webContents) closeFindView();
+  });
 
   await createWindow();
 
