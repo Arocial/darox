@@ -127,8 +127,18 @@ export class BackendManager {
       const dir = path.join(os.homedir(), ".config/arox/profiles/chat");
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       const profiles = entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
-        .map((e) => e.name);
+        .filter((entry) => {
+          if (entry.name.startsWith("_")) return false;
+          if (entry.isDirectory()) return true;
+          if (!entry.isSymbolicLink()) return false;
+          try {
+            return fs.statSync(path.join(dir, entry.name)).isDirectory();
+          } catch {
+            return false;
+          }
+        })
+        .map((entry) => entry.name)
+        .sort((a, b) => a.localeCompare(b));
       if (profiles.length === 0) return ["coder"];
       return profiles;
     } catch {
