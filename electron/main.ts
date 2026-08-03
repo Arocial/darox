@@ -373,12 +373,6 @@ app.whenReady().then(async () => {
     event.returnValue = mgr.getApiToken();
   });
   ipcMain.handle("get_backend_status", () => mgr.getStatus());
-  ipcMain.handle("get_profile_launch_settings", (_e, profile: string) =>
-    mgr.getProfileLaunchSettings(profile),
-  );
-  ipcMain.handle("update_profile_args", (_e, profile: string, args: string[]) =>
-    mgr.updateProfileArgs(profile, args),
-  );
   ipcMain.handle("dialog:open", async (_e, opts) => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
     return dialog.showOpenDialog(mainWindow, opts ?? {});

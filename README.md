@@ -48,7 +48,7 @@ By default, the `useChat` hook expects an API route at `/api/chat` to handle the
 
 ## Backend configuration
 
-The backend binary (`arox`) is spawned and managed automatically by the Electron main process. Its launch settings are stored in `~/.config/arox/profiles/chat/darox.json`:
+The backend binary (`arox`) is spawned and managed automatically by the Electron main process. It reads launch settings from `~/.config/arox/profiles/chat/darox.json` when that file exists:
 
 ```json
 {
@@ -69,7 +69,7 @@ The backend binary (`arox`) is spawned and managed automatically by the Electron
 }
 ```
 
-`command`, `args`, `host`, `port`, and `startupTimeoutMs` can be overridden per profile. Use `"auto"` to allocate a port automatically. The profile launch dialog can edit extra arguments. `AROX_API_TOKEN` can still override the auto-generated Bearer token used for authentication.
+`command`, `args`, `host`, `port`, and `startupTimeoutMs` can be overridden per profile. Use `"auto"` to allocate a port automatically. Darox only reads this file; edit it directly to change launch settings. `AROX_API_TOKEN` can override the auto-generated Bearer token used for authentication.
 
 ## Learn More
 

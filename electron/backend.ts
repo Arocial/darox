@@ -52,7 +52,7 @@ interface DaroxBackendConfig {
   profiles: Record<string, ProfileConfig>;
 }
 
-export interface ProfileLaunchSettings {
+interface ProfileLaunchSettings {
   command: string;
   commonArgs: string[];
   extraArgs: string[];
@@ -193,24 +193,8 @@ function readConfig(): DaroxBackendConfig {
     return validateConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    fs.writeFileSync(
-      CONFIG_PATH,
-      `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
-      { mode: 0o600 },
-    );
     return structuredClone(DEFAULT_CONFIG);
   }
-}
-
-function writeConfig(config: DaroxBackendConfig) {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  const validated = validateConfig(config);
-  const tempPath = `${CONFIG_PATH}.${process.pid}.tmp`;
-  fs.writeFileSync(tempPath, `${JSON.stringify(validated, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  fs.renameSync(tempPath, CONFIG_PATH);
 }
 
 function findPort(host: string): Promise<number> {
@@ -327,19 +311,6 @@ export class BackendManager {
       startupTimeoutMs:
         override.startupTimeoutMs ?? config.backend.startupTimeoutMs,
     };
-  }
-
-  getProfileLaunchSettings(profile: string): ProfileLaunchSettings {
-    return this.resolveSettings(profile);
-  }
-
-  updateProfileArgs(profile: string, args: string[]): ProfileLaunchSettings {
-    validateArgs(args, `profiles.${profile}.args`);
-    const config = readConfig();
-    config.profiles[profile] = { ...(config.profiles[profile] ?? {}), args };
-    writeConfig(config);
-    this.emit();
-    return this.resolveSettings(profile);
   }
 
   getStatus(): any {
