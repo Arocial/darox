@@ -271,7 +271,7 @@ export class BackendManager {
       try {
         const u = new URL(ext);
         const apikey =
-          u.searchParams.get("apikey") || process.env.DAROX_API_TOKEN;
+          u.searchParams.get("apikey") || process.env.AROX_API_TOKEN;
         u.searchParams.delete("apikey");
         this.externalBackend = {
           url: u.toString().replace(/\/$/, ""),
