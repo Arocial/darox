@@ -40,10 +40,9 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 - Chat endpoint: typically dynamic port (e.g., `http://localhost:<port>/api/chat`)
 - The backend binary (`arox`) is spawned and managed automatically by the Electron main process.
-- **Environment Variables**:
-  - `AROX_API_TOKEN`: Overrides the auto-generated Bearer token for API authentication.
-  - `DAROX_BACKEND_HOST`: Overrides the default backend host (`127.0.0.1`).
-  - `DAROX_BACKEND_PORT`: Overrides the auto-generated random port for the backend server.
+- **Backend configuration**:
+  - `~/.config/arox/profiles/chat/darox.json` configures the default profile and global/per-profile command, arguments, host, port, and startup timeout.
+  - `AROX_API_TOKEN` overrides the auto-generated Bearer token for API authentication.
   
 ### Component Layers
 

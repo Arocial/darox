@@ -46,13 +46,30 @@ By default, the `useChat` hook expects an API route at `/api/chat` to handle the
    });
    ```
 
-## Environment Variables
+## Backend configuration
 
-The backend binary (`arox`) is spawned and managed automatically by the Electron main process. You can configure its behavior using the following environment variables:
+The backend binary (`arox`) is spawned and managed automatically by the Electron main process. Its launch settings are stored in `~/.config/arox/profiles/chat/darox.json`:
 
-- `AROX_API_TOKEN`: Overrides the auto-generated Bearer token for API authentication.
-- `DAROX_BACKEND_HOST`: Overrides the default backend host (`127.0.0.1`).
-- `DAROX_BACKEND_PORT`: Overrides the auto-generated random port for the backend server.
+```json
+{
+  "defaultProfile": "coder",
+  "backend": {
+    "command": "arox",
+    "args": [],
+    "host": "127.0.0.1",
+    "port": "auto",
+    "startupTimeoutMs": 30000
+  },
+  "profiles": {
+    "coder": {
+      "args": ["--log-level", "debug"],
+      "port": 8201
+    }
+  }
+}
+```
+
+`command`, `args`, `host`, `port`, and `startupTimeoutMs` can be overridden per profile. Use `"auto"` to allocate a port automatically. The profile launch dialog can edit extra arguments. `AROX_API_TOKEN` can still override the auto-generated Bearer token used for authentication.
 
 ## Learn More
 

@@ -16,6 +16,8 @@ export default function Chat() {
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
   const activeBackendId = useBackendStore((s) => s.activeBackendId);
+  const activeProfile = useBackendStore((s) => s.activeProfile);
+  const instances = useBackendStore((s) => s.instances);
   const [mounted, setMounted] = useState(false);
   const [renderedTabs, setRenderedTabs] = useState<string[]>([]);
   const MAX_TABS = 5;
@@ -77,6 +79,10 @@ export default function Chat() {
     );
   }
 
+  const backendError = activeProfile
+    ? instances[activeProfile]?.error
+    : undefined;
+
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center text-muted-foreground">
@@ -108,7 +114,33 @@ export default function Chat() {
               </div>
             );
           })}
-        {backendStatus !== "connected" && (
+        {backendStatus !== "connected" && backendError && (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="w-full max-w-2xl rounded-lg border border-destructive/40 bg-card p-5 shadow-sm">
+              <h1 className="font-semibold text-destructive">
+                Backend{" "}
+                {processStatus === "start-failed"
+                  ? "failed to start"
+                  : "crashed"}
+              </h1>
+              <p className="mt-2 text-sm">{backendError.message}</p>
+              {backendError.exitCode !== undefined && (
+                <p className="mt-1 text-muted-foreground text-xs">
+                  Exit code: {backendError.exitCode ?? "unknown"}
+                </p>
+              )}
+              {backendError.stderr && (
+                <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-xs">
+                  {backendError.stderr}
+                </pre>
+              )}
+              <p className="mt-3 text-muted-foreground text-xs">
+                Use the Backend menu to adjust launch arguments or retry.
+              </p>
+            </div>
+          </div>
+        )}
+        {backendStatus !== "connected" && !backendError && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             Backend disconnected. Use the Backend menu to reconnect or switch.
           </div>

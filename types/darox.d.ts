@@ -32,6 +32,25 @@ interface DaroxApi {
   closeBackend(profile: string): Promise<void>;
   getBackendStatus(): Promise<any>;
   onBackendStatus(cb: (payload: any) => void): Unsub;
+  getProfileLaunchSettings(profile: string): Promise<{
+    command: string;
+    commonArgs: string[];
+    extraArgs: string[];
+    host: string;
+    port: number | "auto";
+    startupTimeoutMs: number;
+  }>;
+  updateProfileArgs(
+    profile: string,
+    args: string[],
+  ): Promise<{
+    command: string;
+    commonArgs: string[];
+    extraArgs: string[];
+    host: string;
+    port: number | "auto";
+    startupTimeoutMs: number;
+  }>;
 
   // Dialogs
   openDialog(opts: OpenDialogOptions): Promise<OpenDialogResult>;

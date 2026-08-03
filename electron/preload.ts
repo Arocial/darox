@@ -33,6 +33,15 @@ export interface BackendStatusPayload {
   profiles: string[];
 }
 
+export interface ProfileLaunchSettings {
+  command: string;
+  commonArgs: string[];
+  extraArgs: string[];
+  host: string;
+  port: number | "auto";
+  startupTimeoutMs: number;
+}
+
 const darox = {
   // ── Backend lifecycle ──────────────────────────────────────────────
   getAuthToken: (): string | undefined =>
@@ -46,6 +55,13 @@ const darox = {
 
   getBackendStatus: (): Promise<BackendStatusPayload> =>
     ipcRenderer.invoke("get_backend_status"),
+  getProfileLaunchSettings: (profile: string): Promise<ProfileLaunchSettings> =>
+    ipcRenderer.invoke("get_profile_launch_settings", profile),
+  updateProfileArgs: (
+    profile: string,
+    args: string[],
+  ): Promise<ProfileLaunchSettings> =>
+    ipcRenderer.invoke("update_profile_args", profile, args),
 
   onBackendStatus: (cb: (payload: BackendStatusPayload) => void): Unsub => {
     const listener = (_e: unknown, payload: unknown) =>

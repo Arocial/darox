@@ -11,13 +11,24 @@ export type BackendProcessStatus =
   | "stopped"
   | "starting"
   | "running"
+  | "start-failed"
   | "crashed";
 export type BackendId = `profile:${string}` | "custom:default";
 
 export interface InstanceState {
   status: string;
   port: number;
-  exit_code?: number | null;
+  host?: string;
+  command?: string[];
+  error?: BackendError;
+}
+
+export interface BackendError {
+  kind: string;
+  message: string;
+  exitCode?: number | null;
+  stderr?: string;
+  occurredAt: string;
 }
 
 export interface CustomBackendConfig {
@@ -73,6 +84,7 @@ function normalizeUrl(value: string): string {
 function processStatusFromStr(status: string): BackendProcessStatus {
   if (status === "Starting") return "starting";
   if (status === "Running") return "running";
+  if (status === "StartFailed") return "start-failed";
   if (status === "Crashed") return "crashed";
   return "stopped";
 }
@@ -163,7 +175,11 @@ export const useBackendStore = create<BackendState>((set, get) => {
       if (get().activeBackendId === `profile:${target}`) {
         set({ processStatus: "starting", status: "connecting" });
       }
-      await api.restartBackend(target);
+      try {
+        await api.restartBackend(target);
+      } catch (error) {
+        console.error("Failed to restart backend", error);
+      }
     },
 
     switchBackend: async (profile) => {
@@ -176,7 +192,6 @@ export const useBackendStore = create<BackendState>((set, get) => {
         await api.switchBackend(profile);
       } catch (error) {
         console.error("Failed to switch backend", error);
-        set({ processStatus: "crashed", status: "disconnected" });
       }
     },
 

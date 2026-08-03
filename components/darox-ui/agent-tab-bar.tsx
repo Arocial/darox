@@ -13,6 +13,7 @@ import {
   TrashIcon,
   SettingsIcon,
   PowerIcon,
+  AlertTriangleIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import {
   useBackendStore,
 } from "@/components/darox-ui/backend-store";
 import { CustomBackendDialog } from "@/components/darox-ui/browser-api-prompt";
+import { BackendLaunchSettingsDialog } from "@/components/darox-ui/backend-launch-settings-dialog";
 import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
 
 function formatRelativeTime(dateString?: string) {
@@ -260,6 +262,7 @@ export const AgentTabBar = () => {
   );
 
   const [restarting, setRestarting] = useState(false);
+  const [settingsProfile, setSettingsProfile] = useState<string | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showCustomDialog, setShowCustomDialog] = useState(false);
 
@@ -506,6 +509,8 @@ export const AgentTabBar = () => {
                   const instStatus = instances[p]?.status || "Stopped";
                   const isRunning =
                     instStatus === "Running" || instStatus === "Starting";
+                  const failed =
+                    instStatus === "StartFailed" || instStatus === "Crashed";
                   return (
                     <div
                       key={p}
@@ -521,8 +526,28 @@ export const AgentTabBar = () => {
                           className={`inline-block size-1.5 shrink-0 rounded-full ${isRunning ? "bg-green-500" : "bg-transparent"}`}
                         />
                         <span className="truncate">{p}</span>
+                        {failed && (
+                          <span
+                            title={
+                              instances[p]?.error?.message || "Backend failed"
+                            }
+                          >
+                            <AlertTriangleIcon className="size-3 text-destructive" />
+                          </span>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowProfileMenu(false);
+                            setSettingsProfile(p);
+                          }}
+                          className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
+                          title={`Configure ${p}`}
+                        >
+                          <SettingsIcon className="size-3" />
+                        </button>
                         {isRunning && (
                           <button
                             onClick={async (e) => {
@@ -646,6 +671,12 @@ export const AgentTabBar = () => {
         <CustomBackendDialog
           open={showCustomDialog}
           onOpenChange={setShowCustomDialog}
+        />
+        <BackendLaunchSettingsDialog
+          profile={settingsProfile}
+          onOpenChange={(open) => {
+            if (!open) setSettingsProfile(null);
+          }}
         />
       </div>
     </div>
