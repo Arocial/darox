@@ -186,14 +186,14 @@ const SessionItem = ({
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) => {
   const workspace = session.workspace;
-  const { dirName } = formatTabLabel(workspace);
+  const { dirName } = formatTabLabel(workspace || undefined);
   const lastMessages = session.metadata?.last_user_messages as
     | string[]
     | undefined;
   const tooltipText =
     lastMessages && lastMessages.length > 0
       ? lastMessages.join("\n")
-      : workspace;
+      : workspace || undefined;
 
   return (
     <button
@@ -318,7 +318,7 @@ export const AgentTabBar = () => {
 
   const handleOpenSession = useCallback(
     async (session: SessionInfo) => {
-      await openSession(session.id, session.workspace);
+      await openSession(session.id);
     },
     [openSession],
   );

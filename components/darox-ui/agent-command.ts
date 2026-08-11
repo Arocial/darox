@@ -1,8 +1,4 @@
-// One-shot global command over the MainAgent's WebSocket endpoint.
-// Used for slash-equivalents like ForkEvent that target the whole agent
-// instance rather than any individual subagent. The dedicated composer-level
-// WebSocket was removed; the MainAgent now handles these global commands via
-// a plugin, so they are sent over its own WebSocket.
+// One-shot command over a session node's WebSocket endpoint.
 
 export type AgentCommandAck = {
   status: string;
@@ -13,11 +9,13 @@ import { appendWsToken } from "@/lib/api";
 
 export function agentWsUrl(
   apiBase: string,
-  agentId: string,
-  subagentId: string,
+  rootSessionId: string,
+  targetSessionId: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return appendWsToken(`${wsBase}/api/agents/${agentId}/${subagentId}/ws`);
+  return appendWsToken(
+    `${wsBase}/api/sessions/${rootSessionId}/nodes/${targetSessionId}/ws`,
+  );
 }
 
 export function sendAgentCommand(

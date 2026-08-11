@@ -318,11 +318,13 @@ import { appendWsToken } from "@/lib/api";
 
 export function httpBaseToWsUrl(
   apiBase: string,
-  agentId: string,
-  subagentId: string,
+  rootSessionId: string,
+  targetSessionId: string,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return appendWsToken(`${wsBase}/api/agents/${agentId}/${subagentId}/ws`);
+  return appendWsToken(
+    `${wsBase}/api/sessions/${rootSessionId}/nodes/${targetSessionId}/ws`,
+  );
 }
 
 // Module-level cache keyed by URL. Lets StrictMode's unmount→remount reuse

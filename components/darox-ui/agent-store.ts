@@ -14,12 +14,29 @@ export type AgentTab = {
 
 export type SessionInfo = {
   id: string;
-  name: string;
-  workspace: string;
+  path: string[];
+  agent_name: string;
+  workspace: string | null;
   created_at: string;
   updated_at: string;
   metadata: Record<string, unknown>;
+  active: boolean;
+  task_name: string | null;
+  target: string | null;
+  result: unknown;
+  error: unknown;
+  children: SessionInfo[];
 };
+
+export function sessionToAgentTab(session: SessionInfo): AgentTab {
+  return {
+    id: session.id,
+    name: session.agent_name,
+    status: session.active ? "active" : "closed",
+    workspace: session.workspace || "",
+    subagents: session.children.map(sessionToAgentTab),
+  };
+}
 
 type AgentWorkspace = {
   tabs: AgentTab[];
@@ -52,10 +69,7 @@ type AgentTabsState = {
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
   loadAgents: () => Promise<void>;
-  openSession: (
-    sessionId: string,
-    workspace?: string,
-  ) => Promise<AgentTab | null>;
+  openSession: (sessionId: string) => Promise<AgentTab | null>;
   updateAgent: (agent: AgentTab) => void;
   clearAgents: () => void;
 };
@@ -117,13 +131,13 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   createAgent: async (workspace: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await daroxFetch(`${apiBase}/api/agents`, {
+      const res = await daroxFetch(`${apiBase}/api/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),
       });
       if (!res.ok) throw new Error("Failed to create agent");
-      const tab: AgentTab = await res.json();
+      const tab = sessionToAgentTab(await res.json());
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
@@ -138,7 +152,10 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   deleteAgent: async (id: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      await daroxFetch(`${apiBase}/api/agents/${id}`, { method: "DELETE" });
+      const res = await daroxFetch(`${apiBase}/api/sessions/${id}/stop`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to stop session");
     } catch (e) {
       console.error("Failed to delete agent", e);
     }
@@ -195,9 +212,12 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   loadAgents: async () => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await daroxFetch(`${apiBase}/api/agents`);
-      if (!res.ok) throw new Error("Failed to load agents");
-      const agents: AgentTab[] = await res.json();
+      const res = await daroxFetch(`${apiBase}/api/sessions`);
+      if (!res.ok) throw new Error("Failed to load active sessions");
+      const sessions: SessionInfo[] = await res.json();
+      const agents = sessions
+        .filter((session) => session.active)
+        .map(sessionToAgentTab);
       set((state) => {
         // preserve activeId if it's still in the list, otherwise select first
         let newActiveId = state.activeId;
@@ -215,19 +235,17 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     }
   },
 
-  openSession: async (sessionId: string, workspace?: string) => {
+  openSession: async (sessionId: string) => {
     try {
       const apiBase = useBackendStore.getState().apiBase;
-      const res = await daroxFetch(`${apiBase}/api/agents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspace: workspace || undefined,
-          session_id: sessionId,
-        }),
-      });
+      const res = await daroxFetch(
+        `${apiBase}/api/sessions/${sessionId}/start`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) throw new Error("Failed to open session");
-      const tab: AgentTab = await res.json();
+      const tab = sessionToAgentTab(await res.json());
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,

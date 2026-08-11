@@ -34,7 +34,7 @@ export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
   // Fetch initial model from /state.
   useEffect(() => {
     let cancelled = false;
-    daroxFetch(`${apiBase}/api/agents/${agentId}/${subagentId}/state`)
+    daroxFetch(`${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/state`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && typeof data?.model === "string") {
@@ -69,7 +69,7 @@ export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
     const t = setTimeout(async () => {
       try {
         const url = new URL(
-          `${apiBase}/api/agents/${agentId}/${subagentId}/suggestions`,
+          `${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/suggestions`,
         );
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);

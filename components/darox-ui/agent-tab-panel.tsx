@@ -10,7 +10,12 @@ import {
   ChatInputContext,
   defaultInputArgs,
 } from "@/components/darox-ui/chat-input-context";
-import { useAgentTabs, type AgentTab } from "@/components/darox-ui/agent-store";
+import {
+  useAgentTabs,
+  sessionToAgentTab,
+  type AgentTab,
+  type SessionInfo,
+} from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { SubagentIdContext } from "@/components/darox-ui/subagent-id-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
@@ -180,8 +185,8 @@ function AgentChat({
           };
         }),
       );
-    } else if (cmd.type === "cmd-agent-info") {
-      updateAgent(cmd as unknown as AgentTab);
+    } else if (cmd.type === "cmd-session-tree") {
+      updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }
   });
 
@@ -248,7 +253,7 @@ function AgentChatLoader({
 
   useEffect(() => {
     const apiBase = useBackendStore.getState().apiBase;
-    daroxFetch(`${apiBase}/api/agents/${agentId}/${subagentId}/state`)
+    daroxFetch(`${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/state`)
       .then((res) => res.json())
       .then((data) => {
         // Each user message already carries its fork anchor under
@@ -293,10 +298,13 @@ export function AgentTabPanel({
   workspace: string;
   agentTab: AgentTab;
 }) {
-  const agents = useMemo(
-    () => [agentTab, ...(agentTab.subagents || [])],
-    [agentTab],
-  );
+  const agents = useMemo(() => {
+    const flatten = (agent: AgentTab): AgentTab[] => [
+      agent,
+      ...agent.subagents.flatMap(flatten),
+    ];
+    return flatten(agentTab);
+  }, [agentTab]);
   const [activeSubagentId, setActiveSubagentId] = useState(agentTab.id);
   const [mounted, setMounted] = useState<Set<string>>(
     () => new Set([agentTab.id]),

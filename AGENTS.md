@@ -58,7 +58,7 @@ Communication with the backend uses a unified WebSocket channel (`WebSocketChatT
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
    - `cmd-input-request`: Prompts the UI to render an input form (`ChatInputEventArgs`: normal_input).
    - `cmd-user-turn`: Delivers backend event anchors (`server_message_id`) mapped to UI `messageId` for forking/branching.
-   - `cmd-agent-info`: Broadcasts live subagent state changes, dynamically updating the agent tabs.
+   - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
    - `stream-close`: Explicit control frame that closes the current AI SDK generation stream independently of business logic.
 
 User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket.

@@ -78,7 +78,7 @@ function useSuggestions(
       try {
         const base =
           agentId && subagentId
-            ? `${apiBase}/api/agents/${agentId}/${subagentId}/suggestions`
+            ? `${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/suggestions`
             : `${apiBase}/api/suggestions`;
         const url = new URL(base);
         if (command) {

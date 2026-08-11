@@ -8,7 +8,6 @@ import {
   USER_INPUT_ID_KEY,
 } from "@/components/darox-ui/user-turn-anchors-context";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
-import { useWorkspace } from "@/components/darox-ui/workspace-context";
 
 export const UserActionBar: FC = () => {
   const anchorsCtx = useUserTurnAnchors();
@@ -16,7 +15,6 @@ export const UserActionBar: FC = () => {
     (s) => s.message.metadata?.custom?.[USER_INPUT_ID_KEY],
   );
   const anchor = typeof anchorValue === "string" ? anchorValue : null;
-  const workspace = useWorkspace();
   const openSession = useAgentTabs((s) => s.openSession);
 
   const onFork = async () => {
@@ -36,7 +34,7 @@ export const UserActionBar: FC = () => {
         toast.error(ack.output || "Fork succeeded but no session id returned.");
         return;
       }
-      const tab = await openSession(newSessionId, workspace);
+      const tab = await openSession(newSessionId);
       if (!tab) {
         toast.error("Forked, but failed to open new session.");
       }
