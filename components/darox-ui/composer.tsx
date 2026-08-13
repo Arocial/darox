@@ -1,10 +1,5 @@
 import type { FC } from "react";
-import {
-  ComposerPrimitive,
-  useAui,
-  useAuiState,
-  AuiIf,
-} from "@assistant-ui/react";
+import { ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useAgentStatus } from "@/components/darox-ui/agent-status-context";
 
