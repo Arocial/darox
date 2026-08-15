@@ -185,6 +185,13 @@ function AgentChat({
           };
         }),
       );
+    } else if (cmd.type === "cmd-user-message") {
+      const message = cmd.message as UIMessage | undefined;
+      if (!message || message.role !== "user" || typeof message.id !== "string")
+        return;
+      chat.setMessages((prev) =>
+        prev.some((item) => item.id === message.id) ? prev : [...prev, message],
+      );
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }

@@ -90,10 +90,7 @@ const EMPTY_COMPONENTS: ThreadComponents = {};
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
 
-// Resume can briefly add an assistant indicator before removing it again.
-// Keep the new-chat layout until the user actually starts the conversation.
-const isNewChatView = (s: AssistantState) =>
-  !s.thread.messages.some((message) => message.role === "user");
+const isNewChatView = (s: AssistantState) => s.thread.messages.length === 0;
 
 export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const isEmpty = useAuiState(isNewChatView);
