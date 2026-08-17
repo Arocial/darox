@@ -53,9 +53,11 @@ The transport opens lazily through `waitForState()`, `reconnectToStream()`,
 `sendMessages()`, or `sendCommand()`. A 200 ms delayed close allows React
 StrictMode's unmount/remount cycle to reuse the connection.
 
-AI SDK still uses `resume: true` when the node is active so it calls
-`reconnectToStream()` on mount. Here that method creates the local stream sink;
-server-side recovery is automatic at WebSocket connection time.
+The agent panel calls `resumeStream()` through a single-flight wrapper after
+state and buffered commands have been applied. A live `cmd-user-message` uses
+the same wrapper to start its generation stream. This avoids overlapping AI SDK
+responses while still creating the local stream sink needed for server-side
+recovery.
 
 ## Limitations
 

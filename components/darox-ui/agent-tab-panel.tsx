@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
@@ -63,10 +63,20 @@ function AgentChat({
     id: `${agentId}:${agentName}`,
     transport,
     messages: initialMessages,
-    // resume triggers reconnectToStream() on mount so the WebSocket starts
-    // draining server-pushed events before the user submits anything.
-    resume: status !== "closed",
   });
+  const resumePromiseRef = useRef<Promise<void> | null>(null);
+  const resumeChatStream = useCallback(() => {
+    if (resumePromiseRef.current) return;
+
+    const resumePromise = chat.resumeStream();
+    resumePromiseRef.current = resumePromise;
+    const clearResume = () => {
+      if (resumePromiseRef.current === resumePromise) {
+        resumePromiseRef.current = null;
+      }
+    };
+    void resumePromise.then(clearResume, clearResume);
+  }, [chat.resumeStream]);
 
   useEffect(() => {
     if (status === "closed") {
@@ -147,6 +157,20 @@ function AgentChat({
     };
   }, [isActive, agentId, clearNeedsInput]);
 
+  // Apply a state that arrived after the loader snapshot before subscribing to
+  // replayed commands. onState immediately emits its cached state, so ignore
+  // the exact history array already used to initialize useChat. This also
+  // prevents React Strict Mode's second effect setup from overwriting commands
+  // drained during the first setup.
+  useEffect(
+    () =>
+      transport.onState((state) => {
+        if (state.history === initialMessages) return;
+        chat.setMessages(state.history);
+      }),
+    [transport, chat.setMessages, initialMessages],
+  );
+
   useBackendCommands(url, (cmd) => {
     if (cmd.type === "cmd-input-request") {
       setInputArgs(cmd as unknown as ChatInputEventArgs);
@@ -209,19 +233,18 @@ function AgentChat({
         return;
       transport.beginServerStream();
       chat.setMessages((prev) => [...prev, message]);
-      void chat.resumeStream();
+      resumeChatStream();
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }
   });
 
-  useEffect(
-    () =>
-      transport.onState((state) => {
-        chat.setMessages(state.history);
-      }),
-    [transport, chat.setMessages],
-  );
+  // Start one recovery stream after buffered commands have been applied. A
+  // cmd-user-message may already have started it; resumeChatStream coalesces
+  // that call with this fallback for replays containing only AI SDK chunks.
+  useEffect(() => {
+    if (status !== "closed") resumeChatStream();
+  }, [status, resumeChatStream]);
 
   useEffect(() => {
     return () => {
