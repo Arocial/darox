@@ -185,9 +185,13 @@ function AgentChat({
       const message = cmd.message as UIMessage | undefined;
       if (!message || message.role !== "user" || typeof message.id !== "string")
         return;
-      chat.setMessages((prev) =>
-        prev.some((item) => item.id === message.id) ? prev : [...prev, message],
-      );
+      // A server-pushed user message starts a generation just like a local
+      // submission, except it must not be sent back to the backend. Reset the
+      // remembered stream-close boundary before attaching the new local sink.
+      if (chat.messages.some((item) => item.id === message.id)) return;
+      transport.beginServerStream();
+      chat.setMessages((prev) => [...prev, message]);
+      void chat.resumeStream();
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }

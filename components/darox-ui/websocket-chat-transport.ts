@@ -149,6 +149,18 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     return this.streamCompleted;
   }
 
+  /**
+   * Mark a backend-pushed user message as the start of a new generation.
+   * Unlike sendMessages(), this does not send a reply frame: the backend has
+   * already accepted the user turn and will push its AI SDK chunks next.
+   */
+  public beginServerStream() {
+    this.streamCompleted = false;
+    if (this.controller && !this.controllerClosed) {
+      this.closeController();
+    }
+  }
+
   private closeController() {
     if (this.controller && !this.controllerClosed) {
       try {
