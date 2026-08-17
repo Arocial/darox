@@ -264,10 +264,6 @@ function AgentChatLoader({
 
   useEffect(() => {
     setInitialMessages(null);
-    if (status === "closed") {
-      setInitialMessages([]);
-      return;
-    }
     const apiBase = useBackendStore.getState().apiBase;
     const url = httpBaseToWsUrl(apiBase, agentId, subagentId);
     const transport = acquireTransport(url);
