@@ -31,23 +31,15 @@ export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
     [apiBase, agentId, subagentId],
   );
 
-  // Fetch initial model from /state.
+  // The WebSocket state snapshot is the source of truth for the model.
   useEffect(() => {
-    let cancelled = false;
-    daroxFetch(`${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/state`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && typeof data?.model === "string") {
-          setModel(data.model);
-        }
-      })
-      .catch(() => {
-        // Non-fatal: just leave model unknown.
-      });
+    const transport = acquireTransport(wsUrl);
+    const unsubscribe = transport.onState((state) => setModel(state.model));
     return () => {
-      cancelled = true;
+      unsubscribe();
+      releaseTransport(wsUrl);
     };
-  }, [apiBase, agentId, subagentId]);
+  }, [wsUrl]);
 
   // Close on outside click.
   useEffect(() => {

@@ -1,6 +1,4 @@
 "use client";
-import { daroxFetch } from "@/lib/api";
-
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
@@ -32,7 +30,6 @@ import {
   UserTurnAnchorsContext,
   USER_INPUT_ID_KEY,
 } from "@/components/darox-ui/user-turn-anchors-context";
-import { sendAgentCommand } from "@/components/darox-ui/agent-command";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
 import type { ChatInputEventArgs } from "@/types/chat";
 import type { UIMessage } from "ai";
@@ -66,8 +63,8 @@ function AgentChat({
     id: `${agentId}:${agentName}`,
     transport,
     messages: initialMessages,
-    // resume: true triggers transport.reconnectToStream() on mount so we
-    // start draining server-pushed events before the user submits anything.
+    // resume triggers reconnectToStream() on mount so the WebSocket starts
+    // draining server-pushed events before the user submits anything.
     resume: status !== "closed",
   });
 
@@ -163,9 +160,8 @@ function AgentChat({
         typeof client_message_id !== "string"
       )
         return;
-      // Stamp the fork anchor onto the user message's own metadata, in the
-      // same place /state delivers it on reload (metadata.custom). No
-      // separate message-id -> event-id map to maintain.
+      // Stamp the fork anchor onto the user message's own metadata, matching
+      // the state snapshot representation. No separate id map is needed.
       chat.setMessages((prev) =>
         prev.map((m) => {
           if (m.role !== "user") return m;
@@ -197,6 +193,14 @@ function AgentChat({
     }
   });
 
+  useEffect(
+    () =>
+      transport.onState((state) => {
+        chat.setMessages(state.history);
+      }),
+    [transport, chat.setMessages],
+  );
+
   useEffect(() => {
     return () => {
       releaseTransport(url);
@@ -206,12 +210,12 @@ function AgentChat({
   const anchorsValue = useMemo(
     () => ({
       forkAt: (server_message_id: string) =>
-        sendAgentCommand(apiBase, agentId, subagentId, {
+        transport.sendCommand({
           type: "ForkEvent",
           event_id: server_message_id,
         }),
     }),
-    [apiBase, agentId, subagentId],
+    [transport],
   );
 
   return (
@@ -259,22 +263,29 @@ function AgentChatLoader({
   );
 
   useEffect(() => {
+    setInitialMessages(null);
+    if (status === "closed") {
+      setInitialMessages([]);
+      return;
+    }
     const apiBase = useBackendStore.getState().apiBase;
-    daroxFetch(`${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/state`)
-      .then((res) => res.json())
-      .then((data) => {
-        // Each user message already carries its fork anchor under
-        // metadata.custom.user_input_id, so no separate mapping is needed.
-        const history: UIMessage[] = Array.isArray(data.history)
-          ? data.history
-          : [];
-        setInitialMessages(history);
+    const url = httpBaseToWsUrl(apiBase, agentId, subagentId);
+    const transport = acquireTransport(url);
+    let cancelled = false;
+    transport
+      .waitForState()
+      .then((state) => {
+        if (!cancelled) setInitialMessages(state.history);
       })
       .catch((err) => {
-        console.error("Failed to fetch history", err);
-        setInitialMessages([]);
+        console.error("Failed to load session state", err);
+        if (!cancelled) setInitialMessages([]);
       });
-  }, [agentId, subagentId]);
+    return () => {
+      cancelled = true;
+      releaseTransport(url);
+    };
+  }, [agentId, subagentId, status]);
 
   if (initialMessages === null) {
     return (

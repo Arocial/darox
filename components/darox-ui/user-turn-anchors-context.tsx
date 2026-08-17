@@ -1,11 +1,11 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AgentCommandAck } from "./agent-command";
+import type { AgentCommandAck } from "./websocket-chat-transport";
 
 // Key under which a user message's fork anchor (the backend `user_input`
 // session-event id) is stored on its `metadata.custom`. Set live from the
-// `data-user-turn` event and delivered the same way by `/state` on reload,
+// `cmd-user-turn` event and delivered the same way by state snapshots,
 // so the message itself is the single source of truth — no id mapping.
 export const USER_INPUT_ID_KEY = "user_input_id";
 

@@ -2,6 +2,7 @@ import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 
 type WsServerFrame =
   | { type: "ack"; status: string }
+  | { type: "state"; history: UIMessage[]; model: string | null }
   | { type: "step-done" }
   | { type: "data-input-request"; data: unknown }
   | ({ type: string } & Record<string, unknown>);
@@ -13,6 +14,18 @@ export type BackendCommand = {
 
 export type CommandListener = (cmd: BackendCommand) => void;
 
+export type SessionState = {
+  history: UIMessage[];
+  model: string | null;
+};
+
+export type StateListener = (state: SessionState) => void;
+
+export type AgentCommandAck = {
+  status: string;
+  output?: string;
+};
+
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
 {
@@ -23,6 +36,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
+  private pendingChunks: UIMessageChunk[] = [];
   private abortCleanup: (() => void) | null = null;
   // FIFO of resolvers awaiting an ack for a sent command. Acks are 1:1 with
   // client-sent frames per the API contract.
@@ -31,6 +45,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   > = [];
   // Listeners for backend-initiated one-shot commands
   private commandListeners: Set<CommandListener> = new Set();
+  private pendingCommands: BackendCommand[] = [];
+  private stateListeners: Set<StateListener> = new Set();
+  private latestState: SessionState | null = null;
+  private stateWaiters: Array<{
+    resolve: (state: SessionState) => void;
+    reject: (error: Error) => void;
+  }> = [];
 
   constructor(options: { url: string }) {
     this.url = options.url;
@@ -51,6 +72,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         reject(err);
         return;
       }
+      this.latestState = null;
       this.ws = ws;
       ws.onopen = () => resolve();
       ws.onerror = () => {
@@ -60,7 +82,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         const wasOpening = this.openPromise;
         this.ws = null;
         this.openPromise = null;
-        if (wasOpening) reject(new Error("WebSocket closed before open"));
+        const error = new Error("WebSocket connection closed");
+        if (wasOpening) reject(error);
+        for (const waiter of this.stateWaiters.splice(0)) waiter.reject(error);
+        this.failController(error);
       };
       ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
@@ -69,9 +94,26 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
   public onCommand(listener: CommandListener): () => void {
     this.commandListeners.add(listener);
+    for (const command of this.pendingCommands.splice(0)) listener(command);
     return () => {
       this.commandListeners.delete(listener);
     };
+  }
+
+  public onState(listener: StateListener): () => void {
+    this.stateListeners.add(listener);
+    if (this.latestState) listener(this.latestState);
+    return () => {
+      this.stateListeners.delete(listener);
+    };
+  }
+
+  public async waitForState(): Promise<SessionState> {
+    await this.ensureOpen();
+    if (this.latestState) return this.latestState;
+    return new Promise<SessionState>((resolve, reject) => {
+      this.stateWaiters.push({ resolve, reject });
+    });
   }
 
   private enqueue(chunk: UIMessageChunk) {
@@ -81,6 +123,18 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       } catch {
         this.controllerClosed = true;
       }
+    } else {
+      this.pendingChunks.push(chunk);
+    }
+  }
+
+  private attachController(
+    controller: ReadableStreamDefaultController<UIMessageChunk>,
+  ) {
+    this.controller = controller;
+    this.controllerClosed = false;
+    for (const chunk of this.pendingChunks.splice(0)) {
+      this.enqueue(chunk);
     }
   }
 
@@ -124,6 +178,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     if (msg.type.startsWith("cmd-")) {
       const command = msg as BackendCommand;
+      if (this.commandListeners.size === 0) {
+        this.pendingCommands.push(command);
+        return;
+      }
       this.commandListeners.forEach((listener) => {
         listener(command);
       });
@@ -131,6 +189,23 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
 
     switch (msg.type) {
+      case "state": {
+        const frame = msg as { history?: unknown; model?: unknown };
+        const state: SessionState = {
+          history: Array.isArray(frame.history)
+            ? (frame.history as UIMessage[])
+            : [],
+          model: typeof frame.model === "string" ? frame.model : null,
+        };
+        this.pendingChunks = [];
+        this.pendingCommands = [];
+        this.latestState = state;
+        for (const waiter of this.stateWaiters.splice(0)) waiter.resolve(state);
+        this.stateListeners.forEach((listener) => {
+          listener(state);
+        });
+        return;
+      }
       case "ack": {
         const ack = msg as { status?: string; output?: string };
         const resolver = this.commandAckQueue.shift();
@@ -174,8 +249,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     const stream = new ReadableStream<UIMessageChunk>({
       start: (controller) => {
-        this.controller = controller;
-        this.controllerClosed = false;
+        this.attachController(controller);
       },
       cancel: () => {
         this.controller = null;
@@ -217,7 +291,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   async sendCommand(event: {
     type: string;
     [key: string]: unknown;
-  }): Promise<{ status: string; output?: string }> {
+  }): Promise<AgentCommandAck> {
     await this.ensureOpen();
     const ackPromise = new Promise<{ status: string; output?: string }>(
       (resolve) => {
@@ -262,22 +336,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
       const stream = new ReadableStream<UIMessageChunk>({
         start: (controller) => {
-          this.controller = controller;
-          this.controllerClosed = false;
+          this.attachController(controller);
         },
         cancel: () => {
           this.controller = null;
           this.controllerClosed = true;
         },
       });
-      try {
-        this.ws!.send(JSON.stringify({ resume: true }));
-      } catch (err) {
-        this.failController(
-          err instanceof Error ? err : new Error(String(err)),
-        );
-      }
-
       return stream;
     };
 
@@ -327,10 +392,9 @@ export function httpBaseToWsUrl(
   );
 }
 
-// Module-level cache keyed by URL. Lets StrictMode's unmount→remount reuse
-// the same underlying WS connection instead of reconnecting (the backend
-// does not carry pending events across reconnects, which would otherwise
-// split a single message across two connections).
+// Module-level cache keyed by URL. It enforces the backend's one-WebSocket-per
+// session-node contract and lets StrictMode's unmount→remount reuse the same
+// connection instead of needlessly replacing it.
 type CacheEntry = {
   transport: WebSocketChatTransport<UIMessage>;
   refs: number;
