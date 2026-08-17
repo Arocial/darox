@@ -36,6 +36,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
+  private pendingStreamClose = false;
   private pendingChunks: UIMessageChunk[] = [];
   private abortCleanup: (() => void) | null = null;
   // FIFO of resolvers awaiting an ack for a sent command. Acks are 1:1 with
@@ -138,6 +139,18 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
   }
 
+  private handleStreamClose() {
+    this.pendingStreamClose = true;
+    this.closeController();
+  }
+
+  private consumePendingStreamClose() {
+    if (!this.pendingStreamClose) return false;
+    this.pendingStreamClose = false;
+    this.pendingChunks = [];
+    return true;
+  }
+
   private closeController() {
     if (this.controller && !this.controllerClosed) {
       try {
@@ -218,7 +231,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         return;
       }
       case "stream-close":
-        this.closeController();
+        this.handleStreamClose();
         return;
       case "step-done":
         return;
@@ -241,6 +254,9 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   sendMessages: ChatTransport<UI_MESSAGE>["sendMessages"] = async (options) => {
     const reply = this.extractReply(options.messages);
     await this.ensureOpen();
+    // An explicit user reply starts a new stream, so a close remembered from
+    // the previous server-pushed stream no longer applies.
+    this.pendingStreamClose = false;
 
     // Close any prior stream (defensive — runtime should not overlap).
     if (this.controller && !this.controllerClosed) {
@@ -322,6 +338,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         await this.closingPromise;
       }
       await this.ensureOpen();
+      if (this.consumePendingStreamClose()) return null;
 
       // Avoid close the previous controller on remount of strict-mode.
       // We didn't close the controller on unmount, So we wait for previous controller
@@ -333,6 +350,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       if (this.controller && !this.controllerClosed) {
         this.closeController();
       }
+      if (this.consumePendingStreamClose()) return null;
 
       const stream = new ReadableStream<UIMessageChunk>({
         start: (controller) => {
@@ -350,6 +368,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     const ws = this.ws;
     this.ws = null;
     this.openPromise = null;
+    this.pendingStreamClose = false;
     this.closeController();
 
     if (!ws) return;
