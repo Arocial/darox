@@ -33,7 +33,7 @@ it establishes a newer recovery boundary.
 | `state` | Cache and publish committed history/model; not forwarded to AI SDK |
 | Vercel AI SDK chunks | Forward to the active AI SDK stream, or buffer until it attaches |
 | `cmd-*` | Dispatch to backend-command listeners, or buffer until they attach |
-| `cmd-user-message` | Append the backend-pushed user turn and start a new local AI SDK stream |
+| `cmd-user-message` | Deduplicate against a local turn using the optional top-level `client_message_id`, otherwise append the backend-pushed user turn, then start a new local AI SDK stream |
 | `stream-close` | Close the active AI SDK stream |
 | `step-done` | Swallow as a backend-only boundary |
 | `ack` | Resolve the oldest pending structured command; cancelled acks close the stream |

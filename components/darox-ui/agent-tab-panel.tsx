@@ -185,10 +185,28 @@ function AgentChat({
       const message = cmd.message as UIMessage | undefined;
       if (!message || message.role !== "user" || typeof message.id !== "string")
         return;
+      const clientMessageId = cmd.client_message_id;
       // A server-pushed user message starts a generation just like a local
       // submission, except it must not be sent back to the backend. Reset the
       // remembered stream-close boundary before attaching the new local sink.
-      if (chat.messages.some((item) => item.id === message.id)) return;
+      if (
+        typeof clientMessageId === "string" &&
+        chat.messages.some((item) => {
+          const custom = (
+            item.metadata as
+              | {
+                  custom?: {
+                    chatInputEventResult?: { client_message_id?: unknown };
+                  };
+                }
+              | undefined
+          )?.custom;
+          return (
+            custom?.chatInputEventResult?.client_message_id === clientMessageId
+          );
+        })
+      )
+        return;
       transport.beginServerStream();
       chat.setMessages((prev) => [...prev, message]);
       void chat.resumeStream();
