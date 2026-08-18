@@ -237,8 +237,8 @@ export const AgentTabBar = () => {
     deleteAgent,
     needsInput,
     sessions,
-    loadSessions,
     loadAgents,
+    loadSessions,
     deleteSession,
     openSession,
   } = useAgentTabs();
@@ -266,10 +266,9 @@ export const AgentTabBar = () => {
 
   useEffect(() => {
     if (backendStatus === "connected") {
-      loadSessions();
       loadAgents();
     }
-  }, [backendStatus, loadSessions, loadAgents]);
+  }, [backendStatus, loadAgents]);
 
   const handleAdd = useCallback(async () => {
     const workspace = await pickDirectory();

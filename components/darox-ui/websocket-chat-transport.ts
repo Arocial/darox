@@ -26,6 +26,8 @@ export type AgentCommandAck = {
   output?: string;
 };
 
+const STREAM_BATCH_INTERVAL_MS = 150;
+
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
 {
@@ -38,6 +40,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controllerClosed = true;
   private streamCompleted = false;
   private pendingChunks: UIMessageChunk[] = [];
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private abortCleanup: (() => void) | null = null;
   // FIFO of resolvers awaiting an ack for a sent command. Acks are 1:1 with
   // client-sent frames per the API contract.
@@ -118,14 +121,43 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   }
 
   private enqueue(chunk: UIMessageChunk) {
-    if (this.controller && !this.controllerClosed) {
+    const previous = this.pendingChunks.at(-1);
+    if (
+      previous &&
+      (chunk.type === "text-delta" || chunk.type === "reasoning-delta") &&
+      previous.type === chunk.type &&
+      previous.id === chunk.id
+    ) {
+      previous.delta += chunk.delta;
+    } else {
+      this.pendingChunks.push(chunk);
+    }
+
+    if (this.controller && !this.controllerClosed && !this.flushTimer) {
+      this.flushTimer = setTimeout(
+        () => this.flushPendingChunks(),
+        STREAM_BATCH_INTERVAL_MS,
+      );
+    }
+  }
+
+  private flushPendingChunks() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (!this.controller || this.controllerClosed) return;
+
+    const chunks = this.pendingChunks.splice(0);
+    for (let index = 0; index < chunks.length; index++) {
+      const chunk = chunks[index];
       try {
         this.controller.enqueue(chunk);
       } catch {
         this.controllerClosed = true;
+        this.pendingChunks.unshift(...chunks.slice(index));
+        break;
       }
-    } else {
-      this.pendingChunks.push(chunk);
     }
   }
 
@@ -134,14 +166,12 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   ) {
     this.controller = controller;
     this.controllerClosed = false;
-    for (const chunk of this.pendingChunks.splice(0)) {
-      this.enqueue(chunk);
-    }
+    this.flushPendingChunks();
   }
 
   private handleStreamClose() {
     this.streamCompleted = true;
-    this.pendingChunks = [];
+    this.flushPendingChunks();
     this.closeController();
   }
 
@@ -162,6 +192,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   }
 
   private closeController() {
+    this.flushPendingChunks();
     if (this.controller && !this.controllerClosed) {
       try {
         this.controller.close();
@@ -176,6 +207,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   }
 
   private failController(err: Error) {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
     if (this.controller && !this.controllerClosed) {
       try {
         this.controller.error(err);
@@ -221,6 +256,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
           model: typeof frame.model === "string" ? frame.model : null,
         };
         this.pendingChunks = [];
+        if (this.flushTimer) {
+          clearTimeout(this.flushTimer);
+          this.flushTimer = null;
+        }
         this.pendingCommands = [];
         this.latestState = state;
         for (const waiter of this.stateWaiters.splice(0)) waiter.resolve(state);
@@ -380,6 +419,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     this.openPromise = null;
     this.streamCompleted = false;
     this.closeController();
+    this.pendingChunks = [];
 
     if (!ws) return;
 

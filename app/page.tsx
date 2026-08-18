@@ -12,7 +12,7 @@ import { BrowserApiPrompt } from "@/components/darox-ui/browser-api-prompt";
 import { WindowTitleUpdater } from "@/components/darox-ui/window-title-updater";
 
 export default function Chat() {
-  const { tabs, activeId, loading, loadSessions } = useAgentTabs();
+  const { tabs, activeId, loading } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
   const processStatus = useBackendStore((s) => s.processStatus);
   const activeBackendId = useBackendStore((s) => s.activeBackendId);
@@ -53,12 +53,6 @@ export default function Chat() {
       if (unlisten) unlisten();
     };
   }, []);
-
-  useEffect(() => {
-    if (backendStatus === "connected") {
-      loadSessions();
-    }
-  }, [backendStatus, loadSessions]);
 
   if (!mounted) {
     return null;

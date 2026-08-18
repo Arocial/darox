@@ -228,7 +228,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
         } else {
           newActiveId = null;
         }
-        return { tabs: agents, activeId: newActiveId };
+        return { sessions, tabs: agents, activeId: newActiveId };
       });
     } catch (e) {
       console.error("Failed to load agents", e);
