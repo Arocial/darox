@@ -186,9 +186,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
    */
   public beginServerStream() {
     this.streamCompleted = false;
-    if (this.controller && !this.controllerClosed) {
-      this.closeController();
-    }
+    // A recovery stream may already be attached while waiting for replayed or
+    // live server output. Keep that sink alive: closing it here races the
+    // corresponding useChat resume promise and can leave subsequent chunks
+    // buffered without a controller.
   }
 
   private closeController() {

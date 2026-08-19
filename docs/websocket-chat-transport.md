@@ -55,9 +55,10 @@ StrictMode's unmount/remount cycle to reuse the connection.
 
 The agent panel calls `resumeStream()` through a single-flight wrapper after
 state and buffered commands have been applied. A live `cmd-user-message` uses
-the same wrapper to start its generation stream. This avoids overlapping AI SDK
-responses while still creating the local stream sink needed for server-side
-recovery.
+the same wrapper to start its generation stream. An already attached recovery
+sink remains open for that generation; if it is in the process of settling, a
+new resume is queued behind it. This avoids a controller gap that would leave
+live chunks buffered without reaching the UI.
 
 ## Limitations
 

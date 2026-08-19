@@ -65,18 +65,30 @@ function AgentChat({
     messages: initialMessages,
   });
   const resumePromiseRef = useRef<Promise<void> | null>(null);
-  const resumeChatStream = useCallback(() => {
-    if (resumePromiseRef.current) return;
-
-    const resumePromise = chat.resumeStream();
-    resumePromiseRef.current = resumePromise;
-    const clearResume = () => {
-      if (resumePromiseRef.current === resumePromise) {
-        resumePromiseRef.current = null;
+  const queuedResumeRef = useRef(false);
+  const resumeChatStream = useCallback(
+    (queueAfterCurrent = false) => {
+      if (resumePromiseRef.current) {
+        if (queueAfterCurrent) queuedResumeRef.current = true;
+        return;
       }
-    };
-    void resumePromise.then(clearResume, clearResume);
-  }, [chat.resumeStream]);
+
+      queuedResumeRef.current = false;
+      const resumePromise = chat.resumeStream();
+      resumePromiseRef.current = resumePromise;
+      const clearResume = () => {
+        if (resumePromiseRef.current === resumePromise) {
+          resumePromiseRef.current = null;
+          if (queuedResumeRef.current) {
+            queuedResumeRef.current = false;
+            resumeChatStream();
+          }
+        }
+      };
+      void resumePromise.then(clearResume, clearResume);
+    },
+    [chat.resumeStream],
+  );
 
   useEffect(() => {
     if (status === "closed") {
@@ -233,7 +245,9 @@ function AgentChat({
         return;
       transport.beginServerStream();
       chat.setMessages((prev) => [...prev, message]);
-      resumeChatStream();
+      // Reuse an attached recovery sink. If its promise is only waiting to
+      // settle after its controller closed, queue a fresh sink behind it.
+      resumeChatStream(true);
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }
