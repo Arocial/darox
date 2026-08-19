@@ -1,6 +1,5 @@
 export type ChatInputEventArgs = {
   req_id: string;
-  normal_input: boolean;
 };
 
 export type ChatInputEventResult = {

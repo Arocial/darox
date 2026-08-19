@@ -26,7 +26,7 @@ export const Composer: FC = () => {
   const aui = useAui();
   const status = useAgentStatus();
 
-  const isDisabled = status === "closed" || !inputArgs.normal_input;
+  const isDisabled = status === "closed" || !inputArgs.req_id;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -83,7 +83,7 @@ export const Composer: FC = () => {
     const result: ChatInputEventResult = {
       client_message_id: clientMessageId,
       req_id: inputArgs.req_id,
-      user_input: inputArgs.normal_input ? text : null,
+      user_input: text,
     };
 
     aui.thread().append({
