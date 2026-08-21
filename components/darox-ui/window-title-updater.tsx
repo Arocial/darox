@@ -18,6 +18,7 @@ export function WindowTitleUpdater() {
   const activeId = useAgentTabs((s) => s.activeId);
   const tabs = useAgentTabs((s) => s.tabs);
   const isStreaming = useAgentTabs((s) => s.isStreaming);
+  const needsInput = useAgentTabs((s) => s.needsInput);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
@@ -37,8 +38,13 @@ export function WindowTitleUpdater() {
     const hasStreaming = Object.values(isStreaming[activeId] || {}).some(
       (v) => v,
     );
+    const hasInputRequest = Object.values(needsInput[activeId] || {}).some(
+      (v) => v,
+    );
 
-    if (hasStreaming) {
+    if (hasInputRequest) {
+      document.title = `● ${dirName} - Darox`;
+    } else if (hasStreaming) {
       let frameIndex = 0;
       const updateTitle = () => {
         document.title = `${SPINNER_FRAMES[frameIndex]} ${dirName} - Darox`;
@@ -53,7 +59,7 @@ export function WindowTitleUpdater() {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [activeId, tabs, isStreaming]);
+  }, [activeId, tabs, isStreaming, needsInput]);
 
   return null;
 }

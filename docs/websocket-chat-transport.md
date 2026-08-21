@@ -13,8 +13,9 @@ state, replies, cancellation, and structured commands.
 ## State bootstrap and recovery
 
 The backend sends a `state` frame first when a connection is established. It
-contains committed UI message history and the selected model. The backend then
-replays events emitted since that snapshot before streaming live events.
+contains committed UI message history, the selected model, and the retained
+turn's current `busy` state. The backend then replays events emitted since that
+snapshot before streaming live events.
 
 `waitForState()` replaces the former HTTP `/state` request. The agent panel uses
 its history to initialize `useChat`, while `ModelPill` subscribes through
@@ -30,11 +31,12 @@ it establishes a newer recovery boundary.
 
 | Server frame | Handling |
 | --- | --- |
-| `state` | Cache and publish committed history/model; not forwarded to AI SDK |
+| `state` | Cache and publish committed history/model/busy state; not forwarded to AI SDK |
 | Vercel AI SDK chunks | Forward to the active AI SDK stream, or buffer until it attaches |
 | `cmd-*` | Dispatch to backend-command listeners, or buffer until they attach |
 | `cmd-user-message` | Deduplicate against a local turn using the optional top-level `client_message_id`, otherwise append the backend-pushed user turn, then start a new local AI SDK stream |
-| `stream-close` | Close the active AI SDK stream |
+| `finish` | Finish the current assistant message and advance to the next queued AI SDK stream |
+| `cmd-turn-state` | Publish the retained turn's busy/idle boundary for title and attention UI |
 | `step-done` | Swallow as a backend-only boundary |
 | `ack` | Resolve the oldest pending structured command; cancelled acks close the stream |
 
@@ -60,10 +62,14 @@ sink remains open for that generation; if it is in the process of settling, a
 new resume is queued behind it. This avoids a controller gap that would leave
 live chunks buffered without reaching the UI.
 
+User input remains enabled while a retained turn is busy. Each additional
+`sendMessages()` stream waits in FIFO order while the backend queues its input;
+the WebSocket itself remains connected across every turn.
+
 ## Limitations
 
-- Only one AI SDK output stream is active at a time. Starting a new one closes
-  the previous controller.
+- AI SDK output streams are matched to sequential backend inference results by
+  FIFO order; the backend must not interleave inference chunks.
 - An unexpected socket close errors the active stream and pending state load.
   The transport does not automatically retry; remounting or reloading opens a
   new socket, whose snapshot and cached events restore server state.

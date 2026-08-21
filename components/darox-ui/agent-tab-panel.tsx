@@ -5,10 +5,6 @@ import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
 import {
-  ChatInputContext,
-  defaultInputArgs,
-} from "@/components/darox-ui/chat-input-context";
-import {
   useAgentTabs,
   sessionToAgentTab,
   type AgentTab,
@@ -31,7 +27,6 @@ import {
   USER_INPUT_ID_KEY,
 } from "@/components/darox-ui/user-turn-anchors-context";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
-import type { ChatInputEventArgs } from "@/types/chat";
 import type { UIMessage } from "ai";
 
 function AgentChat({
@@ -49,8 +44,6 @@ function AgentChat({
   workspace: string;
   initialMessages: UIMessage[];
 }) {
-  const [inputArgs, setInputArgs] =
-    useState<ChatInputEventArgs>(defaultInputArgs);
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
@@ -93,7 +86,6 @@ function AgentChat({
   useEffect(() => {
     if (status === "closed") {
       transport.close();
-      setInputArgs(defaultInputArgs);
       if (chat.status === "submitted" || chat.status === "streaming") {
         chat.stop();
       }
@@ -107,54 +99,42 @@ function AgentChat({
   const setStreaming = useAgentTabs((s) => s.setStreaming);
   const updateAgent = useAgentTabs((s) => s.updateAgent);
   const isActive = useAgentTabs((s) => s.activeId === agentId);
-  const lastReqIdRef = useRef<string>("");
+  const busyRef = useRef(false);
 
   useEffect(() => {
-    const isBusy = chat.status === "submitted" || chat.status === "streaming";
-    setStreaming(agentId, agentName, isBusy);
-  }, [chat.status, agentId, agentName, setStreaming]);
+    if (status !== "closed") return;
+    busyRef.current = false;
+    setStreaming(agentId, agentName, false);
+  }, [status, agentId, agentName, setStreaming]);
 
-  useEffect(() => {
-    const needsInput = !!inputArgs.req_id;
+  useEffect(
+    () => () => setStreaming(agentId, agentName, false),
+    [agentId, agentName, setStreaming],
+  );
 
-    if (needsInput) {
-      if (inputArgs.req_id !== lastReqIdRef.current) {
-        lastReqIdRef.current = inputArgs.req_id;
-        if (!isActive) {
-          setNeedsInput(agentId, agentName, true);
-        }
+  const applyBusyState = useCallback(
+    (busy: boolean) => {
+      const turnEnded = busyRef.current && !busy;
+      busyRef.current = busy;
+      setStreaming(agentId, agentName, busy);
+      if (busy) setNeedsInput(agentId, agentName, false);
+      if (!turnEnded || (isActive && document.hasFocus())) return;
 
-        // Send desktop notification
-        if (!isActive || !document.hasFocus()) {
-          if ("Notification" in window) {
-            if (Notification.permission === "granted") {
-              new Notification(`Input required: ${agentName}`, {
-                body: `Workspace: ${workspace}`,
-              });
-            } else if (Notification.permission !== "denied") {
-              Notification.requestPermission().then((permission) => {
-                if (permission === "granted") {
-                  new Notification(`Input required: ${agentName}`, {
-                    body: `Workspace: ${workspace}`,
-                  });
-                }
-              });
-            }
-          }
-        }
+      setNeedsInput(agentId, agentName, true);
+      if (!("Notification" in window)) return;
+      const notify = () =>
+        new Notification(`Turn completed: ${agentName}`, {
+          body: `Input required in ${workspace}`,
+        });
+      if (Notification.permission === "granted") notify();
+      else if (Notification.permission !== "denied") {
+        void Notification.requestPermission().then((permission) => {
+          if (permission === "granted") notify();
+        });
       }
-    } else {
-      setNeedsInput(agentId, agentName, false);
-      lastReqIdRef.current = "";
-    }
-  }, [
-    inputArgs.req_id,
-    agentId,
-    agentName,
-    setNeedsInput,
-    workspace,
-    isActive,
-  ]);
+    },
+    [agentId, agentName, isActive, setNeedsInput, setStreaming, workspace],
+  );
 
   useEffect(() => {
     if (!isActive) return;
@@ -177,15 +157,16 @@ function AgentChat({
   useEffect(
     () =>
       transport.onState((state) => {
+        applyBusyState(state.busy);
         if (state.history === initialMessages) return;
         chat.setMessages(state.history);
       }),
-    [transport, chat.setMessages, initialMessages],
+    [transport, chat.setMessages, initialMessages, applyBusyState],
   );
 
   useBackendCommands(url, (cmd) => {
-    if (cmd.type === "cmd-input-request") {
-      setInputArgs(cmd as unknown as ChatInputEventArgs);
+    if (cmd.type === "cmd-turn-state") {
+      applyBusyState(cmd.busy === true);
     } else if (cmd.type === "cmd-user-turn") {
       const { server_message_id, client_message_id } = cmd as unknown as {
         server_message_id?: string;
@@ -283,19 +264,17 @@ function AgentChat({
         <SubagentIdContext.Provider value={subagentId}>
           <AgentNameContext.Provider value={agentName}>
             <AgentStatusContext.Provider value={status}>
-              <ChatInputContext.Provider value={{ inputArgs, setInputArgs }}>
-                <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                  <AssistantRuntimeProvider runtime={runtime}>
-                    <div
-                      className="h-full"
-                      onMouseDown={() => isActive && clearNeedsInput(agentId)}
-                      onKeyDown={() => isActive && clearNeedsInput(agentId)}
-                    >
-                      <Thread />
-                    </div>
-                  </AssistantRuntimeProvider>
-                </UserTurnAnchorsContext.Provider>
-              </ChatInputContext.Provider>
+              <UserTurnAnchorsContext.Provider value={anchorsValue}>
+                <AssistantRuntimeProvider runtime={runtime}>
+                  <div
+                    className="h-full"
+                    onMouseDown={() => isActive && clearNeedsInput(agentId)}
+                    onKeyDown={() => isActive && clearNeedsInput(agentId)}
+                  >
+                    <Thread />
+                  </div>
+                </AssistantRuntimeProvider>
+              </UserTurnAnchorsContext.Provider>
             </AgentStatusContext.Provider>
           </AgentNameContext.Provider>
         </SubagentIdContext.Provider>

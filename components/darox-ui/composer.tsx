@@ -11,22 +11,17 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { Button } from "@/components/ui/button";
 import { ComposerWithCommandMenu } from "@/components/darox-ui/command-menu";
 import {
-  useChatInput,
-  defaultInputArgs,
-} from "@/components/darox-ui/chat-input-context";
-import {
   useWorkspace,
   historyKey,
 } from "@/components/darox-ui/workspace-context";
 import type { ChatInputEventResult } from "@/types/chat";
 
 export const Composer: FC = () => {
-  const { inputArgs, setInputArgs } = useChatInput();
   const workspace = useWorkspace();
   const aui = useAui();
   const status = useAgentStatus();
 
-  const isDisabled = status === "closed" || !inputArgs.req_id;
+  const isDisabled = status === "closed";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default send
@@ -82,7 +77,6 @@ export const Composer: FC = () => {
 
     const result: ChatInputEventResult = {
       client_message_id: clientMessageId,
-      req_id: inputArgs.req_id,
       user_input: text,
     };
 
@@ -96,7 +90,6 @@ export const Composer: FC = () => {
       attachments: processedAttachments as any,
     });
     aui.composer().reset();
-    setInputArgs(defaultInputArgs);
   };
 
   return (
@@ -117,7 +110,7 @@ const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const isDisabled = disabled || isEmpty;
-  const showCancel = isRunning && !disabled;
+  const showCancel = isRunning && isEmpty && !disabled;
 
   return (
     <div className="aui-composer-action-wrapper relative mx-2 mb-2 flex items-center justify-between">

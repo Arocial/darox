@@ -2,7 +2,12 @@ import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 
 type WsServerFrame =
   | { type: "ack"; status: string }
-  | { type: "state"; history: UIMessage[]; model: string | null }
+  | {
+      type: "state";
+      history: UIMessage[];
+      model: string | null;
+      busy: boolean;
+    }
   | { type: "step-done" }
   | { type: "data-input-request"; data: unknown }
   | ({ type: string } & Record<string, unknown>);
@@ -17,6 +22,7 @@ export type CommandListener = (cmd: BackendCommand) => void;
 export type SessionState = {
   history: UIMessage[];
   model: string | null;
+  busy: boolean;
 };
 
 export type StateListener = (state: SessionState) => void;
@@ -38,6 +44,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
+  private waitingControllers: ReadableStreamDefaultController<UIMessageChunk>[] =
+    [];
   private streamCompleted = false;
   private pendingChunks: UIMessageChunk[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -164,6 +172,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private attachController(
     controller: ReadableStreamDefaultController<UIMessageChunk>,
   ) {
+    if (this.controller && !this.controllerClosed) {
+      this.waitingControllers.push(controller);
+      return;
+    }
     this.controller = controller;
     this.controllerClosed = false;
     this.flushPendingChunks();
@@ -205,6 +217,11 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       this.abortCleanup();
       this.abortCleanup = null;
     }
+    const next = this.waitingControllers.shift();
+    if (next) {
+      this.streamCompleted = false;
+      this.attachController(next);
+    }
   }
 
   private failController(err: Error) {
@@ -219,10 +236,24 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     this.controller = null;
     this.controllerClosed = true;
+    for (const controller of this.waitingControllers.splice(0)) {
+      try {
+        controller.error(err);
+      } catch {}
+    }
     if (this.abortCleanup) {
       this.abortCleanup();
       this.abortCleanup = null;
     }
+  }
+
+  private closeAllControllers() {
+    for (const controller of this.waitingControllers.splice(0)) {
+      try {
+        controller.close();
+      } catch {}
+    }
+    this.closeController();
   }
 
   private handleMessage(raw: unknown) {
@@ -249,12 +280,17 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     switch (msg.type) {
       case "state": {
-        const frame = msg as { history?: unknown; model?: unknown };
+        const frame = msg as {
+          history?: unknown;
+          model?: unknown;
+          busy?: unknown;
+        };
         const state: SessionState = {
           history: Array.isArray(frame.history)
             ? (frame.history as UIMessage[])
             : [],
           model: typeof frame.model === "string" ? frame.model : null,
+          busy: frame.busy === true,
         };
         this.pendingChunks = [];
         if (this.flushTimer) {
@@ -276,11 +312,15 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
           resolver({ status: ack.status ?? "ok", output: ack.output });
         }
         if (ack.status === "cancelled") {
-          this.closeController();
+          this.closeAllControllers();
         }
         return;
       }
       case "stream-close":
+        this.handleStreamClose();
+        return;
+      case "finish":
+        this.enqueue(msg as UIMessageChunk);
         this.handleStreamClose();
         return;
       case "step-done":
@@ -307,11 +347,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     // An explicit user reply starts a new stream, so a close remembered from
     // the previous server-pushed stream no longer applies.
     this.streamCompleted = false;
-
-    // Close any prior stream (defensive — runtime should not overlap).
-    if (this.controller && !this.controllerClosed) {
-      this.closeController();
-    }
 
     const stream = new ReadableStream<UIMessageChunk>({
       start: (controller) => {
@@ -419,7 +454,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     this.ws = null;
     this.openPromise = null;
     this.streamCompleted = false;
-    this.closeController();
+    this.closeAllControllers();
     this.pendingChunks = [];
 
     if (!ws) return;

@@ -56,17 +56,16 @@ Communication with the backend uses a unified WebSocket channel (`WebSocketChatT
 
 1. **AI Generation Stream**: Standard Vercel AI SDK parts (`text-*`, `tool-*`, `finish`) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
-   - `cmd-input-request`: Prompts the UI to accept input for the supplied request ID.
+   - `cmd-turn-state`: Reports the retained turn's busy/idle boundary.
    - `cmd-user-turn`: Delivers backend event anchors (`server_message_id`) mapped to UI `messageId` for forking/branching.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
-   - `stream-close`: Explicit control frame that closes the current AI SDK generation stream independently of business logic.
+   - `finish`: Completes one AI SDK generation while the WebSocket remains connected.
 
-User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket.
+User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time; inputs submitted while busy are queued by the backend.
 
 ### State Management
 
 - **Zustand** for component-level state (e.g., attachment handling)
-- **React Context** (`ChatInputContext`) for sharing input event args across components
 - **localStorage** for command history persistence
 
 ### Key Patterns

@@ -1,10 +1,5 @@
-export type ChatInputEventArgs = {
-  req_id: string;
-};
-
 export type ChatInputEventResult = {
   client_message_id: string;
-  req_id: string;
   user_input: string | null;
 };
 
