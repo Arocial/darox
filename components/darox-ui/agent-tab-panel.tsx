@@ -27,6 +27,7 @@ import {
   USER_INPUT_ID_KEY,
 } from "@/components/darox-ui/user-turn-anchors-context";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
+import { ChatSubmitContext } from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
 
 function AgentChat({
@@ -58,29 +59,74 @@ function AgentChat({
     messages: initialMessages,
   });
   const resumePromiseRef = useRef<Promise<void> | null>(null);
-  const queuedResumeRef = useRef(false);
-  const resumeChatStream = useCallback(
-    (queueAfterCurrent = false) => {
-      if (resumePromiseRef.current) {
-        if (queueAfterCurrent) queuedResumeRef.current = true;
-        return;
-      }
+  const pendingUserMessagesRef = useRef<UIMessage[]>([]);
+  const userBoundaryDrainRef = useRef<Promise<void> | null>(null);
+  const seenClientMessageIdsRef = useRef(new Set<string>());
+  const pendingServerMessageIdsRef = useRef(new Map<string, string>());
+  const resumeChatStream = useCallback(() => {
+    if (resumePromiseRef.current) return;
 
-      queuedResumeRef.current = false;
-      const resumePromise = chat.resumeStream();
-      resumePromiseRef.current = resumePromise;
-      const clearResume = () => {
-        if (resumePromiseRef.current === resumePromise) {
-          resumePromiseRef.current = null;
-          if (queuedResumeRef.current) {
-            queuedResumeRef.current = false;
-            resumeChatStream();
-          }
+    const resumePromise = chat.resumeStream();
+    resumePromiseRef.current = resumePromise;
+    const clearResume = () => {
+      if (resumePromiseRef.current === resumePromise) {
+        resumePromiseRef.current = null;
+      }
+    };
+    void resumePromise.then(clearResume, clearResume);
+  }, [chat.resumeStream]);
+
+  const queueServerUserMessage = useCallback(
+    (message: UIMessage) => {
+      transport.splitAtUserMessage();
+      pendingUserMessagesRef.current.push(message);
+      if (userBoundaryDrainRef.current) return;
+
+      // Closing the controller is synchronous, but AI SDK may still have
+      // queued update jobs. Wait for that consumer to settle before inserting
+      // the user boundary, otherwise a late write can appear below the user.
+      const precedingSegment = resumePromiseRef.current;
+      const drain = Promise.resolve(precedingSegment).then(() => {
+        const pending = pendingUserMessagesRef.current.splice(0);
+        if (pending.length > 0) {
+          const anchored = pending.map((item) => {
+            const custom = (item.metadata as { custom?: Record<string, any> })
+              ?.custom;
+            const clientMessageId = (
+              custom?.chatInputEventResult as
+                | { client_message_id?: unknown }
+                | undefined
+            )?.client_message_id;
+            if (typeof clientMessageId !== "string") return item;
+            const serverMessageId =
+              pendingServerMessageIdsRef.current.get(clientMessageId);
+            if (!serverMessageId) return item;
+            pendingServerMessageIdsRef.current.delete(clientMessageId);
+            return {
+              ...item,
+              metadata: {
+                ...(item.metadata as object | undefined),
+                custom: {
+                  ...custom,
+                  [USER_INPUT_ID_KEY]: serverMessageId,
+                },
+              },
+            };
+          });
+          chat.setMessages((prev) => [...prev, ...anchored]);
         }
-      };
-      void resumePromise.then(clearResume, clearResume);
+        if (userBoundaryDrainRef.current === drain) {
+          userBoundaryDrainRef.current = null;
+        }
+        if (pendingUserMessagesRef.current.length > 0) {
+          queueServerUserMessage(pendingUserMessagesRef.current.shift()!);
+          return;
+        }
+        resumeChatStream();
+      });
+      userBoundaryDrainRef.current = drain;
     },
-    [chat.resumeStream],
+    [chat.setMessages, resumeChatStream, transport],
   );
 
   useEffect(() => {
@@ -94,9 +140,9 @@ function AgentChat({
 
   const runtime = useAISDKRuntime(chat);
 
-  const setNeedsInput = useAgentTabs((s) => s.setNeedsInput);
-  const clearNeedsInput = useAgentTabs((s) => s.clearNeedsInput);
-  const setStreaming = useAgentTabs((s) => s.setStreaming);
+  const setCompletionUnread = useAgentTabs((s) => s.setCompletionUnread);
+  const clearCompletionUnread = useAgentTabs((s) => s.clearCompletionUnread);
+  const setBusy = useAgentTabs((s) => s.setBusy);
   const updateAgent = useAgentTabs((s) => s.updateAgent);
   const isActive = useAgentTabs((s) => s.activeId === agentId);
   const busyRef = useRef(false);
@@ -104,27 +150,33 @@ function AgentChat({
   useEffect(() => {
     if (status !== "closed") return;
     busyRef.current = false;
-    setStreaming(agentId, agentName, false);
-  }, [status, agentId, agentName, setStreaming]);
+    setBusy(agentId, agentName, false);
+  }, [status, agentId, agentName, setBusy]);
 
   useEffect(
-    () => () => setStreaming(agentId, agentName, false),
-    [agentId, agentName, setStreaming],
+    () => () => setBusy(agentId, agentName, false),
+    [agentId, agentName, setBusy],
   );
 
   const applyBusyState = useCallback(
     (busy: boolean) => {
       const turnEnded = busyRef.current && !busy;
       busyRef.current = busy;
-      setStreaming(agentId, agentName, busy);
-      if (busy) setNeedsInput(agentId, agentName, false);
+      if (busy) {
+        transport.beginBusyEpoch();
+        resumeChatStream();
+      } else {
+        transport.endBusyEpoch();
+      }
+      setBusy(agentId, agentName, busy);
+      if (busy) setCompletionUnread(agentId, agentName, false);
       if (!turnEnded || (isActive && document.hasFocus())) return;
 
-      setNeedsInput(agentId, agentName, true);
+      setCompletionUnread(agentId, agentName, true);
       if (!("Notification" in window)) return;
       const notify = () =>
         new Notification(`Turn completed: ${agentName}`, {
-          body: `Input required in ${workspace}`,
+          body: `Task completed in ${workspace}`,
         });
       if (Notification.permission === "granted") notify();
       else if (Notification.permission !== "denied") {
@@ -133,21 +185,30 @@ function AgentChat({
         });
       }
     },
-    [agentId, agentName, isActive, setNeedsInput, setStreaming, workspace],
+    [
+      agentId,
+      agentName,
+      isActive,
+      resumeChatStream,
+      setBusy,
+      setCompletionUnread,
+      transport,
+      workspace,
+    ],
   );
 
   useEffect(() => {
     if (!isActive) return;
 
     const handleInteraction = () => {
-      clearNeedsInput(agentId);
+      clearCompletionUnread(agentId);
     };
 
     window.addEventListener("focus", handleInteraction);
     return () => {
       window.removeEventListener("focus", handleInteraction);
     };
-  }, [isActive, agentId, clearNeedsInput]);
+  }, [isActive, agentId, clearCompletionUnread]);
 
   // Apply a state that arrived after the loader snapshot before subscribing to
   // replayed commands. onState immediately emits its cached state, so ignore
@@ -177,6 +238,10 @@ function AgentChat({
         typeof client_message_id !== "string"
       )
         return;
+      pendingServerMessageIdsRef.current.set(
+        client_message_id,
+        server_message_id,
+      );
       // Stamp the fork anchor onto the user message's own metadata, matching
       // the state snapshot representation. No separate id map is needed.
       chat.setMessages((prev) =>
@@ -188,6 +253,7 @@ function AgentChat({
             custom?.chatInputEventResult?.client_message_id;
 
           if (foundClientMessageId !== client_message_id) return m;
+          pendingServerMessageIdsRef.current.delete(client_message_id);
           if (custom?.[USER_INPUT_ID_KEY] === server_message_id) return m;
           return {
             ...m,
@@ -203,40 +269,40 @@ function AgentChat({
       if (!message || message.role !== "user" || typeof message.id !== "string")
         return;
       const clientMessageId = cmd.client_message_id;
-      // A server-pushed user message starts a generation just like a local
-      // submission, except it must not be sent back to the backend. Reset the
-      // remembered stream-close boundary before attaching the new local sink.
       if (
         typeof clientMessageId === "string" &&
-        chat.messages.some((item) => {
-          const custom = (
-            item.metadata as
-              | {
-                  custom?: {
-                    chatInputEventResult?: { client_message_id?: unknown };
-                  };
-                }
-              | undefined
-          )?.custom;
-          return (
-            custom?.chatInputEventResult?.client_message_id === clientMessageId
-          );
-        })
+        seenClientMessageIdsRef.current.has(clientMessageId)
       )
         return;
-      transport.beginServerStream();
-      chat.setMessages((prev) => [...prev, message]);
-      // Reuse an attached recovery sink. If its promise is only waiting to
-      // settle after its controller closed, queue a fresh sink behind it.
-      resumeChatStream(true);
+      if (typeof clientMessageId === "string") {
+        seenClientMessageIdsRef.current.add(clientMessageId);
+      }
+      const echoedMessage =
+        typeof clientMessageId === "string"
+          ? {
+              ...message,
+              metadata: {
+                ...(message.metadata as object | undefined),
+                custom: {
+                  ...(message.metadata as { custom?: Record<string, unknown> })
+                    ?.custom,
+                  chatInputEventResult: {
+                    client_message_id: clientMessageId,
+                  },
+                },
+              },
+            }
+          : message;
+      // The backend echo is the canonical user-message timeline boundary.
+      // Finish the preceding assistant segment before inserting it, then
+      // attach a fresh AI SDK sink for subsequent output on the same socket.
+      queueServerUserMessage(echoedMessage);
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }
   });
 
-  // Start one recovery stream after buffered commands have been applied. A
-  // cmd-user-message may already have started it; resumeChatStream coalesces
-  // that call with this fallback for replays containing only AI SDK chunks.
+  // Recover a busy epoch after buffered state and commands have been applied.
   useEffect(() => {
     if (status !== "closed") resumeChatStream();
   }, [status, resumeChatStream]);
@@ -258,23 +324,36 @@ function AgentChat({
     [transport],
   );
 
+  const submitUserMessage = useCallback(
+    async (message: UIMessage) => {
+      await transport.sendUserInput(message);
+    },
+    [transport],
+  );
+
   return (
     <WorkspaceContext.Provider value={workspace}>
       <AgentIdContext.Provider value={agentId}>
         <SubagentIdContext.Provider value={subagentId}>
           <AgentNameContext.Provider value={agentName}>
             <AgentStatusContext.Provider value={status}>
-              <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                <AssistantRuntimeProvider runtime={runtime}>
-                  <div
-                    className="h-full"
-                    onMouseDown={() => isActive && clearNeedsInput(agentId)}
-                    onKeyDown={() => isActive && clearNeedsInput(agentId)}
-                  >
-                    <Thread />
-                  </div>
-                </AssistantRuntimeProvider>
-              </UserTurnAnchorsContext.Provider>
+              <ChatSubmitContext.Provider value={submitUserMessage}>
+                <UserTurnAnchorsContext.Provider value={anchorsValue}>
+                  <AssistantRuntimeProvider runtime={runtime}>
+                    <div
+                      className="h-full"
+                      onMouseDown={() =>
+                        isActive && clearCompletionUnread(agentId)
+                      }
+                      onKeyDown={() =>
+                        isActive && clearCompletionUnread(agentId)
+                      }
+                    >
+                      <Thread />
+                    </div>
+                  </AssistantRuntimeProvider>
+                </UserTurnAnchorsContext.Provider>
+              </ChatSubmitContext.Provider>
             </AgentStatusContext.Provider>
           </AgentNameContext.Provider>
         </SubagentIdContext.Provider>

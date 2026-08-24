@@ -17,8 +17,8 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 export function WindowTitleUpdater() {
   const activeId = useAgentTabs((s) => s.activeId);
   const tabs = useAgentTabs((s) => s.tabs);
-  const isStreaming = useAgentTabs((s) => s.isStreaming);
-  const needsInput = useAgentTabs((s) => s.needsInput);
+  const isBusy = useAgentTabs((s) => s.isBusy);
+  const completionUnread = useAgentTabs((s) => s.completionUnread);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
@@ -35,16 +35,14 @@ export function WindowTitleUpdater() {
     }
 
     const { dirName } = formatTabLabel(activeTab.workspace);
-    const hasStreaming = Object.values(isStreaming[activeId] || {}).some(
-      (v) => v,
-    );
-    const hasInputRequest = Object.values(needsInput[activeId] || {}).some(
-      (v) => v,
-    );
+    const hasBusy = Object.values(isBusy[activeId] || {}).some((v) => v);
+    const hasUnreadCompletion = Object.values(
+      completionUnread[activeId] || {},
+    ).some((v) => v);
 
-    if (hasInputRequest) {
+    if (hasUnreadCompletion) {
       document.title = `● ${dirName} - Darox`;
-    } else if (hasStreaming) {
+    } else if (hasBusy) {
       let frameIndex = 0;
       const updateTitle = () => {
         document.title = `${SPINNER_FRAMES[frameIndex]} ${dirName} - Darox`;
@@ -59,7 +57,7 @@ export function WindowTitleUpdater() {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [activeId, tabs, isStreaming, needsInput]);
+  }, [activeId, tabs, isBusy, completionUnread]);
 
   return null;
 }

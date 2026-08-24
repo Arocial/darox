@@ -75,20 +75,22 @@ async function pickDirectory(): Promise<string | null> {
 const ActiveTabItem = ({
   tab,
   activeId,
-  needsInput,
+  completionUnread,
   onSelect,
   onReset,
   onClose,
 }: {
   tab: AgentTab;
   activeId: string | null;
-  needsInput: Record<string, boolean>;
+  completionUnread: Record<string, boolean>;
   onSelect: (id: string) => void;
   onReset: (e: React.MouseEvent, id: string, workspace: string) => void;
   onClose: (e: React.MouseEvent, id: string) => void;
 }) => {
   const { dirName, parentPath } = formatTabLabel(tab.workspace);
-  const hasInputRequest = Object.values(needsInput || {}).some((v) => v);
+  const hasUnreadCompletion = Object.values(completionUnread || {}).some(
+    (v) => v,
+  );
   const isActive = activeId === tab.id;
 
   return (
@@ -109,10 +111,10 @@ const ActiveTabItem = ({
           title={tab.workspace}
         >
           <span className="truncate">{dirName}</span>
-          {hasInputRequest && (
+          {hasUnreadCompletion && (
             <span
               className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-              title="Input required"
+              title="Task completed"
             />
           )}
         </div>
@@ -235,7 +237,7 @@ export const AgentTabBar = () => {
     setActiveId,
     createAgent,
     deleteAgent,
-    needsInput,
+    completionUnread,
     sessions,
     loadAgents,
     loadSessions,
@@ -356,7 +358,7 @@ export const AgentTabBar = () => {
                 key={tab.id}
                 tab={tab}
                 activeId={activeId}
-                needsInput={needsInput[tab.id]}
+                completionUnread={completionUnread[tab.id]}
                 onSelect={setActiveId}
                 onReset={handleReset}
                 onClose={handleClose}

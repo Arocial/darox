@@ -8,8 +8,6 @@ type WsServerFrame =
       model: string | null;
       busy: boolean;
     }
-  | { type: "step-done" }
-  | { type: "data-input-request"; data: unknown }
   | ({ type: string } & Record<string, unknown>);
 
 export type BackendCommand = {
@@ -44,9 +42,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
-  private waitingControllers: ReadableStreamDefaultController<UIMessageChunk>[] =
-    [];
-  private streamCompleted = false;
   private pendingChunks: UIMessageChunk[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private abortCleanup: (() => void) | null = null;
@@ -173,35 +168,31 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     controller: ReadableStreamDefaultController<UIMessageChunk>,
   ) {
     if (this.controller && !this.controllerClosed) {
-      this.waitingControllers.push(controller);
-      return;
+      this.closeController();
     }
     this.controller = controller;
     this.controllerClosed = false;
     this.flushPendingChunks();
   }
 
-  private handleStreamClose() {
-    this.streamCompleted = true;
-    this.flushPendingChunks();
-    this.closeController();
-  }
-
-  private hasCompletedStream() {
-    return this.streamCompleted;
+  /** Start one retained-turn stream. Repeated busy frames are idempotent. */
+  public beginBusyEpoch() {
+    if (this.latestState) this.latestState.busy = true;
   }
 
   /**
-   * Mark a backend-pushed user message as the start of a new generation.
-   * Unlike sendMessages(), this does not send a reply frame: the backend has
-   * already accepted the user turn and will push its AI SDK chunks next.
+   * Use a server-echoed user message as a timeline boundary. Chunks received
+   * before the command are flushed into the preceding assistant segment;
+   * later chunks stay buffered until the next AI SDK recovery sink attaches.
    */
-  public beginServerStream() {
-    this.streamCompleted = false;
-    // A recovery stream may already be attached while waiting for replayed or
-    // live server output. Keep that sink alive: closing it here races the
-    // corresponding useChat resume promise and can leave subsequent chunks
-    // buffered without a controller.
+  public splitAtUserMessage() {
+    this.closeController();
+  }
+
+  /** Finish the final assistant segment when the retained turn becomes idle. */
+  public endBusyEpoch() {
+    if (this.latestState) this.latestState.busy = false;
+    this.closeController();
   }
 
   private closeController() {
@@ -217,11 +208,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       this.abortCleanup();
       this.abortCleanup = null;
     }
-    const next = this.waitingControllers.shift();
-    if (next) {
-      this.streamCompleted = false;
-      this.attachController(next);
-    }
   }
 
   private failController(err: Error) {
@@ -236,24 +222,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     this.controller = null;
     this.controllerClosed = true;
-    for (const controller of this.waitingControllers.splice(0)) {
-      try {
-        controller.error(err);
-      } catch {}
-    }
     if (this.abortCleanup) {
       this.abortCleanup();
       this.abortCleanup = null;
     }
-  }
-
-  private closeAllControllers() {
-    for (const controller of this.waitingControllers.splice(0)) {
-      try {
-        controller.close();
-      } catch {}
-    }
-    this.closeController();
   }
 
   private handleMessage(raw: unknown) {
@@ -312,18 +284,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
           resolver({ status: ack.status ?? "ok", output: ack.output });
         }
         if (ack.status === "cancelled") {
-          this.closeAllControllers();
+          this.endBusyEpoch();
         }
         return;
       }
-      case "stream-close":
-        this.handleStreamClose();
-        return;
+      // Older backends emit finish for intermediate agent runs. The retained
+      // turn remains one busy epoch, so cmd-turn-state is its only end signal.
       case "finish":
-        this.enqueue(msg as UIMessageChunk);
-        this.handleStreamClose();
-        return;
-      case "step-done":
         return;
       default: {
         const chunk = msg as UIMessageChunk;
@@ -344,10 +311,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   sendMessages: ChatTransport<UI_MESSAGE>["sendMessages"] = async (options) => {
     const reply = this.extractReply(options.messages);
     await this.ensureOpen();
-    // An explicit user reply starts a new stream, so a close remembered from
-    // the previous server-pushed stream no longer applies.
-    this.streamCompleted = false;
-
     const stream = new ReadableStream<UIMessageChunk>({
       start: (controller) => {
         this.attachController(controller);
@@ -363,6 +326,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       const onAbort = () => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           try {
+            this.commandAckQueue.push(() => {});
             this.ws.send(JSON.stringify({ cancel: true }));
           } catch {}
         }
@@ -376,6 +340,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
 
     try {
+      this.commandAckQueue.push(() => {});
       this.ws!.send(JSON.stringify({ reply }));
     } catch (err) {
       this.failController(err instanceof Error ? err : new Error(String(err)));
@@ -383,6 +348,23 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     return stream;
   };
+
+  /** Send input without adding it optimistically to the AI SDK timeline. */
+  public async sendUserInput(reply: UI_MESSAGE): Promise<void> {
+    await this.ensureOpen();
+    const ack = await new Promise<AgentCommandAck>((resolve, reject) => {
+      this.commandAckQueue.push(resolve);
+      try {
+        this.ws!.send(JSON.stringify({ reply }));
+      } catch (err) {
+        this.commandAckQueue.pop();
+        reject(err);
+      }
+    });
+    if (ack.status !== "ok") {
+      throw new Error(`Backend rejected user input: ${ack.status}`);
+    }
+  }
 
   /**
    * Send a structured command (slash-equivalent) without going through the
@@ -423,7 +405,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         await this.closingPromise;
       }
       await this.ensureOpen();
-      if (this.hasCompletedStream()) return null;
+      if (this.latestState?.busy !== true) return null;
 
       // Avoid close the previous controller on remount of strict-mode.
       // We didn't close the controller on unmount, So we wait for previous controller
@@ -435,7 +417,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       if (this.controller && !this.controllerClosed) {
         this.closeController();
       }
-      if (this.hasCompletedStream()) return null;
+      if (this.latestState?.busy !== true) return null;
 
       const stream = new ReadableStream<UIMessageChunk>({
         start: (controller) => {
@@ -453,8 +435,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     const ws = this.ws;
     this.ws = null;
     this.openPromise = null;
-    this.streamCompleted = false;
-    this.closeAllControllers();
+    this.closeController();
     this.pendingChunks = [];
 
     if (!ws) return;

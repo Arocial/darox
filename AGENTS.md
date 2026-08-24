@@ -59,9 +59,10 @@ Communication with the backend uses a unified WebSocket channel (`WebSocketChatT
    - `cmd-turn-state`: Reports the retained turn's busy/idle boundary.
    - `cmd-user-turn`: Delivers backend event anchors (`server_message_id`) mapped to UI `messageId` for forking/branching.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
-   - `finish`: Completes one AI SDK generation while the WebSocket remains connected.
+   - `cmd-user-message`: Echoes accepted user input and splits the visible assistant timeline.
+   - `finish`: Legacy compatibility frame; the frontend uses `cmd-turn-state` to close the retained turn.
 
-User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time; inputs submitted while busy are queued by the backend.
+User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time. The frontend waits for `cmd-user-message` before displaying them, so backend event order defines the visible timeline; inputs submitted while busy influence subsequent output in the same retained turn.
 
 ### State Management
 

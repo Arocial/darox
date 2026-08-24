@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { useState, type FC } from "react";
 import { ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useAgentStatus } from "@/components/darox-ui/agent-status-context";
@@ -15,11 +15,16 @@ import {
   historyKey,
 } from "@/components/darox-ui/workspace-context";
 import type { ChatInputEventResult } from "@/types/chat";
+import { useChatSubmit } from "@/components/darox-ui/chat-submit-context";
+import type { UIMessage } from "ai";
+import { toast } from "sonner";
 
 export const Composer: FC = () => {
   const workspace = useWorkspace();
   const aui = useAui();
   const status = useAgentStatus();
+  const submitUserMessage = useChatSubmit();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isDisabled = status === "closed";
 
@@ -80,16 +85,44 @@ export const Composer: FC = () => {
       user_input: text,
     };
 
-    aui.thread().append({
+    const attachmentParts: UIMessage["parts"] = processedAttachments.flatMap(
+      (attachment) =>
+        (attachment.content ?? []).flatMap((part) => {
+          if (part.type !== "file") return [];
+          return [
+            {
+              type: "file" as const,
+              url: part.data,
+              mediaType: part.mimeType,
+              ...(attachment.name && { filename: attachment.name }),
+            },
+          ];
+        }),
+    );
+    const parts: UIMessage["parts"] = [
+      ...attachmentParts,
+      ...(result.user_input
+        ? [{ type: "text" as const, text: result.user_input }]
+        : []),
+    ];
+    const message: UIMessage = {
+      id: clientMessageId,
       role: "user",
-      content: result.user_input
-        ? [{ type: "text", text: result.user_input }]
-        : [],
+      parts,
       metadata: { custom: { chatInputEventResult: result } },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      attachments: processedAttachments as any,
-    });
-    aui.composer().reset();
+    };
+
+    setIsSubmitting(true);
+    try {
+      await submitUserMessage(message);
+      aui.composer().reset();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to send message",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -100,16 +133,22 @@ export const Composer: FC = () => {
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone flex w-full flex-col rounded-2xl border border-input bg-background px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-ring/20 data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
         <ComposerWithCommandMenu disabled={isDisabled} />
-        <ComposerAction disabled={status === "closed"} />
+        <ComposerAction
+          disabled={status === "closed"}
+          submitting={isSubmitting}
+        />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC<{ disabled?: boolean }> = ({ disabled }) => {
+const ComposerAction: FC<{ disabled?: boolean; submitting?: boolean }> = ({
+  disabled,
+  submitting,
+}) => {
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
   const isRunning = useAuiState((s) => s.thread.isRunning);
-  const isDisabled = disabled || isEmpty;
+  const isDisabled = disabled || submitting || isEmpty;
   const showCancel = isRunning && isEmpty && !disabled;
 
   return (

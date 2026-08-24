@@ -42,8 +42,8 @@ type AgentWorkspace = {
   tabs: AgentTab[];
   activeId: string | null;
   sessions: SessionInfo[];
-  needsInput: Record<string, Record<string, boolean>>;
-  isStreaming: Record<string, Record<string, boolean>>;
+  completionUnread: Record<string, Record<string, boolean>>;
+  isBusy: Record<string, Record<string, boolean>>;
 };
 
 type AgentTabsState = {
@@ -51,18 +51,18 @@ type AgentTabsState = {
   activeId: string | null;
   loading: boolean;
   sessions: SessionInfo[];
-  needsInput: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
-  isStreaming: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
+  completionUnread: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
+  isBusy: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
   backendWorkspaces: Record<string, AgentWorkspace>;
 
   setActiveId: (id: string) => void;
-  setNeedsInput: (sessionId: string, agentName: string, needs: boolean) => void;
-  clearNeedsInput: (sessionId: string) => void;
-  setStreaming: (
+  setCompletionUnread: (
     sessionId: string,
     agentName: string,
-    streaming: boolean,
+    unread: boolean,
   ) => void;
+  clearCompletionUnread: (sessionId: string) => void;
+  setBusy: (sessionId: string, agentName: string, busy: boolean) => void;
 
   createAgent: (workspace: string) => Promise<AgentTab | null>;
   deleteAgent: (id: string) => Promise<void>;
@@ -79,50 +79,50 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   activeId: null,
   loading: false,
   sessions: [],
-  needsInput: {},
-  isStreaming: {},
+  completionUnread: {},
+  isBusy: {},
   backendWorkspaces: {},
 
   setActiveId: (id) =>
     set((state) => {
-      const newNeedsInput = { ...state.needsInput };
-      delete newNeedsInput[id];
-      return { activeId: id, needsInput: newNeedsInput };
+      const nextCompletionUnread = { ...state.completionUnread };
+      delete nextCompletionUnread[id];
+      return { activeId: id, completionUnread: nextCompletionUnread };
     }),
 
-  setNeedsInput: (sessionId, agentName, needs) =>
+  setCompletionUnread: (sessionId, agentName, unread) =>
     set((state) => {
-      const sessionNeeds = state.needsInput[sessionId] || {};
-      if (sessionNeeds[agentName] === needs) return state;
+      const sessionCompletion = state.completionUnread[sessionId] || {};
+      if (sessionCompletion[agentName] === unread) return state;
       return {
-        needsInput: {
-          ...state.needsInput,
+        completionUnread: {
+          ...state.completionUnread,
           [sessionId]: {
-            ...sessionNeeds,
-            [agentName]: needs,
+            ...sessionCompletion,
+            [agentName]: unread,
           },
         },
       };
     }),
 
-  clearNeedsInput: (sessionId) =>
+  clearCompletionUnread: (sessionId) =>
     set((state) => {
-      if (!state.needsInput[sessionId]) return state;
-      const newNeedsInput = { ...state.needsInput };
-      delete newNeedsInput[sessionId];
-      return { needsInput: newNeedsInput };
+      if (!state.completionUnread[sessionId]) return state;
+      const nextCompletionUnread = { ...state.completionUnread };
+      delete nextCompletionUnread[sessionId];
+      return { completionUnread: nextCompletionUnread };
     }),
 
-  setStreaming: (sessionId, agentName, streaming) =>
+  setBusy: (sessionId, agentName, busy) =>
     set((state) => {
-      const sessionStreaming = state.isStreaming[sessionId] || {};
-      if (sessionStreaming[agentName] === streaming) return state;
+      const sessionBusy = state.isBusy[sessionId] || {};
+      if (sessionBusy[agentName] === busy) return state;
       return {
-        isStreaming: {
-          ...state.isStreaming,
+        isBusy: {
+          ...state.isBusy,
           [sessionId]: {
-            ...sessionStreaming,
-            [agentName]: streaming,
+            ...sessionBusy,
+            [agentName]: busy,
           },
         },
       };
@@ -161,10 +161,10 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     }
     set((state) => {
       const tabs = state.tabs.filter((t) => t.id !== id);
-      const newNeedsInput = { ...state.needsInput };
-      delete newNeedsInput[id];
-      const newIsStreaming = { ...state.isStreaming };
-      delete newIsStreaming[id];
+      const nextCompletionUnread = { ...state.completionUnread };
+      delete nextCompletionUnread[id];
+      const nextIsBusy = { ...state.isBusy };
+      delete nextIsBusy[id];
 
       let activeId = state.activeId;
       if (activeId === id) {
@@ -173,8 +173,8 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       return {
         tabs,
         activeId,
-        needsInput: newNeedsInput,
-        isStreaming: newIsStreaming,
+        completionUnread: nextCompletionUnread,
+        isBusy: nextIsBusy,
       };
     });
 
@@ -263,7 +263,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     })),
 
   clearAgents: () =>
-    set({ tabs: [], activeId: null, needsInput: {}, isStreaming: {} }),
+    set({ tabs: [], activeId: null, completionUnread: {}, isBusy: {} }),
 }));
 
 useBackendStore.subscribe((state, prevState) => {
@@ -276,8 +276,8 @@ useBackendStore.subscribe((state, prevState) => {
         tabs: agentState.tabs,
         activeId: agentState.activeId,
         sessions: agentState.sessions,
-        needsInput: agentState.needsInput,
-        isStreaming: agentState.isStreaming,
+        completionUnread: agentState.completionUnread,
+        isBusy: agentState.isBusy,
       };
     }
     const next = state.activeBackendId
@@ -288,8 +288,8 @@ useBackendStore.subscribe((state, prevState) => {
       tabs: next?.tabs || [],
       activeId: next?.activeId || null,
       sessions: next?.sessions || [],
-      needsInput: next?.needsInput || {},
-      isStreaming: next?.isStreaming || {},
+      completionUnread: next?.completionUnread || {},
+      isBusy: next?.isBusy || {},
       loading: false,
     };
   });
