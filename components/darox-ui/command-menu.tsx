@@ -149,6 +149,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
   const workspace = useWorkspace();
   const apiBase = useBackendStore((s) => s.apiBase);
   const text = useAuiState((s) => s.composer.text);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   const aui = useAui();
 
   const [open, setOpen] = useState(false);
@@ -315,6 +316,20 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
         }}
         onBlur={() => setIsFocused(false)}
         onKeyDown={(e) => {
+          const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
+
+          if (
+            e.key === "Enter" &&
+            isRunning &&
+            !showMenu &&
+            !isModifier &&
+            !e.nativeEvent.isComposing
+          ) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+            return;
+          }
+
           if (e.key === "Enter" && e.altKey) {
             e.preventDefault();
             const target = e.currentTarget as HTMLTextAreaElement;
@@ -329,7 +344,6 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
             return;
           }
 
-          const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
           const cmdkKeys = [
             "Enter",
             "ArrowUp",
