@@ -27,6 +27,37 @@ import { useBackendCommands } from "@/hooks/use-backend-commands";
 import { ChatSubmitContext } from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
 
+function getUserInputId(message: UIMessage): string | undefined {
+  if (message.role !== "user") return undefined;
+  const metadata = message.metadata as
+    | { custom?: { user_input_id?: unknown } }
+    | undefined;
+  const userInputId = metadata?.custom?.user_input_id;
+  return typeof userInputId === "string" ? userInputId : undefined;
+}
+
+function preserveUserMessageIds(
+  current: UIMessage[],
+  snapshot: UIMessage[],
+): UIMessage[] {
+  const currentUserIdsByInputId = new Map<string, string>();
+  for (const message of current) {
+    const userInputId = getUserInputId(message);
+    if (userInputId !== undefined) {
+      currentUserIdsByInputId.set(userInputId, message.id);
+    }
+  }
+
+  return snapshot.map((message) => {
+    const userInputId = getUserInputId(message);
+    const currentId =
+      userInputId === undefined
+        ? undefined
+        : currentUserIdsByInputId.get(userInputId);
+    return currentId === undefined ? message : { ...message, id: currentId };
+  });
+}
+
 function AgentChat({
   agentId,
   subagentId,
@@ -192,7 +223,9 @@ function AgentChat({
       transport.onState((state) => {
         applyBusyState(state.busy);
         if (state.history === initialMessages) return;
-        chat.setMessages(state.history);
+        chat.setMessages((current) =>
+          preserveUserMessageIds(current, state.history),
+        );
       }),
     [transport, chat.setMessages, initialMessages, applyBusyState],
   );
