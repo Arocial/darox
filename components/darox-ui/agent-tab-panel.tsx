@@ -36,6 +36,39 @@ function getUserInputId(message: UIMessage): string | undefined {
   return typeof userInputId === "string" ? userInputId : undefined;
 }
 
+function getClientMessageId(message: UIMessage): string | undefined {
+  if (message.role !== "user") return undefined;
+  const metadata = message.metadata as
+    | {
+        custom?: {
+          chatInputEventResult?: { client_message_id?: unknown };
+        };
+      }
+    | undefined;
+  const clientMessageId =
+    metadata?.custom?.chatInputEventResult?.client_message_id;
+  return typeof clientMessageId === "string" ? clientMessageId : undefined;
+}
+
+function reconcileServerUserMessages(
+  current: UIMessage[],
+  serverMessages: UIMessage[],
+): UIMessage[] {
+  const next = [...current];
+  for (const serverMessage of serverMessages) {
+    const clientMessageId = getClientMessageId(serverMessage);
+    const optimisticIndex =
+      clientMessageId === undefined
+        ? -1
+        : next.findIndex(
+            (message) => getClientMessageId(message) === clientMessageId,
+          );
+    if (optimisticIndex === -1) next.push(serverMessage);
+    else next[optimisticIndex] = serverMessage;
+  }
+  return next;
+}
+
 function preserveUserMessageIds(
   current: UIMessage[],
   snapshot: UIMessage[],
@@ -116,7 +149,9 @@ function AgentChat({
       const drain = Promise.resolve(precedingSegment).then(() => {
         const pending = pendingUserMessagesRef.current.splice(0);
         if (pending.length > 0) {
-          chat.setMessages((prev) => [...prev, ...pending]);
+          chat.setMessages((prev) =>
+            reconcileServerUserMessages(prev, pending),
+          );
         }
         if (userBoundaryDrainRef.current === drain) {
           userBoundaryDrainRef.current = null;
@@ -295,9 +330,30 @@ function AgentChat({
 
   const submitUserMessage = useCallback(
     async (message: UIMessage) => {
-      await transport.sendUserInput(message);
+      const clientMessageId = getClientMessageId(message);
+      chat.setMessages((current) => [...current, message]);
+      try {
+        await transport.sendUserInput(message);
+      } catch (error) {
+        // Keep an already echoed message: the backend accepted it even if the
+        // acknowledgement raced with a connection failure.
+        if (
+          clientMessageId === undefined ||
+          !seenClientMessageIdsRef.current.has(clientMessageId)
+        ) {
+          chat.setMessages((current) =>
+            current.filter(
+              (currentMessage) =>
+                currentMessage.id !== message.id ||
+                (clientMessageId !== undefined &&
+                  getClientMessageId(currentMessage) !== clientMessageId),
+            ),
+          );
+        }
+        throw error;
+      }
     },
-    [transport],
+    [chat.setMessages, transport],
   );
 
   return (

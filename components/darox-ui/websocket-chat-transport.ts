@@ -345,7 +345,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     return stream;
   };
 
-  /** Send input without adding it optimistically to the AI SDK timeline. */
+  /** Send input; the caller owns optimistic timeline insertion and rollback. */
   public async sendUserInput(reply: UI_MESSAGE): Promise<void> {
     await this.ensureOpen();
     const ack = await new Promise<AgentCommandAck>((resolve, reject) => {
