@@ -24,7 +24,11 @@ import {
 import { ModelPill } from "@/components/darox-ui/model-pill";
 import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
-import { ChatSubmitContext } from "@/components/darox-ui/chat-submit-context";
+import {
+  ChatSubmitContext,
+  PendingUserMessagesContext,
+  type PendingUserMessage,
+} from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
 
 function getUserInputId(message: UIMessage): string | undefined {
@@ -149,6 +153,9 @@ function AgentChat({
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);
   const userBoundaryDrainRef = useRef<Promise<void> | null>(null);
   const seenClientMessageIdsRef = useRef(new Set<string>());
+  const [pendingUserMessages, setPendingUserMessages] = useState<
+    PendingUserMessage[]
+  >([]);
   const resumeChatStream = useCallback(() => {
     if (resumePromiseRef.current) return;
 
@@ -177,6 +184,17 @@ function AgentChat({
         if (pending.length > 0) {
           chat.setMessages((prev) =>
             reconcileServerUserMessages(prev, pending),
+          );
+          const confirmedIds = new Set(
+            pending
+              .map(getClientMessageId)
+              .filter((id): id is string => id !== undefined),
+          );
+          setPendingUserMessages((current) =>
+            current.filter(
+              (pendingMessage) =>
+                !confirmedIds.has(pendingMessage.clientMessageId),
+            ),
           );
         }
         if (userBoundaryDrainRef.current === drain) {
@@ -361,29 +379,33 @@ function AgentChat({
   const submitUserMessage = useCallback(
     async (message: UIMessage) => {
       const clientMessageId = getClientMessageId(message);
-      chat.setMessages((current) => [...current, message]);
+      if (clientMessageId === undefined) {
+        throw new Error("User message is missing a client message id");
+      }
+      setPendingUserMessages((current) => [
+        ...current,
+        { clientMessageId, message, status: "sending" },
+      ]);
       try {
         await transport.sendUserInput(message);
+        setPendingUserMessages((current) =>
+          current.map((pendingMessage) =>
+            pendingMessage.clientMessageId === clientMessageId
+              ? { ...pendingMessage, status: "accepted" }
+              : pendingMessage,
+          ),
+        );
       } catch (error) {
-        // Keep an already echoed message: the backend accepted it even if the
-        // acknowledgement raced with a connection failure.
-        if (
-          clientMessageId === undefined ||
-          !seenClientMessageIdsRef.current.has(clientMessageId)
-        ) {
-          chat.setMessages((current) =>
-            current.filter(
-              (currentMessage) =>
-                currentMessage.id !== message.id ||
-                (clientMessageId !== undefined &&
-                  getClientMessageId(currentMessage) !== clientMessageId),
-            ),
-          );
-        }
+        setPendingUserMessages((current) =>
+          current.filter(
+            (pendingMessage) =>
+              pendingMessage.clientMessageId !== clientMessageId,
+          ),
+        );
         throw error;
       }
     },
-    [chat.setMessages, transport],
+    [transport],
   );
 
   return (
@@ -393,21 +415,25 @@ function AgentChat({
           <AgentNameContext.Provider value={agentName}>
             <AgentStatusContext.Provider value={status}>
               <ChatSubmitContext.Provider value={submitUserMessage}>
-                <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                  <AssistantRuntimeProvider runtime={runtime}>
-                    <div
-                      className="h-full"
-                      onMouseDown={() =>
-                        isActive && clearCompletionUnread(agentId)
-                      }
-                      onKeyDown={() =>
-                        isActive && clearCompletionUnread(agentId)
-                      }
-                    >
-                      <Thread />
-                    </div>
-                  </AssistantRuntimeProvider>
-                </UserTurnAnchorsContext.Provider>
+                <PendingUserMessagesContext.Provider
+                  value={pendingUserMessages}
+                >
+                  <UserTurnAnchorsContext.Provider value={anchorsValue}>
+                    <AssistantRuntimeProvider runtime={runtime}>
+                      <div
+                        className="h-full"
+                        onMouseDown={() =>
+                          isActive && clearCompletionUnread(agentId)
+                        }
+                        onKeyDown={() =>
+                          isActive && clearCompletionUnread(agentId)
+                        }
+                      >
+                        <Thread />
+                      </div>
+                    </AssistantRuntimeProvider>
+                  </UserTurnAnchorsContext.Provider>
+                </PendingUserMessagesContext.Provider>
               </ChatSubmitContext.Provider>
             </AgentStatusContext.Provider>
           </AgentNameContext.Provider>

@@ -47,6 +47,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
+  LoaderCircleIcon,
   SquareIcon,
 } from "lucide-react";
 import {
@@ -59,6 +60,10 @@ import {
 import { Composer } from "@/components/darox-ui/composer";
 import { UserMessageText } from "@/components/darox-ui/user-message-text";
 import { UserActionBar } from "@/components/darox-ui/user-action-bar";
+import {
+  usePendingUserMessages,
+  type PendingUserMessage,
+} from "@/components/darox-ui/chat-submit-context";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -94,10 +99,11 @@ const isNewChatView = (s: AssistantState) => s.thread.messages.length === 0;
 
 export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const isEmpty = useAuiState(isNewChatView);
+  const pendingMessages = usePendingUserMessages();
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} />
+      <ThreadRoot isEmpty={isEmpty && pendingMessages.length === 0} />
     </ThreadComponentsContext.Provider>
   );
 };
@@ -127,9 +133,7 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
             isEmpty && "justify-center",
           )}
         >
-          <AuiIf condition={isNewChatView}>
-            <Welcome />
-          </AuiIf>
+          {isEmpty && <Welcome />}
 
           <div
             data-slot="aui_message-group"
@@ -141,6 +145,7 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
             <ThreadPrimitive.Messages>
               {() => <ThreadMessage />}
             </ThreadPrimitive.Messages>
+            <PendingUserMessages />
           </div>
 
           <ThreadPrimitive.ViewportFooter
@@ -152,13 +157,71 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
           >
             <ThreadScrollToBottom />
             <Composer />
-            <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-              <ThreadSuggestions />
-            </AuiIf>
+            {isEmpty && (
+              <AuiIf condition={(s) => s.composer.isEmpty}>
+                <ThreadSuggestions />
+              </AuiIf>
+            )}
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
+  );
+};
+
+const PendingUserMessages: FC = () => {
+  const messages = usePendingUserMessages();
+
+  return messages.map((message) => (
+    <PendingUserMessageBubble
+      key={message.clientMessageId}
+      pendingMessage={message}
+    />
+  ));
+};
+
+const PendingUserMessageBubble: FC<{
+  pendingMessage: PendingUserMessage;
+}> = ({ pendingMessage }) => {
+  const { message, status } = pendingMessage;
+  const text = message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  const files = message.parts.filter((part) => part.type === "file");
+
+  return (
+    <div
+      data-slot="aui_pending-user-message-root"
+      className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [&:where(>*)]:col-start-2"
+      data-role="user"
+    >
+      {files.length > 0 && (
+        <div className="col-start-2 flex max-w-[85%] flex-wrap justify-end gap-2 justify-self-end">
+          {files.map((file, index) => (
+            <a
+              key={`${file.url}:${index}`}
+              href={file.url}
+              className="bg-muted text-muted-foreground max-w-48 truncate rounded-lg px-3 py-2 text-xs"
+              download={file.filename}
+            >
+              {file.filename ?? "Attachment"}
+            </a>
+          ))}
+        </div>
+      )}
+      {text && (
+        <div className="col-start-2 min-w-0">
+          <div className="bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word">
+            <p className="whitespace-pre-wrap">{text}</p>
+          </div>
+        </div>
+      )}
+      <div className="text-muted-foreground col-start-2 flex min-h-5 items-center justify-end gap-1 pt-1 text-xs">
+        <LoaderCircleIcon className="size-3 animate-spin" />
+        {status === "sending" ? "Sending…" : "Waiting for processing…"}
+      </div>
+    </div>
   );
 };
 
