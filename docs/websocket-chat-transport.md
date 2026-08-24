@@ -36,7 +36,6 @@ it establishes a newer recovery boundary.
 | `cmd-*` | Dispatch to backend-command listeners, or buffer until they attach |
 | `cmd-user-message` | Establish the canonical user-message timeline boundary: flush the preceding assistant segment, append the echoed user turn, and attach a fresh AI SDK sink for later output |
 | `cmd-turn-state` | Start/end the retained turn's reading epoch and publish busy/idle state for title and completion UI |
-| `finish` | Ignored for compatibility with older backends; intermediate agent results do not end the retained turn |
 | `ack` | Resolve the oldest pending structured command; cancelled acks close the stream |
 
 Client frames are `{ "reply": <UIMessage> }`, `{ "cancel": true }`, or
@@ -77,9 +76,8 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
   belong above that user message and later chunks belong below it.
 - Send `cmd-turn-state busy=false` only after the final output chunk.
 - Echo the top-level `client_message_id` for client-originated input so replay
-  is idempotent. Ideally include both `client_message_id` and the fork anchor's
-  `server_message_id` in the echoed message metadata; that would make
-  `cmd-user-turn` and the frontend's pending-anchor reconciliation unnecessary.
+  is idempotent, and include the fork anchor's `user_input_id` in the echoed
+  message metadata.
 - `finish`, `stream-close`, and `step-done` are not needed by this frontend.
 
 ## Limitations

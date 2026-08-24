@@ -22,10 +22,7 @@ import {
   httpBaseToWsUrl,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
-import {
-  UserTurnAnchorsContext,
-  USER_INPUT_ID_KEY,
-} from "@/components/darox-ui/user-turn-anchors-context";
+import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
 import { ChatSubmitContext } from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
@@ -62,7 +59,6 @@ function AgentChat({
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);
   const userBoundaryDrainRef = useRef<Promise<void> | null>(null);
   const seenClientMessageIdsRef = useRef(new Set<string>());
-  const pendingServerMessageIdsRef = useRef(new Map<string, string>());
   const resumeChatStream = useCallback(() => {
     if (resumePromiseRef.current) return;
 
@@ -89,31 +85,7 @@ function AgentChat({
       const drain = Promise.resolve(precedingSegment).then(() => {
         const pending = pendingUserMessagesRef.current.splice(0);
         if (pending.length > 0) {
-          const anchored = pending.map((item) => {
-            const custom = (item.metadata as { custom?: Record<string, any> })
-              ?.custom;
-            const clientMessageId = (
-              custom?.chatInputEventResult as
-                | { client_message_id?: unknown }
-                | undefined
-            )?.client_message_id;
-            if (typeof clientMessageId !== "string") return item;
-            const serverMessageId =
-              pendingServerMessageIdsRef.current.get(clientMessageId);
-            if (!serverMessageId) return item;
-            pendingServerMessageIdsRef.current.delete(clientMessageId);
-            return {
-              ...item,
-              metadata: {
-                ...(item.metadata as object | undefined),
-                custom: {
-                  ...custom,
-                  [USER_INPUT_ID_KEY]: serverMessageId,
-                },
-              },
-            };
-          });
-          chat.setMessages((prev) => [...prev, ...anchored]);
+          chat.setMessages((prev) => [...prev, ...pending]);
         }
         if (userBoundaryDrainRef.current === drain) {
           userBoundaryDrainRef.current = null;
@@ -228,42 +200,6 @@ function AgentChat({
   useBackendCommands(url, (cmd) => {
     if (cmd.type === "cmd-turn-state") {
       applyBusyState(cmd.busy === true);
-    } else if (cmd.type === "cmd-user-turn") {
-      const { server_message_id, client_message_id } = cmd as unknown as {
-        server_message_id?: string;
-        client_message_id?: string;
-      };
-      if (
-        typeof server_message_id !== "string" ||
-        typeof client_message_id !== "string"
-      )
-        return;
-      pendingServerMessageIdsRef.current.set(
-        client_message_id,
-        server_message_id,
-      );
-      // Stamp the fork anchor onto the user message's own metadata, matching
-      // the state snapshot representation. No separate id map is needed.
-      chat.setMessages((prev) =>
-        prev.map((m) => {
-          if (m.role !== "user") return m;
-          const custom = (m.metadata as { custom?: Record<string, any> })
-            ?.custom;
-          const foundClientMessageId =
-            custom?.chatInputEventResult?.client_message_id;
-
-          if (foundClientMessageId !== client_message_id) return m;
-          pendingServerMessageIdsRef.current.delete(client_message_id);
-          if (custom?.[USER_INPUT_ID_KEY] === server_message_id) return m;
-          return {
-            ...m,
-            metadata: {
-              ...(m.metadata as object | undefined),
-              custom: { ...custom, [USER_INPUT_ID_KEY]: server_message_id },
-            },
-          };
-        }),
-      );
     } else if (cmd.type === "cmd-user-message") {
       const message = cmd.message as UIMessage | undefined;
       if (!message || message.role !== "user" || typeof message.id !== "string")

@@ -54,13 +54,11 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 Communication with the backend uses a unified WebSocket channel (`WebSocketChatTransport`) that multiplexes two types of data:
 
-1. **AI Generation Stream**: Standard Vercel AI SDK parts (`text-*`, `tool-*`, `finish`) flow directly into the chat thread UI.
+1. **AI Generation Stream**: Standard Vercel AI SDK content parts (`text-*`, `tool-*`, etc.) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
    - `cmd-turn-state`: Reports the retained turn's busy/idle boundary.
-   - `cmd-user-turn`: Delivers backend event anchors (`server_message_id`) mapped to UI `messageId` for forking/branching.
+   - `cmd-user-message`: Echoes accepted user input with its fork anchor and splits the visible assistant timeline.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
-   - `cmd-user-message`: Echoes accepted user input and splits the visible assistant timeline.
-   - `finish`: Legacy compatibility frame; the frontend uses `cmd-turn-state` to close the retained turn.
 
 User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time. The frontend waits for `cmd-user-message` before displaying them, so backend event order defines the visible timeline; inputs submitted while busy influence subsequent output in the same retained turn.
 

@@ -288,10 +288,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         }
         return;
       }
-      // Older backends emit finish for intermediate agent runs. The retained
-      // turn remains one busy epoch, so cmd-turn-state is its only end signal.
-      case "finish":
-        return;
       default: {
         const chunk = msg as UIMessageChunk;
         this.enqueue(chunk);
