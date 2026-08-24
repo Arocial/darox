@@ -50,6 +50,30 @@ function getClientMessageId(message: UIMessage): string | undefined {
   return typeof clientMessageId === "string" ? clientMessageId : undefined;
 }
 
+function ensureUniqueMessageIds(messages: UIMessage[]): UIMessage[] {
+  const usedIds = new Set<string>();
+
+  return messages.map((message, index) => {
+    if (!usedIds.has(message.id)) {
+      usedIds.add(message.id);
+      return message;
+    }
+
+    // A retained turn can contain multiple user inputs. Older backends may
+    // assign all of their cmd-user-message echoes the retained turn's message
+    // id, even though user_input_id identifies distinct timeline boundaries.
+    const stableDisambiguator = getUserInputId(message) ?? String(index);
+    const baseId = `${message.id}:duplicate:${stableDisambiguator}`;
+    let uniqueId = baseId;
+    let suffix = 1;
+    while (usedIds.has(uniqueId)) {
+      uniqueId = `${baseId}:${suffix++}`;
+    }
+    usedIds.add(uniqueId);
+    return { ...message, id: uniqueId };
+  });
+}
+
 function reconcileServerUserMessages(
   current: UIMessage[],
   serverMessages: UIMessage[],
@@ -81,7 +105,7 @@ function preserveUserMessageIds(
     }
   }
 
-  return snapshot.map((message) => {
+  const preserved = snapshot.map((message) => {
     const userInputId = getUserInputId(message);
     const currentId =
       userInputId === undefined
@@ -89,6 +113,8 @@ function preserveUserMessageIds(
         : currentUserIdsByInputId.get(userInputId);
     return currentId === undefined ? message : { ...message, id: currentId };
   });
+
+  return ensureUniqueMessageIds(preserved);
 }
 
 function AgentChat({
@@ -285,6 +311,10 @@ function AgentChat({
         typeof clientMessageId === "string"
           ? {
               ...message,
+              // The backend message id can be shared by every accepted input
+              // in one retained turn. The client id is unique per submission
+              // and also replaces the matching optimistic message in-place.
+              id: clientMessageId,
               metadata: {
                 ...(message.metadata as object | undefined),
                 custom: {
@@ -413,7 +443,8 @@ function AgentChatLoader({
     transport
       .waitForState()
       .then((state) => {
-        if (!cancelled) setInitialMessages(state.history);
+        if (!cancelled)
+          setInitialMessages(ensureUniqueMessageIds(state.history));
       })
       .catch((err) => {
         console.error("Failed to load session state", err);
