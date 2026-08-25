@@ -609,7 +609,11 @@ function AgentChatLoader({
       cancelled = true;
       releaseTransport(url);
     };
-  }, [agentId, subagentId, status]);
+    // Status changes are lifecycle updates for the same session node. Reloading
+    // here briefly removes the command listener, so a completion-time command
+    // can be buffered and replayed on top of a snapshot that already contains
+    // the same user message.
+  }, [agentId, subagentId]);
 
   if (initialMessages === null) {
     return (
