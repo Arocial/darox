@@ -20,6 +20,7 @@ import {
   acquireTransport,
   releaseTransport,
   httpBaseToWsUrl,
+  type SessionState,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
 import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
@@ -60,6 +61,23 @@ function getClientMessageId(message: UIMessage): string | undefined {
 
 function ensureUniqueMessageIds(messages: UIMessage[]): UIMessage[] {
   const usedIds = new Set<string>();
+
+  // Keep the state snapshot's array identity when no repair is needed. The
+  // transport replays that same snapshot whenever the state listener is
+  // resubscribed (for example when the active session changes), and AgentChat
+  // uses the identity to avoid replacing newer streamed messages with the
+  // initial history.
+  if (
+    messages.every((message) => {
+      if (usedIds.has(message.id)) return false;
+      usedIds.add(message.id);
+      return true;
+    })
+  ) {
+    return messages;
+  }
+
+  usedIds.clear();
 
   return messages.map((message, index) => {
     if (!usedIds.has(message.id)) {
@@ -157,6 +175,9 @@ function AgentChat({
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);
   const userBoundaryDrainRef = useRef<Promise<void> | null>(null);
   const seenClientMessageIdsRef = useRef(new Set<string>());
+  const appliedCommandTimelineRef = useRef<SessionState["timeline"] | null>(
+    null,
+  );
   const [pendingUserMessages, setPendingUserMessages] = useState<
     PendingUserMessage[]
   >([]);
@@ -306,27 +327,30 @@ function AgentChat({
     () =>
       transport.onState((state) => {
         applyBusyState(state.busy);
-        let messageIndex = 0;
-        setCommandInputs(
-          state.timeline.flatMap((entry) => {
-            if (entry.type === "message") {
-              messageIndex += 1;
-              return [];
-            }
-            if (typeof entry.client_message_id !== "string") return [];
-            return [
-              {
-                clientMessageId: entry.client_message_id,
-                beforeMessageIndex: messageIndex,
-                serverMessageId: entry.server_message_id,
-                command: entry.command,
-                status: entry.status,
-                output: entry.output,
-                error: entry.error,
-              },
-            ];
-          }),
-        );
+        if (state.timeline !== appliedCommandTimelineRef.current) {
+          appliedCommandTimelineRef.current = state.timeline;
+          let messageIndex = 0;
+          setCommandInputs(
+            state.timeline.flatMap((entry) => {
+              if (entry.type === "message") {
+                messageIndex += 1;
+                return [];
+              }
+              if (typeof entry.client_message_id !== "string") return [];
+              return [
+                {
+                  clientMessageId: entry.client_message_id,
+                  beforeMessageIndex: messageIndex,
+                  serverMessageId: entry.server_message_id,
+                  command: entry.command,
+                  status: entry.status,
+                  output: entry.output,
+                  error: entry.error,
+                },
+              ];
+            }),
+          );
+        }
         if (state.history === initialMessages) return;
         chat.setMessages((current) =>
           preserveUserMessageIds(current, state.history),
