@@ -95,13 +95,17 @@ export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
     setModel(modelRef); // optimistic
     const transport = acquireTransport(wsUrl);
     try {
-      const ack = await transport.sendCommand({
+      const result = await transport.sendCommand({
         type: "SetModelEvent",
         model_ref: modelRef,
       });
-      if (ack.status !== "ok") {
+      if (result.status !== "handled") {
         setModel(previous);
-        setError(ack.output || `Failed to switch model (${ack.status})`);
+        setError(
+          result.error ||
+            result.output ||
+            `Failed to switch model (${result.status})`,
+        );
       }
     } catch (e) {
       setModel(previous);

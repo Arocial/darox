@@ -57,10 +57,11 @@ Communication with the backend uses a unified WebSocket channel (`WebSocketChatT
 1. **AI Generation Stream**: Standard Vercel AI SDK content parts (`text-*`, `tool-*`, etc.) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
    - `cmd-turn-state`: Reports the retained turn's busy/idle boundary.
-   - `cmd-user-message`: Echoes accepted user input with its fork anchor and splits the visible assistant timeline.
+   - `cmd-client-input`: Reports typed client-input lifecycle changes. Started messages split the visible assistant timeline; accepted commands use a separate command view.
+   - `cmd-command-completed`: Completes an accepted command with its status and optional output or error.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
 
-User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time. The frontend waits for `cmd-user-message` before displaying them, so backend event order defines the visible timeline; inputs submitted while busy influence subsequent output in the same retained turn.
+User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time. A started message in `cmd-client-input` clears its pending UI and inserts the echoed user message into the visible timeline, so backend event order defines its placement. An accepted command clears pending UI into a separate command view and is later updated by `cmd-command-completed`; no client-side command detection is required. Inputs submitted while busy influence subsequent output in the same retained turn.
 
 ### State Management
 

@@ -64,6 +64,8 @@ import {
   usePendingUserMessages,
   type PendingUserMessage,
 } from "@/components/darox-ui/chat-submit-context";
+import { CommandInputList } from "@/components/darox-ui/command-input-list";
+import { useCommandInputs } from "@/components/darox-ui/command-input-context";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -100,16 +102,22 @@ const isNewChatView = (s: AssistantState) => s.thread.messages.length === 0;
 export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const isEmpty = useAuiState(isNewChatView);
   const pendingMessages = usePendingUserMessages();
+  const commands = useCommandInputs();
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty && pendingMessages.length === 0} />
+      <ThreadRoot
+        isEmpty={
+          isEmpty && pendingMessages.length === 0 && commands.length === 0
+        }
+      />
     </ThreadComponentsContext.Provider>
   );
 };
 
 const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
+  const messageCount = useAuiState((state) => state.thread.messages.length);
 
   return (
     <ThreadPrimitive.Root
@@ -143,8 +151,14 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
             )}
           >
             <ThreadPrimitive.Messages>
-              {() => <ThreadMessage />}
+              {({ message }) => (
+                <>
+                  <CommandInputList beforeMessageIndex={message.index} />
+                  <ThreadMessage />
+                </>
+              )}
             </ThreadPrimitive.Messages>
+            <CommandInputList beforeMessageIndex={messageCount} />
             <PendingUserMessages />
           </div>
 
@@ -183,7 +197,7 @@ const PendingUserMessages: FC = () => {
 const PendingUserMessageBubble: FC<{
   pendingMessage: PendingUserMessage;
 }> = ({ pendingMessage }) => {
-  const { message, status } = pendingMessage;
+  const { message } = pendingMessage;
   const text = message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
@@ -219,7 +233,7 @@ const PendingUserMessageBubble: FC<{
       )}
       <div className="text-muted-foreground col-start-2 flex min-h-5 items-center justify-end gap-1 pt-1 text-xs">
         <LoaderCircleIcon className="size-3 animate-spin" />
-        {status === "sending" ? "Sending…" : "Waiting for processing…"}
+        Sending…
       </div>
     </div>
   );

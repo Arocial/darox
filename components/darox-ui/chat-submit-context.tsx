@@ -8,7 +8,6 @@ export type SubmitUserMessage = (message: UIMessage) => Promise<void>;
 export type PendingUserMessage = {
   clientMessageId: string;
   message: UIMessage;
-  status: "sending" | "accepted";
 };
 
 export const ChatSubmitContext = createContext<SubmitUserMessage | null>(null);

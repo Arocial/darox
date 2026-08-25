@@ -23,15 +23,19 @@ export const UserActionBar: FC = () => {
       return;
     }
     try {
-      const ack = await anchorsCtx.forkAt(anchor);
-      if (ack.status !== "ok") {
-        toast.error(ack.output || `Fork failed: ${ack.status}`);
+      const result = await anchorsCtx.forkAt(anchor);
+      if (result.status !== "handled") {
+        toast.error(
+          result.error || result.output || `Fork failed: ${result.status}`,
+        );
         return;
       }
-      const match = ack.output?.match(/New branch session id:\s*(\S+)/);
+      const match = result.output?.match(/New branch session id:\s*(\S+)/);
       const newSessionId = match?.[1];
       if (!newSessionId) {
-        toast.error(ack.output || "Fork succeeded but no session id returned.");
+        toast.error(
+          result.output || "Fork succeeded but no session id returned.",
+        );
         return;
       }
       const tab = await openSession(newSessionId);

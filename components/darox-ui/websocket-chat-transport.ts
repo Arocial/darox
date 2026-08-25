@@ -1,10 +1,9 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 
 type WsServerFrame =
-  | { type: "ack"; status: string }
   | {
       type: "state";
-      history: UIMessage[];
+      history: StateTimelineEntry[];
       model: string | null;
       busy: boolean;
     }
@@ -18,16 +17,32 @@ export type BackendCommand = {
 export type CommandListener = (cmd: BackendCommand) => void;
 
 export type SessionState = {
+  timeline: StateTimelineEntry[];
   history: UIMessage[];
+  commands: CommandState[];
   model: string | null;
   busy: boolean;
 };
 
-export type StateListener = (state: SessionState) => void;
+export type StateTimelineEntry =
+  | { type: "message"; message: UIMessage }
+  | ({ type: "command" } & CommandState);
 
-export type AgentCommandAck = {
+export type CommandState = {
+  client_message_id?: string;
+  server_message_id?: string;
+  command: unknown;
   status: string;
   output?: string;
+  error?: string;
+};
+
+export type StateListener = (state: SessionState) => void;
+
+export type AgentCommandResult = {
+  status: string;
+  output?: string;
+  error?: string;
 };
 
 const STREAM_BATCH_INTERVAL_MS = 150;
@@ -45,11 +60,13 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private pendingChunks: UIMessageChunk[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private abortCleanup: (() => void) | null = null;
-  // FIFO of resolvers awaiting an ack for a sent command. Acks are 1:1 with
-  // client-sent frames per the API contract.
-  private commandAckQueue: Array<
-    (ack: { status: string; output?: string }) => void
-  > = [];
+  private commandCompletions = new Map<
+    string,
+    {
+      resolve: (result: AgentCommandResult) => void;
+      reject: (error: Error) => void;
+    }
+  >();
   // Listeners for backend-initiated one-shot commands
   private commandListeners: Set<CommandListener> = new Set();
   private pendingCommands: BackendCommand[] = [];
@@ -92,6 +109,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         const error = new Error("WebSocket connection closed");
         if (wasOpening) reject(error);
         for (const waiter of this.stateWaiters.splice(0)) waiter.reject(error);
+        this.commandCompletions.forEach((completion) => {
+          completion.reject(error);
+        });
+        this.commandCompletions.clear();
         this.failController(error);
       };
       ws.onmessage = (ev) => this.handleMessage(ev.data);
@@ -240,6 +261,26 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     if (msg.type.startsWith("cmd-")) {
       const command = msg as BackendCommand;
+      if (msg.type === "cmd-command-completed") {
+        const input = command.input as
+          | { client_message_id?: unknown }
+          | undefined;
+        const clientMessageId = input?.client_message_id;
+        if (typeof clientMessageId === "string") {
+          const completion = this.commandCompletions.get(clientMessageId);
+          if (completion) {
+            this.commandCompletions.delete(clientMessageId);
+            completion.resolve({
+              status:
+                typeof command.status === "string" ? command.status : "error",
+              output:
+                typeof command.output === "string" ? command.output : undefined,
+              error:
+                typeof command.error === "string" ? command.error : undefined,
+            });
+          }
+        }
+      }
       if (this.commandListeners.size === 0) {
         this.pendingCommands.push(command);
         return;
@@ -257,10 +298,25 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
           model?: unknown;
           busy?: unknown;
         };
+        const timeline = Array.isArray(frame.history)
+          ? (frame.history as StateTimelineEntry[])
+          : [];
         const state: SessionState = {
-          history: Array.isArray(frame.history)
-            ? (frame.history as UIMessage[])
-            : [],
+          timeline,
+          history: timeline
+            .filter(
+              (
+                entry,
+              ): entry is Extract<StateTimelineEntry, { type: "message" }> =>
+                entry.type === "message",
+            )
+            .map((entry) => entry.message),
+          commands: timeline.filter(
+            (
+              entry,
+            ): entry is Extract<StateTimelineEntry, { type: "command" }> =>
+              entry.type === "command",
+          ),
           model: typeof frame.model === "string" ? frame.model : null,
           busy: frame.busy === true,
         };
@@ -275,17 +331,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         this.stateListeners.forEach((listener) => {
           listener(state);
         });
-        return;
-      }
-      case "ack": {
-        const ack = msg as { status?: string; output?: string };
-        const resolver = this.commandAckQueue.shift();
-        if (resolver) {
-          resolver({ status: ack.status ?? "ok", output: ack.output });
-        }
-        if (ack.status === "cancelled") {
-          this.endBusyEpoch();
-        }
         return;
       }
       default: {
@@ -322,7 +367,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       const onAbort = () => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           try {
-            this.commandAckQueue.push(() => {});
             this.ws.send(JSON.stringify({ cancel: true }));
           } catch {}
         }
@@ -336,7 +380,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
 
     try {
-      this.commandAckQueue.push(() => {});
       this.ws!.send(JSON.stringify({ reply }));
     } catch (err) {
       this.failController(err instanceof Error ? err : new Error(String(err)));
@@ -348,44 +391,33 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   /** Send input; the caller owns optimistic timeline insertion and rollback. */
   public async sendUserInput(reply: UI_MESSAGE): Promise<void> {
     await this.ensureOpen();
-    const ack = await new Promise<AgentCommandAck>((resolve, reject) => {
-      this.commandAckQueue.push(resolve);
-      try {
-        this.ws!.send(JSON.stringify({ reply }));
-      } catch (err) {
-        this.commandAckQueue.pop();
-        reject(err);
-      }
-    });
-    if (ack.status !== "ok") {
-      throw new Error(`Backend rejected user input: ${ack.status}`);
-    }
+    this.ws!.send(JSON.stringify({ reply }));
   }
 
   /**
    * Send a structured command (slash-equivalent) without going through the
-   * LLM. Returns the server's ack. The caller is responsible for serializing
-   * concurrent calls if it cares about ack ordering.
+   * LLM. Completion is correlated by the stable client message id.
    */
   async sendCommand(event: {
     type: string;
     [key: string]: unknown;
-  }): Promise<AgentCommandAck> {
+  }): Promise<AgentCommandResult> {
     await this.ensureOpen();
-    const ackPromise = new Promise<{ status: string; output?: string }>(
-      (resolve) => {
-        this.commandAckQueue.push(resolve);
+    const clientMessageId = crypto.randomUUID();
+    const completionPromise = new Promise<AgentCommandResult>(
+      (resolve, reject) => {
+        this.commandCompletions.set(clientMessageId, { resolve, reject });
       },
     );
     try {
-      this.ws!.send(JSON.stringify({ command: event }));
+      this.ws!.send(
+        JSON.stringify({ command: event, client_message_id: clientMessageId }),
+      );
     } catch (err) {
-      // Pop the resolver we just pushed so the queue stays consistent.
-      const idx = this.commandAckQueue.length - 1;
-      if (idx >= 0) this.commandAckQueue.splice(idx, 1);
+      this.commandCompletions.delete(clientMessageId);
       throw err instanceof Error ? err : new Error(String(err));
     }
-    return ackPromise;
+    return completionPromise;
   }
 
   reconnectToStream: ChatTransport<UI_MESSAGE>["reconnectToStream"] =

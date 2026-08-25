@@ -30,6 +30,10 @@ import {
   type PendingUserMessage,
 } from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
+import {
+  CommandInputsContext,
+  type CommandInputItem,
+} from "@/components/darox-ui/command-input-context";
 
 function getUserInputId(message: UIMessage): string | undefined {
   if (message.role !== "user") return undefined;
@@ -64,7 +68,7 @@ function ensureUniqueMessageIds(messages: UIMessage[]): UIMessage[] {
     }
 
     // A retained turn can contain multiple user inputs. Older backends may
-    // assign all of their cmd-user-message echoes the retained turn's message
+    // assign all of their started message echoes the retained turn's message
     // id, even though user_input_id identifies distinct timeline boundaries.
     const stableDisambiguator = getUserInputId(message) ?? String(index);
     const baseId = `${message.id}:duplicate:${stableDisambiguator}`;
@@ -156,6 +160,7 @@ function AgentChat({
   const [pendingUserMessages, setPendingUserMessages] = useState<
     PendingUserMessage[]
   >([]);
+  const [commandInputs, setCommandInputs] = useState<CommandInputItem[]>([]);
   const resumeChatStream = useCallback(() => {
     if (resumePromiseRef.current) return;
 
@@ -301,6 +306,27 @@ function AgentChat({
     () =>
       transport.onState((state) => {
         applyBusyState(state.busy);
+        let messageIndex = 0;
+        setCommandInputs(
+          state.timeline.flatMap((entry) => {
+            if (entry.type === "message") {
+              messageIndex += 1;
+              return [];
+            }
+            if (typeof entry.client_message_id !== "string") return [];
+            return [
+              {
+                clientMessageId: entry.client_message_id,
+                beforeMessageIndex: messageIndex,
+                serverMessageId: entry.server_message_id,
+                command: entry.command,
+                status: entry.status,
+                output: entry.output,
+                error: entry.error,
+              },
+            ];
+          }),
+        );
         if (state.history === initialMessages) return;
         chat.setMessages((current) =>
           preserveUserMessageIds(current, state.history),
@@ -312,11 +338,52 @@ function AgentChat({
   useBackendCommands(url, (cmd) => {
     if (cmd.type === "cmd-turn-state") {
       applyBusyState(cmd.busy === true);
-    } else if (cmd.type === "cmd-user-message") {
-      const message = cmd.message as UIMessage | undefined;
+    } else if (cmd.type === "cmd-client-input") {
+      const payload = cmd.payload as
+        | {
+            type?: unknown;
+            status?: unknown;
+            message?: unknown;
+            command?: unknown;
+          }
+        | undefined;
+      const clientMessageId = cmd.client_message_id;
+      if (
+        payload?.type === "command" &&
+        payload.status === "accepted" &&
+        typeof clientMessageId === "string"
+      ) {
+        setPendingUserMessages((current) =>
+          current.filter(
+            (pendingMessage) =>
+              pendingMessage.clientMessageId !== clientMessageId,
+          ),
+        );
+        setCommandInputs((current) => {
+          const next: CommandInputItem = {
+            clientMessageId,
+            beforeMessageIndex: chat.messages.length,
+            serverMessageId:
+              typeof cmd.server_message_id === "string"
+                ? cmd.server_message_id
+                : undefined,
+            command: payload.command,
+            status: "accepted",
+          };
+          const index = current.findIndex(
+            (item) => item.clientMessageId === clientMessageId,
+          );
+          if (index === -1) return [...current, next];
+          return current.map((item, itemIndex) =>
+            itemIndex === index ? { ...item, ...next } : item,
+          );
+        });
+        return;
+      }
+      if (payload?.type !== "message" || payload.status !== "started") return;
+      const message = payload.message as UIMessage | undefined;
       if (!message || message.role !== "user" || typeof message.id !== "string")
         return;
-      const clientMessageId = cmd.client_message_id;
       if (
         typeof clientMessageId === "string" &&
         seenClientMessageIdsRef.current.has(clientMessageId)
@@ -349,6 +416,49 @@ function AgentChat({
       // Finish the preceding assistant segment before inserting it, then
       // attach a fresh AI SDK sink for subsequent output on the same socket.
       queueServerUserMessage(echoedMessage);
+    } else if (cmd.type === "cmd-command-completed") {
+      const input = cmd.input as
+        | {
+            client_message_id?: unknown;
+            server_message_id?: unknown;
+            payload?: { command?: unknown };
+          }
+        | undefined;
+      const clientMessageId = input?.client_message_id;
+      if (typeof clientMessageId !== "string") return;
+      setPendingUserMessages((current) =>
+        current.filter(
+          (pendingMessage) =>
+            pendingMessage.clientMessageId !== clientMessageId,
+        ),
+      );
+      setCommandInputs((current) => {
+        const completed: CommandInputItem = {
+          clientMessageId,
+          beforeMessageIndex: chat.messages.length,
+          serverMessageId:
+            typeof input?.server_message_id === "string"
+              ? input.server_message_id
+              : undefined,
+          command: input?.payload?.command,
+          status: typeof cmd.status === "string" ? cmd.status : "error",
+          output: typeof cmd.output === "string" ? cmd.output : undefined,
+          error: typeof cmd.error === "string" ? cmd.error : undefined,
+        };
+        const found = current.some(
+          (item) => item.clientMessageId === clientMessageId,
+        );
+        return found
+          ? current.map((item) =>
+              item.clientMessageId === clientMessageId
+                ? {
+                    ...completed,
+                    beforeMessageIndex: item.beforeMessageIndex,
+                  }
+                : item,
+            )
+          : [...current, completed];
+      });
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }
@@ -384,17 +494,10 @@ function AgentChat({
       }
       setPendingUserMessages((current) => [
         ...current,
-        { clientMessageId, message, status: "sending" },
+        { clientMessageId, message },
       ]);
       try {
         await transport.sendUserInput(message);
-        setPendingUserMessages((current) =>
-          current.map((pendingMessage) =>
-            pendingMessage.clientMessageId === clientMessageId
-              ? { ...pendingMessage, status: "accepted" }
-              : pendingMessage,
-          ),
-        );
       } catch (error) {
         setPendingUserMessages((current) =>
           current.filter(
@@ -419,19 +522,21 @@ function AgentChat({
                   value={pendingUserMessages}
                 >
                   <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                    <AssistantRuntimeProvider runtime={runtime}>
-                      <div
-                        className="h-full"
-                        onMouseDown={() =>
-                          isActive && clearCompletionUnread(agentId)
-                        }
-                        onKeyDown={() =>
-                          isActive && clearCompletionUnread(agentId)
-                        }
-                      >
-                        <Thread />
-                      </div>
-                    </AssistantRuntimeProvider>
+                    <CommandInputsContext.Provider value={commandInputs}>
+                      <AssistantRuntimeProvider runtime={runtime}>
+                        <div
+                          className="h-full"
+                          onMouseDown={() =>
+                            isActive && clearCompletionUnread(agentId)
+                          }
+                          onKeyDown={() =>
+                            isActive && clearCompletionUnread(agentId)
+                          }
+                        >
+                          <Thread />
+                        </div>
+                      </AssistantRuntimeProvider>
+                    </CommandInputsContext.Provider>
                   </UserTurnAnchorsContext.Provider>
                 </PendingUserMessagesContext.Provider>
               </ChatSubmitContext.Provider>
