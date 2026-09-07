@@ -174,6 +174,7 @@ function AgentChat({
     id: `${agentId}:${agentName}`,
     transport,
     messages: initialMessages,
+    experimental_throttle: 150,
   });
   const resumePromiseRef = useRef<Promise<void> | null>(null);
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);

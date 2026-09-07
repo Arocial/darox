@@ -162,6 +162,12 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       previous.id === chunk.id
     ) {
       previous.delta += chunk.delta;
+    } else if (
+      previous?.type === "tool-input-delta" &&
+      chunk.type === "tool-input-delta" &&
+      previous.toolCallId === chunk.toolCallId
+    ) {
+      previous.inputTextDelta += chunk.inputTextDelta;
     } else {
       this.pendingChunks.push(chunk);
     }
