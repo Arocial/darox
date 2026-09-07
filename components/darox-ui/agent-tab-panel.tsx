@@ -493,6 +493,36 @@ function AgentChat({
             )
           : [...current, completed];
       });
+    } else if (cmd.type === "compaction") {
+      const eventId = cmd.event_id;
+      const trigger = cmd.trigger;
+      const llmContextId = cmd.llm_context_id;
+      const timestamp = cmd.timestamp;
+      if (
+        typeof eventId !== "string" ||
+        (trigger !== "manual" &&
+          trigger !== "token_threshold" &&
+          trigger !== "tool_request") ||
+        typeof llmContextId !== "string" ||
+        typeof timestamp !== "string"
+      )
+        return;
+      setCompactionMarkers((current) => {
+        if (current.some((marker) => marker.event_id === eventId)) {
+          return current;
+        }
+        return [
+          ...current,
+          {
+            type: "compaction",
+            event_id: eventId,
+            trigger,
+            llm_context_id: llmContextId,
+            timestamp,
+            beforeMessageIndex: chat.messages.length,
+          },
+        ];
+      });
     } else if (cmd.type === "cmd-session-tree") {
       updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
     }

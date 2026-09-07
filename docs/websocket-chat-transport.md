@@ -23,10 +23,10 @@ its history to initialize `useChat`, while `ModelPill` subscribes through
 `onState()` for the model. Later `state` frames refresh both consumers after the
 runtime commits a new snapshot.
 
-Replay can begin before React installs the AI SDK stream controller or command
-listener. The transport therefore buffers UI chunks and `cmd-*` frames until
-their consumers attach. A new `state` frame resets those pending buffers because
-it establishes a newer recovery boundary.
+Replay can begin before React installs the AI SDK stream controller or timeline
+listener. The transport therefore buffers UI chunks, `cmd-*` frames, and live
+compaction markers until their consumers attach. A new `state` frame resets
+those pending buffers because it establishes a newer recovery boundary.
 
 ## Frame mapping
 
@@ -35,6 +35,7 @@ it establishes a newer recovery boundary.
 | `state` | Cache and publish committed history/model/busy state; render commands and compaction markers outside the AI SDK message list |
 | Vercel AI SDK chunks | Forward to the active AI SDK stream, or buffer until it attaches |
 | `cmd-*` | Dispatch to backend-command listeners, or buffer until they attach |
+| `compaction` | Dispatch a live compaction marker outside the AI SDK stream |
 | `cmd-client-input` with a started message payload | Establish the canonical user-message timeline boundary: flush the preceding assistant segment, append the echoed user turn, and attach a fresh AI SDK sink for later output |
 | `cmd-client-input` with an accepted command payload | Move pending input into the separate command view without touching the AI SDK stream |
 | `cmd-command-completed` | Update the matching command by `client_message_id` and resolve callers waiting for its result |

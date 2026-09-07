@@ -33,7 +33,6 @@ export type CompactionState = {
   type: "compaction";
   event_id: string;
   trigger: "manual" | "token_threshold" | "tool_request";
-  step_boundary: boolean;
   llm_context_id: string;
   timestamp: string;
 };
@@ -269,7 +268,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     if (!msg || typeof msg !== "object" || !("type" in msg)) return;
 
-    if (msg.type.startsWith("cmd-")) {
+    if (msg.type.startsWith("cmd-") || msg.type === "compaction") {
       const command = msg as BackendCommand;
       if (msg.type === "cmd-command-completed") {
         const input = command.input as
