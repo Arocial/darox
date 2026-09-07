@@ -246,7 +246,7 @@ function AgentChat({
     }
   }, [status, transport, chat.status, chat.stop]);
 
-  const runtime = useAISDKRuntime(chat);
+  const runtime = useAISDKRuntime(chat, { joinStrategy: "none" });
 
   const setCompletionUnread = useAgentTabs((s) => s.setCompletionUnread);
   const clearCompletionUnread = useAgentTabs((s) => s.clearCompletionUnread);
