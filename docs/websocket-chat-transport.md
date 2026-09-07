@@ -13,9 +13,10 @@ state, replies, cancellation, and structured commands.
 ## State bootstrap and recovery
 
 The backend sends a `state` frame first when a connection is established. It
-contains one ordered discriminated history of UI messages and completed
-commands, the selected model, and the retained turn's current `busy` state. The backend then
-replays events emitted since that snapshot before streaming live events.
+contains one ordered discriminated history of UI messages, completed commands,
+and compaction markers, plus the selected model and the retained turn's current
+`busy` state. The backend then replays events emitted since that snapshot before
+streaming live events.
 
 `waitForState()` replaces the former HTTP `/state` request. The agent panel uses
 its history to initialize `useChat`, while `ModelPill` subscribes through
@@ -31,7 +32,7 @@ it establishes a newer recovery boundary.
 
 | Server frame | Handling |
 | --- | --- |
-| `state` | Cache and publish committed history/model/busy state; not forwarded to AI SDK |
+| `state` | Cache and publish committed history/model/busy state; render commands and compaction markers outside the AI SDK message list |
 | Vercel AI SDK chunks | Forward to the active AI SDK stream, or buffer until it attaches |
 | `cmd-*` | Dispatch to backend-command listeners, or buffer until they attach |
 | `cmd-client-input` with a started message payload | Establish the canonical user-message timeline boundary: flush the preceding assistant segment, append the echoed user turn, and attach a fresh AI SDK sink for later output |

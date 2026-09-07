@@ -26,7 +26,17 @@ export type SessionState = {
 
 export type StateTimelineEntry =
   | { type: "message"; message: UIMessage }
-  | ({ type: "command" } & CommandState);
+  | ({ type: "command" } & CommandState)
+  | CompactionState;
+
+export type CompactionState = {
+  type: "compaction";
+  event_id: string;
+  trigger: "manual" | "token_threshold" | "tool_request";
+  step_boundary: boolean;
+  llm_context_id: string;
+  timestamp: string;
+};
 
 export type CommandState = {
   client_message_id?: string;

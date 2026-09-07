@@ -65,6 +65,8 @@ import {
   type PendingUserMessage,
 } from "@/components/darox-ui/chat-submit-context";
 import { CommandInputList } from "@/components/darox-ui/command-input-list";
+import { CompactionMarkerList } from "@/components/darox-ui/compaction-marker-list";
+import { useCompactionMarkers } from "@/components/darox-ui/compaction-marker-context";
 import { useCommandInputs } from "@/components/darox-ui/command-input-context";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
@@ -103,12 +105,16 @@ export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const isEmpty = useAuiState(isNewChatView);
   const pendingMessages = usePendingUserMessages();
   const commands = useCommandInputs();
+  const compactionMarkers = useCompactionMarkers();
 
   return (
     <ThreadComponentsContext.Provider value={components}>
       <ThreadRoot
         isEmpty={
-          isEmpty && pendingMessages.length === 0 && commands.length === 0
+          isEmpty &&
+          pendingMessages.length === 0 &&
+          commands.length === 0 &&
+          compactionMarkers.length === 0
         }
       />
     </ThreadComponentsContext.Provider>
@@ -153,11 +159,13 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
             <ThreadPrimitive.Messages>
               {({ message }) => (
                 <>
+                  <CompactionMarkerList beforeMessageIndex={message.index} />
                   <CommandInputList beforeMessageIndex={message.index} />
                   <ThreadMessage />
                 </>
               )}
             </ThreadPrimitive.Messages>
+            <CompactionMarkerList beforeMessageIndex={messageCount} />
             <CommandInputList beforeMessageIndex={messageCount} />
             <PendingUserMessages />
           </div>

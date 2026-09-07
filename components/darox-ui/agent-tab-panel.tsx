@@ -35,6 +35,10 @@ import {
   CommandInputsContext,
   type CommandInputItem,
 } from "@/components/darox-ui/command-input-context";
+import {
+  CompactionMarkersContext,
+  type CompactionMarkerItem,
+} from "@/components/darox-ui/compaction-marker-context";
 
 function getUserInputId(message: UIMessage): string | undefined {
   if (message.role !== "user") return undefined;
@@ -175,13 +179,14 @@ function AgentChat({
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);
   const userBoundaryDrainRef = useRef<Promise<void> | null>(null);
   const seenClientMessageIdsRef = useRef(new Set<string>());
-  const appliedCommandTimelineRef = useRef<SessionState["timeline"] | null>(
-    null,
-  );
+  const appliedTimelineRef = useRef<SessionState["timeline"] | null>(null);
   const [pendingUserMessages, setPendingUserMessages] = useState<
     PendingUserMessage[]
   >([]);
   const [commandInputs, setCommandInputs] = useState<CommandInputItem[]>([]);
+  const [compactionMarkers, setCompactionMarkers] = useState<
+    CompactionMarkerItem[]
+  >([]);
   const resumeChatStream = useCallback(() => {
     if (resumePromiseRef.current) return;
 
@@ -327,29 +332,34 @@ function AgentChat({
     () =>
       transport.onState((state) => {
         applyBusyState(state.busy);
-        if (state.timeline !== appliedCommandTimelineRef.current) {
-          appliedCommandTimelineRef.current = state.timeline;
+        if (state.timeline !== appliedTimelineRef.current) {
+          appliedTimelineRef.current = state.timeline;
           let messageIndex = 0;
-          setCommandInputs(
-            state.timeline.flatMap((entry) => {
-              if (entry.type === "message") {
-                messageIndex += 1;
-                return [];
-              }
-              if (typeof entry.client_message_id !== "string") return [];
-              return [
-                {
-                  clientMessageId: entry.client_message_id,
-                  beforeMessageIndex: messageIndex,
-                  serverMessageId: entry.server_message_id,
-                  command: entry.command,
-                  status: entry.status,
-                  output: entry.output,
-                  error: entry.error,
-                },
-              ];
-            }),
-          );
+          const commands: CommandInputItem[] = [];
+          const compactions: CompactionMarkerItem[] = [];
+          for (const entry of state.timeline) {
+            if (entry.type === "message") {
+              messageIndex += 1;
+            } else if (entry.type === "command") {
+              if (typeof entry.client_message_id !== "string") continue;
+              commands.push({
+                clientMessageId: entry.client_message_id,
+                beforeMessageIndex: messageIndex,
+                serverMessageId: entry.server_message_id,
+                command: entry.command,
+                status: entry.status,
+                output: entry.output,
+                error: entry.error,
+              });
+            } else if (entry.type === "compaction") {
+              compactions.push({
+                ...entry,
+                beforeMessageIndex: messageIndex,
+              });
+            }
+          }
+          setCommandInputs(commands);
+          setCompactionMarkers(compactions);
         }
         if (state.history === initialMessages) return;
         chat.setMessages((current) =>
@@ -546,21 +556,25 @@ function AgentChat({
                   value={pendingUserMessages}
                 >
                   <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                    <CommandInputsContext.Provider value={commandInputs}>
-                      <AssistantRuntimeProvider runtime={runtime}>
-                        <div
-                          className="h-full"
-                          onMouseDown={() =>
-                            isActive && clearCompletionUnread(agentId)
-                          }
-                          onKeyDown={() =>
-                            isActive && clearCompletionUnread(agentId)
-                          }
-                        >
-                          <Thread />
-                        </div>
-                      </AssistantRuntimeProvider>
-                    </CommandInputsContext.Provider>
+                    <CompactionMarkersContext.Provider
+                      value={compactionMarkers}
+                    >
+                      <CommandInputsContext.Provider value={commandInputs}>
+                        <AssistantRuntimeProvider runtime={runtime}>
+                          <div
+                            className="h-full"
+                            onMouseDown={() =>
+                              isActive && clearCompletionUnread(agentId)
+                            }
+                            onKeyDown={() =>
+                              isActive && clearCompletionUnread(agentId)
+                            }
+                          >
+                            <Thread />
+                          </div>
+                        </AssistantRuntimeProvider>
+                      </CommandInputsContext.Provider>
+                    </CompactionMarkersContext.Provider>
                   </UserTurnAnchorsContext.Provider>
                 </PendingUserMessagesContext.Provider>
               </ChatSubmitContext.Provider>
