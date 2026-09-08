@@ -11,11 +11,13 @@ import {
   httpBaseToWsUrl,
 } from "@/components/darox-ui/websocket-chat-transport";
 
+import type { StreamMode } from "@/components/darox-ui/stream-mode-store";
 import type { SuggestionItem } from "@/types/chat";
-export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
-  agentId,
-  subagentId,
-}) => {
+export const ModelPill: FC<{
+  agentId: string;
+  subagentId: string;
+  streamMode: StreamMode;
+}> = ({ agentId, subagentId, streamMode }) => {
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const [model, setModel] = useState<string | null>(null);
@@ -27,8 +29,8 @@ export const ModelPill: FC<{ agentId: string; subagentId: string }> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const wsUrl = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, subagentId),
-    [apiBase, agentId, subagentId],
+    () => httpBaseToWsUrl(apiBase, agentId, subagentId, streamMode),
+    [apiBase, agentId, subagentId, streamMode],
   );
 
   // The WebSocket state snapshot is the source of truth for the model.

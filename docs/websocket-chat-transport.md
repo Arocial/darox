@@ -4,8 +4,11 @@
 `ChatTransport` over the backend's session-node WebSocket endpoint:
 
 ```text
-/api/sessions/{root_session_id}/nodes/{target_session_id}/ws
+/api/sessions/{root_session_id}/nodes/{target_session_id}/ws?stream_mode={full|concise}
 ```
+
+`full` streams the complete event sequence. `concise` retains user input,
+state, and completed output while omitting intermediate model and tool events.
 
 The connection carries Vercel AI SDK chunks, application commands, session
 state, replies, cancellation, and structured commands.
@@ -56,6 +59,13 @@ The transport opens lazily through `waitForState()`, `reconnectToStream()`,
 `sendMessages()`, or `sendCommand()`. A 200 ms delayed close allows React
 StrictMode's unmount/remount cycle to reuse the connection.
 
+The global stream preference is persisted as `auto`, `full`, or `concise`.
+`auto` resolves once at application startup: viewports below 768px use
+`concise`, and wider viewports use `full`. Resizing does not change the resolved
+mode. A preference change reconnects the visible session node immediately;
+other mounted session and subagent sockets are released, then reconnect with
+the new mode only when selected.
+
 The agent panel calls `resumeStream()` through a single-flight wrapper after
 state and buffered commands have been applied. A live started message in `cmd-client-input`
 flushes and closes the preceding sink, waits for AI SDK update jobs to settle,
@@ -94,11 +104,12 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
 - An unexpected socket close errors the active stream and pending state load.
   The transport does not automatically retry; remounting or reloading opens a
   new socket, whose snapshot and cached events restore server state.
-- Inactive session nodes reject WebSocket connections, so their history becomes
-  available after the runtime is started.
+- Saved inactive nodes can be connected; submitting input starts their runtime
+  lazily.
 
 ## Files
 
 - `components/darox-ui/websocket-chat-transport.ts` — transport and shared cache.
-- `components/darox-ui/agent-tab-panel.tsx` — history bootstrap and chat wiring.
+- `components/darox-ui/stream-mode-store.ts` — persisted preference and startup-only auto detection.
+- `components/darox-ui/agent-tab-panel.tsx` — history bootstrap, chat wiring, and lazy mode reconnection.
 - `components/darox-ui/model-pill.tsx` — model state subscription and switching.

@@ -52,7 +52,14 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 ### Messaging Architecture
 
-Communication with the backend uses a unified WebSocket channel (`WebSocketChatTransport`) that multiplexes two types of data:
+Communication with the backend uses a unified WebSocket channel (`WebSocketChatTransport`) that multiplexes two types of data. Each connection includes a `stream_mode` query parameter:
+
+- `full` streams the complete event sequence.
+- `concise` keeps user input, state, and completed output while omitting intermediate model/tool activity.
+
+The global frontend preference is `auto`, `full`, or `concise`. `auto` resolves once at application startup to `concise` for viewports below 768px and `full` otherwise; resize events do not change it. Changing the preference reconnects the visible session node immediately. Other mounted session/subagent connections are released and reconnect lazily when selected.
+
+The channel carries two types of data:
 
 1. **AI Generation Stream**: Standard Vercel AI SDK content parts (`text-*`, `tool-*`, etc.) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
@@ -66,7 +73,7 @@ User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back ove
 ### State Management
 
 - **Zustand** for component-level state (e.g., attachment handling)
-- **localStorage** for command history persistence
+- **localStorage** for command history, backend configuration, and the global stream-mode preference
 
 ### Key Patterns
 

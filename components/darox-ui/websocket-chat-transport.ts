@@ -509,16 +509,20 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 }
 
 import { appendWsToken } from "@/lib/api";
+import type { StreamMode } from "@/components/darox-ui/stream-mode-store";
 
 export function httpBaseToWsUrl(
   apiBase: string,
   rootSessionId: string,
   targetSessionId: string,
+  streamMode: StreamMode,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return appendWsToken(
+  const url = new URL(
     `${wsBase}/api/sessions/${rootSessionId}/nodes/${targetSessionId}/ws`,
   );
+  url.searchParams.set("stream_mode", streamMode);
+  return appendWsToken(url.toString());
 }
 
 // Module-level cache keyed by URL. It enforces the backend's one-WebSocket-per

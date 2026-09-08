@@ -23,6 +23,10 @@ import {
   useBackendStore,
 } from "@/components/darox-ui/backend-store";
 import { CustomBackendDialog } from "@/components/darox-ui/browser-api-prompt";
+import {
+  useStreamModeStore,
+  type StreamModePreference,
+} from "@/components/darox-ui/stream-mode-store";
 import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
 
 function formatRelativeTime(dateString?: string) {
@@ -71,6 +75,28 @@ async function pickDirectory(): Promise<string | null> {
   const dir = prompt("Enter workspace directory path:");
   return dir || null;
 }
+
+const STREAM_MODE_OPTIONS: Array<{
+  value: StreamModePreference;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "auto",
+    label: "Auto",
+    description: "Concise on mobile, full otherwise",
+  },
+  {
+    value: "full",
+    label: "Full",
+    description: "Include thinking and tool activity",
+  },
+  {
+    value: "concise",
+    label: "Concise",
+    description: "Show prompts and completed output",
+  },
+];
 
 const ActiveTabItem = ({
   tab,
@@ -264,7 +290,13 @@ export const AgentTabBar = () => {
 
   const [restarting, setRestarting] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showStreamModeMenu, setShowStreamModeMenu] = useState(false);
   const [showCustomDialog, setShowCustomDialog] = useState(false);
+  const streamModePreference = useStreamModeStore((state) => state.preference);
+  const resolvedStreamMode = useStreamModeStore((state) => state.resolvedMode);
+  const setStreamModePreference = useStreamModeStore(
+    (state) => state.setPreference,
+  );
 
   useEffect(() => {
     if (backendStatus === "connected") {
@@ -459,207 +491,279 @@ export const AgentTabBar = () => {
           )}
         </div>
       </div>
-      <div className="relative flex items-center justify-between gap-1 border-t px-2 py-2">
-        <button
-          onClick={() => setShowProfileMenu(!showProfileMenu)}
-          className="group -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left text-muted-foreground text-xs transition-colors hover:bg-muted/50 hover:text-foreground"
-          title="Switch Backend"
-        >
-          <span
-            className={`inline-block size-2 shrink-0 rounded-full ${
-              backendStatus === "connected"
-                ? "bg-green-500"
-                : backendStatus === "connecting"
-                  ? "animate-pulse bg-yellow-500"
-                  : "bg-red-500"
-            }`}
-          />
-          <div className="min-w-0 flex-1 truncate font-medium">
-            {activeBackendId === "custom:default"
-              ? customBackend?.url || "Custom Backend"
-              : activeProfile || "No Backend"}
-            <span className="ml-1 hidden font-normal opacity-70 xl:inline">
-              (
-              {backendStatus === "connected"
-                ? "Connected"
-                : backendStatus === "connecting"
-                  ? "Connecting"
-                  : "Disconnected"}
-              )
+      <div className="flex flex-col gap-1 border-t px-2 py-2">
+        <div className="relative flex w-full items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setShowStreamModeMenu(!showStreamModeMenu);
+              setShowProfileMenu(false);
+            }}
+            className="group -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left text-muted-foreground text-xs transition-colors hover:bg-muted/50 hover:text-foreground"
+            title="Select stream mode"
+          >
+            <span className="w-14 shrink-0 font-medium text-muted-foreground/80">
+              Stream
             </span>
-          </div>
-          <ChevronUpIcon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
-        </button>
+            <span className="min-w-0 flex-1 truncate font-medium text-foreground/80">
+              {streamModePreference === "auto"
+                ? `Auto · ${resolvedStreamMode === "concise" ? "Concise" : "Full"}`
+                : streamModePreference === "concise"
+                  ? "Concise"
+                  : "Full"}
+            </span>
+            <ChevronUpIcon className="size-4 shrink-0 transition-colors group-hover:text-foreground" />
+          </button>
 
-        {showProfileMenu && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowProfileMenu(false)}
-            />
-            <div className="absolute bottom-full left-2 z-50 mb-2 flex w-64 flex-col overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground text-xs shadow-md">
-              {isDesktop && (
-                <div className="border-b px-2 py-1.5 font-semibold text-muted-foreground">
-                  Automatic Profiles
+          {showStreamModeMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowStreamModeMenu(false)}
+              />
+              <div className="absolute bottom-full left-0 z-50 mb-2 flex w-64 flex-col overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground text-xs shadow-md">
+                <div className="border-b px-3 py-1.5 font-semibold text-muted-foreground">
+                  Stream Mode
                 </div>
-              )}
-              {isDesktop &&
-                profiles.map((p) => {
-                  const instStatus = instances[p]?.status || "Stopped";
-                  const isRunning =
-                    instStatus === "Running" || instStatus === "Starting";
-                  const failed =
-                    instStatus === "StartFailed" || instStatus === "Crashed";
-                  return (
-                    <div
-                      key={p}
-                      className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${activeBackendId === `profile:${p}` ? "bg-accent/50" : ""}`}
-                      onClick={async () => {
-                        if (activeBackendId !== `profile:${p}` || !isRunning)
-                          await switchBackend(p);
-                        setShowProfileMenu(false);
-                      }}
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className={`inline-block size-1.5 shrink-0 rounded-full ${isRunning ? "bg-green-500" : "bg-transparent"}`}
-                        />
-                        <span className="truncate">{p}</span>
-                        {failed && (
-                          <span
-                            title={
-                              instances[p]?.error?.message || "Backend failed"
-                            }
-                          >
-                            <AlertTriangleIcon className="size-3 text-destructive" />
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        {isRunning && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await restartBackend(p);
-                            }}
-                            className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
-                            title={`Restart ${p}`}
-                          >
-                            <RotateCwIcon className="size-3" />
-                          </button>
-                        )}
-                        {isRunning && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await closeBackend(p);
-                            }}
-                            className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
-                            title={`Close ${p}`}
-                          >
-                            <XIcon className="size-3" />
-                          </button>
-                        )}
-                      </div>
+                {STREAM_MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setStreamModePreference(option.value);
+                      setShowStreamModeMenu(false);
+                    }}
+                    className={`px-3 py-2 text-left transition-colors hover:bg-accent hover:text-accent-foreground ${
+                      streamModePreference === option.value
+                        ? "bg-accent/50"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 font-medium">
+                      <span>{option.label}</span>
+                      {streamModePreference === option.value && (
+                        <span className="text-primary">✓</span>
+                      )}
                     </div>
-                  );
-                })}
-              {isDesktop && profiles.length === 0 && (
-                <div className="px-2 py-1.5 opacity-50">No profiles found</div>
-              )}
-              <div className="border-y px-2 py-1.5 font-semibold text-muted-foreground">
-                Custom Backend
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {option.description}
+                      {option.value === "auto" &&
+                        ` · currently ${resolvedStreamMode}`}
+                    </div>
+                  </button>
+                ))}
               </div>
-              {customBackend && (
-                <div
-                  className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${
-                    activeBackendId === "custom:default" ? "bg-accent/50" : ""
-                  }`}
-                  onClick={async () => {
-                    await selectCustomBackend();
-                    setShowProfileMenu(false);
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`inline-block size-1.5 shrink-0 rounded-full ${
-                        activeBackendId === "custom:default" &&
-                        backendStatus === "connected"
-                          ? "bg-green-500"
-                          : "bg-transparent"
-                      }`}
-                    />
-                    <span className="truncate">{customBackend.url}</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      onClick={async (event) => {
-                        event.stopPropagation();
-                        await selectCustomBackend();
-                      }}
-                      className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
-                      title="Reconnect"
-                    >
-                      <RotateCwIcon className="size-3" />
-                    </button>
-                    {activeBackendId === "custom:default" && (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          disconnectCustomBackend();
-                        }}
-                        className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
-                        title="Disconnect"
-                      >
-                        <PowerIcon className="size-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProfileMenu(false);
-                  setShowCustomDialog(true);
-                }}
-                className="flex items-center gap-2 px-2 py-1.5 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              >
-                <SettingsIcon className="size-3.5" />
-                {customBackend
-                  ? "Edit Custom Backend…"
-                  : "Configure Custom Backend…"}
-              </button>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
 
-        <button
-          onClick={async () => {
-            setRestarting(true);
-            if (activeBackendId === "custom:default") {
-              await selectCustomBackend();
-            } else if (activeProfile) {
-              await restartBackend(activeProfile);
+        <div className="relative flex w-full items-center justify-between gap-1">
+          <button
+            onClick={() => {
+              setShowProfileMenu(!showProfileMenu);
+              setShowStreamModeMenu(false);
+            }}
+            className="group -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left text-muted-foreground text-xs transition-colors hover:bg-muted/50 hover:text-foreground"
+            title="Switch Backend"
+          >
+            <span
+              className={`inline-block size-2 shrink-0 rounded-full ${
+                backendStatus === "connected"
+                  ? "bg-green-500"
+                  : backendStatus === "connecting"
+                    ? "animate-pulse bg-yellow-500"
+                    : "bg-red-500"
+              }`}
+            />
+            <div className="min-w-0 flex-1 truncate font-medium">
+              {activeBackendId === "custom:default"
+                ? customBackend?.url || "Custom Backend"
+                : activeProfile || "No Backend"}
+              <span className="ml-1 hidden font-normal opacity-70 xl:inline">
+                (
+                {backendStatus === "connected"
+                  ? "Connected"
+                  : backendStatus === "connecting"
+                    ? "Connecting"
+                    : "Disconnected"}
+                )
+              </span>
+            </div>
+            <ChevronUpIcon className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+          </button>
+
+          {showProfileMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowProfileMenu(false)}
+              />
+              <div className="absolute bottom-full left-2 z-50 mb-2 flex w-64 flex-col overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground text-xs shadow-md">
+                {isDesktop && (
+                  <div className="border-b px-2 py-1.5 font-semibold text-muted-foreground">
+                    Automatic Profiles
+                  </div>
+                )}
+                {isDesktop &&
+                  profiles.map((p) => {
+                    const instStatus = instances[p]?.status || "Stopped";
+                    const isRunning =
+                      instStatus === "Running" || instStatus === "Starting";
+                    const failed =
+                      instStatus === "StartFailed" || instStatus === "Crashed";
+                    return (
+                      <div
+                        key={p}
+                        className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${activeBackendId === `profile:${p}` ? "bg-accent/50" : ""}`}
+                        onClick={async () => {
+                          if (activeBackendId !== `profile:${p}` || !isRunning)
+                            await switchBackend(p);
+                          setShowProfileMenu(false);
+                        }}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={`inline-block size-1.5 shrink-0 rounded-full ${isRunning ? "bg-green-500" : "bg-transparent"}`}
+                          />
+                          <span className="truncate">{p}</span>
+                          {failed && (
+                            <span
+                              title={
+                                instances[p]?.error?.message || "Backend failed"
+                              }
+                            >
+                              <AlertTriangleIcon className="size-3 text-destructive" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {isRunning && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await restartBackend(p);
+                              }}
+                              className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
+                              title={`Restart ${p}`}
+                            >
+                              <RotateCwIcon className="size-3" />
+                            </button>
+                          )}
+                          {isRunning && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await closeBackend(p);
+                              }}
+                              className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
+                              title={`Close ${p}`}
+                            >
+                              <XIcon className="size-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                {isDesktop && profiles.length === 0 && (
+                  <div className="px-2 py-1.5 opacity-50">
+                    No profiles found
+                  </div>
+                )}
+                <div className="border-y px-2 py-1.5 font-semibold text-muted-foreground">
+                  Custom Backend
+                </div>
+                {customBackend && (
+                  <div
+                    className={`flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground ${
+                      activeBackendId === "custom:default" ? "bg-accent/50" : ""
+                    }`}
+                    onClick={async () => {
+                      await selectCustomBackend();
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`inline-block size-1.5 shrink-0 rounded-full ${
+                          activeBackendId === "custom:default" &&
+                          backendStatus === "connected"
+                            ? "bg-green-500"
+                            : "bg-transparent"
+                        }`}
+                      />
+                      <span className="truncate">{customBackend.url}</span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          await selectCustomBackend();
+                        }}
+                        className="rounded p-1 opacity-70 hover:bg-muted hover:opacity-100"
+                        title="Reconnect"
+                      >
+                        <RotateCwIcon className="size-3" />
+                      </button>
+                      {activeBackendId === "custom:default" && (
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            disconnectCustomBackend();
+                          }}
+                          className="rounded p-1 opacity-70 hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
+                          title="Disconnect"
+                        >
+                          <PowerIcon className="size-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setShowCustomDialog(true);
+                  }}
+                  className="flex items-center gap-2 px-2 py-1.5 text-left text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                >
+                  <SettingsIcon className="size-3.5" />
+                  {customBackend
+                    ? "Edit Custom Backend…"
+                    : "Configure Custom Backend…"}
+                </button>
+              </div>
+            </>
+          )}
+
+          <button
+            onClick={async () => {
+              setRestarting(true);
+              if (activeBackendId === "custom:default") {
+                await selectCustomBackend();
+              } else if (activeProfile) {
+                await restartBackend(activeProfile);
+              }
+              setRestarting(false);
+            }}
+            disabled={restarting || !activeBackendId}
+            className="ml-1 shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+            title={
+              activeBackendId === "custom:default"
+                ? "Reconnect Custom Backend"
+                : "Restart Active Backend"
             }
-            setRestarting(false);
-          }}
-          disabled={restarting || !activeBackendId}
-          className="ml-1 shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
-          title={
-            activeBackendId === "custom:default"
-              ? "Reconnect Custom Backend"
-              : "Restart Active Backend"
-          }
-        >
-          <RotateCwIcon
-            className={`size-4 ${restarting ? "animate-spin" : ""}`}
+          >
+            <RotateCwIcon
+              className={`size-4 ${restarting ? "animate-spin" : ""}`}
+            />
+          </button>
+          <CustomBackendDialog
+            open={showCustomDialog}
+            onOpenChange={setShowCustomDialog}
           />
-        </button>
-        <CustomBackendDialog
-          open={showCustomDialog}
-          onOpenChange={setShowCustomDialog}
-        />
+        </div>
       </div>
     </div>
   );

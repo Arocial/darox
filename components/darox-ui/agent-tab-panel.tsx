@@ -36,6 +36,10 @@ import {
   type CommandInputItem,
 } from "@/components/darox-ui/command-input-context";
 import {
+  useStreamModeStore,
+  type StreamMode,
+} from "@/components/darox-ui/stream-mode-store";
+import {
   CompactionMarkersContext,
   type CompactionMarkerItem,
 } from "@/components/darox-ui/compaction-marker-context";
@@ -154,6 +158,7 @@ function AgentChat({
   status,
   workspace,
   initialMessages,
+  streamMode,
 }: {
   agentId: string;
   subagentId: string;
@@ -161,12 +166,13 @@ function AgentChat({
   status: string;
   workspace: string;
   initialMessages: UIMessage[];
+  streamMode: StreamMode;
 }) {
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, subagentId),
-    [apiBase, agentId, subagentId],
+    () => httpBaseToWsUrl(apiBase, agentId, subagentId, streamMode),
+    [apiBase, agentId, subagentId, streamMode],
   );
   const transport = useMemo(() => acquireTransport(url), [url]);
 
@@ -623,21 +629,38 @@ function AgentChatLoader({
   agentName,
   status,
   workspace,
+  isActive,
+  desiredStreamMode,
 }: {
   agentId: string;
   subagentId: string;
   agentName: string;
   status: string;
   workspace: string;
+  isActive: boolean;
+  desiredStreamMode: StreamMode;
 }) {
+  const apiBase = useBackendStore((state) => state.apiBase);
+  const [connectionMode, setConnectionMode] = useState<StreamMode | null>(
+    desiredStreamMode,
+  );
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     null,
   );
 
   useEffect(() => {
+    if (isActive) {
+      setConnectionMode(desiredStreamMode);
+    } else if (connectionMode !== desiredStreamMode) {
+      setConnectionMode(null);
+    }
+  }, [connectionMode, desiredStreamMode, isActive]);
+
+  useEffect(() => {
     setInitialMessages(null);
-    const apiBase = useBackendStore.getState().apiBase;
-    const url = httpBaseToWsUrl(apiBase, agentId, subagentId);
+    if (!connectionMode) return;
+
+    const url = httpBaseToWsUrl(apiBase, agentId, subagentId, connectionMode);
     const transport = acquireTransport(url);
     let cancelled = false;
     transport
@@ -658,9 +681,9 @@ function AgentChatLoader({
     // here briefly removes the command listener, so a completion-time command
     // can be buffered and replayed on top of a snapshot that already contains
     // the same user message.
-  }, [agentId, subagentId]);
+  }, [agentId, apiBase, connectionMode, subagentId]);
 
-  if (initialMessages === null) {
+  if (initialMessages === null || connectionMode === null) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         Loading history...
@@ -676,6 +699,7 @@ function AgentChatLoader({
       status={status}
       workspace={workspace}
       initialMessages={initialMessages}
+      streamMode={connectionMode}
     />
   );
 }
@@ -700,6 +724,8 @@ export function AgentTabPanel({
   const [mounted, setMounted] = useState<Set<string>>(
     () => new Set([agentTab.id]),
   );
+  const isRootActive = useAgentTabs((state) => state.activeId === agentId);
+  const desiredStreamMode = useStreamModeStore((state) => state.resolvedMode);
 
   const handleSelect = (id: string) => {
     setActiveSubagentId(id);
@@ -730,13 +756,21 @@ export function AgentTabPanel({
               agentName={agent.name}
               status={agent.status}
               workspace={workspace}
+              isActive={isRootActive && activeSubagentId === agent.id}
+              desiredStreamMode={desiredStreamMode}
             />
           </div>
         );
       })}
-      <div className="absolute top-3 left-3 z-20">
-        <ModelPill agentId={agentId} subagentId={activeSubagentId} />
-      </div>
+      {isRootActive && (
+        <div className="absolute top-3 left-3 z-20">
+          <ModelPill
+            agentId={agentId}
+            subagentId={activeSubagentId}
+            streamMode={desiredStreamMode}
+          />
+        </div>
+      )}
       {agents.length > 1 && (
         <div className="absolute top-3 right-3 z-20 flex min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm">
           <div className="mb-2 rounded-t-md border-border border-b bg-muted/60 px-3 py-1.5 font-semibold text-foreground/80 text-xs uppercase tracking-wider">
