@@ -40,11 +40,11 @@ export function AgentNavigation() {
           </Button>
         </DialogTrigger>
         <DialogContent
-          className="flex max-h-[85dvh] w-80 flex-col overflow-hidden p-0 pt-6"
+          className="flex h-[85dvh] w-80 flex-col overflow-hidden p-0 pt-6"
           aria-describedby={undefined}
         >
           <DialogTitle className="px-4">Sessions and settings</DialogTitle>
-          <div className="min-h-0 overflow-auto [&>div]:w-full">
+          <div className="flex min-h-0 flex-1 overflow-hidden [&>div]:w-full">
             <AgentTabBar />
           </div>
         </DialogContent>
