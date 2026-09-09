@@ -74,6 +74,7 @@ User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back ove
 
 - **Zustand** for component-level state (e.g., attachment handling)
 - **localStorage** for command history, backend configuration, and the global stream-mode preference
+- Custom backends are stored as a named list with stable `custom:<id>` identities. The browser restores the last selected custom backend; remembered tokens use localStorage and session-only tokens use sessionStorage.
 
 ### Key Patterns
 

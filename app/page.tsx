@@ -42,7 +42,7 @@ export default function Chat() {
   useEffect(() => {
     const backend = useBackendStore.getState();
     let unlisten: (() => void) | undefined;
-    backend.hydrateCustomBackend();
+    backend.hydrateCustomBackends();
     backend.setupDesktopListeners().then((fn) => {
       unlisten = fn;
     });

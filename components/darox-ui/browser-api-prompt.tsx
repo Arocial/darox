@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
-import { useBackendStore } from "@/components/darox-ui/backend-store";
+import {
+  type CustomBackendConfig,
+  useBackendStore,
+} from "@/components/darox-ui/backend-store";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,29 +15,43 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-function CustomBackendForm({ onConnected }: { onConnected?: () => void }) {
-  const customBackend = useBackendStore((state) => state.customBackend);
+function CustomBackendForm({
+  backend,
+  onConnected,
+}: {
+  backend?: CustomBackendConfig;
+  onConnected?: () => void;
+}) {
   const connect = useBackendStore((state) => state.connectCustomBackend);
-  const [url, setUrl] = useState(customBackend?.url || "");
-  const [token, setToken] = useState(customBackend?.token || "");
+  const [name, setName] = useState(backend?.name || "");
+  const [url, setUrl] = useState(backend?.url || "");
+  const [token, setToken] = useState(backend?.token || "");
   const [rememberToken, setRememberToken] = useState(
-    customBackend?.rememberToken || false,
+    backend?.rememberToken || false,
   );
   const [showToken, setShowToken] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setUrl(customBackend?.url || "");
-    setToken(customBackend?.token || "");
-    setRememberToken(customBackend?.rememberToken || false);
-  }, [customBackend]);
+    setName(backend?.name || "");
+    setUrl(backend?.url || "");
+    setToken(backend?.token || "");
+    setRememberToken(backend?.rememberToken || false);
+    setError("");
+  }, [backend]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
-    const connected = await connect({ url, token, rememberToken });
+    const connected = await connect({
+      id: backend?.id,
+      name,
+      url,
+      token,
+      rememberToken,
+    });
     setSubmitting(false);
     if (connected) onConnected?.();
     else
@@ -45,6 +62,17 @@ function CustomBackendForm({ onConnected }: { onConnected?: () => void }) {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium">Name</span>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Development"
+          autoCapitalize="none"
+          autoCorrect="off"
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </label>
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">Backend URL</span>
         <input
@@ -90,7 +118,11 @@ function CustomBackendForm({ onConnected }: { onConnected?: () => void }) {
       {error && <p className="text-destructive text-sm">{error}</p>}
       <DialogFooter>
         <Button type="submit" disabled={!url.trim() || submitting}>
-          {submitting ? "Connecting…" : "Connect"}
+          {submitting
+            ? "Connecting…"
+            : backend
+              ? "Save and connect"
+              : "Add and connect"}
         </Button>
       </DialogFooter>
     </form>
@@ -100,31 +132,119 @@ function CustomBackendForm({ onConnected }: { onConnected?: () => void }) {
 export function CustomBackendDialog({
   open,
   onOpenChange,
+  backendId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  backendId?: string;
 }) {
+  const backend = useBackendStore((state) =>
+    state.customBackends.find((item) => item.id === backendId),
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Custom Backend</DialogTitle>
+          <DialogTitle>
+            {backend ? "Edit Custom Backend" : "Add Custom Backend"}
+          </DialogTitle>
         </DialogHeader>
-        <CustomBackendForm onConnected={() => onOpenChange(false)} />
+        <CustomBackendForm
+          backend={backend}
+          onConnected={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );
 }
 
 export function BrowserApiPrompt() {
+  const customBackends = useBackendStore((state) => state.customBackends);
+  const selectCustomBackend = useBackendStore(
+    (state) => state.selectCustomBackend,
+  );
+  const [editingId, setEditingId] = useState<string>();
+  const [connectingId, setConnectingId] = useState<string>();
+  const [error, setError] = useState("");
+  const editingBackend = customBackends.find(
+    (backend) => backend.id === editingId,
+  );
+
+  const connect = async (id: string) => {
+    setError("");
+    setConnectingId(id);
+    const connected = await selectCustomBackend(id);
+    setConnectingId(undefined);
+    if (!connected) {
+      setError("Unable to connect to the selected backend.");
+    }
+  };
+
   return (
     <div className="flex h-dvh items-center justify-center bg-background p-4 text-foreground">
       <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
         <h2 className="mb-2 font-semibold text-xl">Connect to Backend</h2>
         <p className="mb-5 text-muted-foreground text-sm">
-          Enter the URL and API token for your Darox backend.
+          Select a saved backend or add another Darox backend.
         </p>
-        <CustomBackendForm />
+        {customBackends.length > 0 && (
+          <div className="mb-5 space-y-2">
+            {customBackends.map((backend) => (
+              <div
+                key={backend.id}
+                className="flex min-w-0 items-center gap-2 rounded-md border p-2"
+              >
+                <button
+                  type="button"
+                  disabled={Boolean(connectingId)}
+                  onClick={() => void connect(backend.id)}
+                  className="min-w-0 flex-1 text-left disabled:opacity-50"
+                >
+                  <span className="block truncate font-medium text-sm">
+                    {backend.name}
+                  </span>
+                  <span className="block truncate text-muted-foreground text-xs">
+                    {backend.url}
+                  </span>
+                </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditingId(backend.id)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={Boolean(connectingId)}
+                  onClick={() => void connect(backend.id)}
+                >
+                  {connectingId === backend.id ? "Connecting…" : "Connect"}
+                </Button>
+              </div>
+            ))}
+            {error && <p className="text-destructive text-sm">{error}</p>}
+          </div>
+        )}
+        <div className="mb-4 flex items-center justify-between border-t pt-4">
+          <h3 className="font-medium text-sm">
+            {editingBackend ? "Edit backend" : "Add backend"}
+          </h3>
+          {editingBackend && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setEditingId(undefined)}
+            >
+              Add new
+            </Button>
+          )}
+        </div>
+        <CustomBackendForm backend={editingBackend} />
       </div>
     </div>
   );

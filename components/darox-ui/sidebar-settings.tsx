@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronUpIcon, PowerIcon, RotateCwIcon } from "lucide-react";
+import {
+  ChevronUpIcon,
+  PencilIcon,
+  PlusIcon,
+  PowerIcon,
+  RotateCwIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { Popover } from "radix-ui";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -88,12 +95,19 @@ export function SidebarSettings() {
   const { preference, resolvedMode, setPreference } = useStreamModeStore();
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
+  const [editingCustomId, setEditingCustomId] = useState<string>();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const pending = pendingAction !== null;
   const id = useId();
-  const custom = backend.activeBackendId === "custom:default";
+  const activeCustomId = backend.activeBackendId?.startsWith("custom:")
+    ? backend.activeBackendId.slice("custom:".length)
+    : undefined;
+  const activeCustom = backend.customBackends.find(
+    (item) => item.id === activeCustomId,
+  );
+  const custom = Boolean(activeCustom);
   const name = custom
-    ? backend.customBackend?.url || "Custom Backend"
+    ? activeCustom?.name || "Custom Backend"
     : backend.activeProfile || "No Backend";
   const resolvedLabel = resolvedMode === "full" ? "Full" : "Concise";
   const modeLabel =
@@ -238,58 +252,119 @@ export function SidebarSettings() {
                       </div>
                     );
                   })}
-                {backend.customBackend && (
-                  <div
-                    role="listitem"
-                    className={`flex min-w-0 items-center rounded-md transition-colors hover:bg-accent ${custom ? "bg-accent/60" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      aria-current={custom ? "true" : undefined}
-                      disabled={pending}
-                      title={`${backend.customBackend.url} · ${custom ? status : "Not selected"}`}
-                      onClick={() => {
-                        if (!custom) {
-                          void runAction("switch:custom", () =>
-                            backend.selectCustomBackend(),
-                          );
-                        }
-                      }}
-                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50"
+                {backend.customBackends.map((customBackend) => {
+                  const active = activeCustomId === customBackend.id;
+                  const itemStatus = active
+                    ? { label: status, color: statusColor }
+                    : {
+                        label: "Not selected",
+                        color: "bg-muted-foreground/40",
+                      };
+                  return (
+                    <div
+                      key={customBackend.id}
+                      role="listitem"
+                      className={`flex min-w-0 items-center rounded-md transition-colors hover:bg-accent ${active ? "bg-accent/60" : ""}`}
                     >
-                      <span
-                        className={`size-1.5 shrink-0 rounded-full ${custom ? statusColor : "bg-muted-foreground/40"}`}
-                      />
-                      <span
-                        className={`min-w-0 flex-1 truncate ${custom ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                      <button
+                        type="button"
+                        aria-current={active ? "true" : undefined}
+                        disabled={pending}
+                        title={`${customBackend.name} · ${customBackend.url} · ${itemStatus.label}`}
+                        onClick={() => {
+                          if (!active) {
+                            void runAction(
+                              `switch:custom:${customBackend.id}`,
+                              () =>
+                                backend.selectCustomBackend(customBackend.id),
+                            );
+                          }
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50"
                       >
-                        {backend.customBackend.url}
-                      </span>
-                    </button>
-                    <BackendActions
-                      custom
-                      pending={pending}
-                      spinning={pendingAction === "restart:custom"}
-                      connecting={custom && backend.status === "connecting"}
-                      canStop={custom && backend.status !== "disconnected"}
-                      onRestart={() =>
-                        void runAction("restart:custom", () =>
-                          backend.selectCustomBackend(),
-                        )
-                      }
-                      onStop={() =>
-                        void runAction("stop:custom", () =>
-                          backend.disconnectCustomBackend(),
-                        )
-                      }
-                    />
-                  </div>
-                )}
-                {backend.profiles.length === 0 && !backend.customBackend && (
-                  <div className="px-2 py-2 text-muted-foreground text-xs">
-                    No Backend configured
-                  </div>
-                )}
+                        <span
+                          className={`size-1.5 shrink-0 rounded-full ${itemStatus.color}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block truncate ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                          >
+                            {customBackend.name}
+                          </span>
+                          <span className="block truncate text-[10px] text-muted-foreground/70">
+                            {customBackend.url}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label={`Edit ${customBackend.name}`}
+                          title="Edit"
+                          disabled={pending}
+                          onClick={() => {
+                            setEditingCustomId(customBackend.id);
+                            setOpen(false);
+                            setCustomOpen(true);
+                          }}
+                          className="rounded p-1.5 text-muted-foreground hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                        >
+                          <PencilIcon className="size-3.5" />
+                        </button>
+                        <BackendActions
+                          custom
+                          pending={pending}
+                          spinning={
+                            pendingAction ===
+                            `restart:custom:${customBackend.id}`
+                          }
+                          connecting={active && backend.status === "connecting"}
+                          canStop={active && backend.status !== "disconnected"}
+                          onRestart={() =>
+                            void runAction(
+                              `restart:custom:${customBackend.id}`,
+                              () =>
+                                backend.selectCustomBackend(customBackend.id),
+                            )
+                          }
+                          onStop={() =>
+                            void runAction(
+                              `stop:custom:${customBackend.id}`,
+                              () =>
+                                backend.disconnectCustomBackend(
+                                  customBackend.id,
+                                ),
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Delete ${customBackend.name}`}
+                          title="Delete"
+                          disabled={pending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete custom backend “${customBackend.name}”?`,
+                              )
+                            ) {
+                              backend.deleteCustomBackend(customBackend.id);
+                            }
+                          }}
+                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {backend.profiles.length === 0 &&
+                  backend.customBackends.length === 0 && (
+                    <div className="px-2 py-2 text-muted-foreground text-xs">
+                      No Backend configured
+                    </div>
+                  )}
               </div>
               {!custom && activeInstance?.error && (
                 <p
@@ -302,14 +377,14 @@ export function SidebarSettings() {
               <button
                 type="button"
                 onClick={() => {
+                  setEditingCustomId(undefined);
                   setOpen(false);
                   setCustomOpen(true);
                 }}
-                className="rounded text-muted-foreground text-xs hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1 rounded text-muted-foreground text-xs hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {backend.customBackend
-                  ? "Edit Custom Backend…"
-                  : "Configure Custom Backend…"}
+                <PlusIcon className="size-3.5" />
+                Add Custom Backend…
               </button>
             </div>
             <fieldset className="min-w-0 border-t p-4">
@@ -351,7 +426,11 @@ export function SidebarSettings() {
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-      <CustomBackendDialog open={customOpen} onOpenChange={setCustomOpen} />
+      <CustomBackendDialog
+        open={customOpen}
+        onOpenChange={setCustomOpen}
+        backendId={editingCustomId}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export type BackendProcessStatus =
   | "running"
   | "start-failed"
   | "crashed";
-export type BackendId = `profile:${string}` | "custom:default";
+export type BackendId = `profile:${string}` | `custom:${string}`;
 
 export interface InstanceState {
   status: string;
@@ -32,17 +32,25 @@ export interface BackendError {
 }
 
 export interface CustomBackendConfig {
+  id: string;
+  name: string;
   url: string;
   token: string;
   rememberToken: boolean;
 }
+
+export type CustomBackendInput = Omit<CustomBackendConfig, "id"> & {
+  id?: string;
+};
+
+type StoredCustomBackendConfig = Omit<CustomBackendConfig, "token">;
 
 type BackendState = {
   activeBackendId: BackendId | null;
   activeProfile: string;
   profiles: string[];
   instances: Record<string, InstanceState>;
-  customBackend: CustomBackendConfig | null;
+  customBackends: CustomBackendConfig[];
   managedExternalUrl: string;
 
   apiBase: string;
@@ -54,17 +62,23 @@ type BackendState = {
   restartBackend: (profile?: string) => Promise<void>;
   switchBackend: (profile: string) => Promise<void>;
   closeBackend: (profile: string) => Promise<void>;
-  connectCustomBackend: (config: CustomBackendConfig) => Promise<boolean>;
-  selectCustomBackend: () => Promise<boolean>;
-  disconnectCustomBackend: () => void;
-  hydrateCustomBackend: () => void;
+  connectCustomBackend: (config: CustomBackendInput) => Promise<boolean>;
+  selectCustomBackend: (id?: string) => Promise<boolean>;
+  disconnectCustomBackend: (id: string) => void;
+  deleteCustomBackend: (id: string) => void;
+  hydrateCustomBackends: () => void;
   setupDesktopListeners: () => Promise<(() => void) | undefined>;
 };
 
-const CUSTOM_URL_KEY = "darox_custom_backend_url";
-const CUSTOM_TOKEN_KEY = "darox_custom_backend_token";
-const CUSTOM_SESSION_TOKEN_KEY = "darox_custom_backend_session_token";
-const CUSTOM_REMEMBER_KEY = "darox_custom_backend_remember_token";
+const CUSTOM_BACKENDS_KEY = "darox_custom_backends_v1";
+const CUSTOM_TOKENS_KEY = "darox_custom_backend_tokens_v1";
+const CUSTOM_SESSION_TOKENS_KEY = "darox_custom_backend_session_tokens_v1";
+const ACTIVE_CUSTOM_BACKEND_KEY = "darox_active_custom_backend_id";
+
+const LEGACY_CUSTOM_URL_KEY = "darox_custom_backend_url";
+const LEGACY_CUSTOM_TOKEN_KEY = "darox_custom_backend_token";
+const LEGACY_CUSTOM_SESSION_TOKEN_KEY = "darox_custom_backend_session_token";
+const LEGACY_CUSTOM_REMEMBER_KEY = "darox_custom_backend_remember_token";
 
 export const isDesktop =
   typeof window !== "undefined" && typeof window.darox !== "undefined";
@@ -81,12 +95,113 @@ function normalizeUrl(value: string): string {
   return new URL(url).toString().replace(/\/$/, "");
 }
 
+function createCustomBackendId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function processStatusFromStr(status: string): BackendProcessStatus {
   if (status === "Starting") return "starting";
   if (status === "Running") return "running";
   if (status === "StartFailed") return "start-failed";
   if (status === "Crashed") return "crashed";
   return "stopped";
+}
+
+function readRecord(storage: Storage, key: string): Record<string, string> {
+  try {
+    const value = JSON.parse(storage.getItem(key) || "{}");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistCustomBackends(backends: CustomBackendConfig[]): void {
+  const stored: StoredCustomBackendConfig[] = backends.map(
+    ({ token: _token, ...backend }) => backend,
+  );
+  const persistentTokens: Record<string, string> = {};
+  const sessionTokens: Record<string, string> = {};
+
+  for (const backend of backends) {
+    if (backend.rememberToken) persistentTokens[backend.id] = backend.token;
+    else sessionTokens[backend.id] = backend.token;
+  }
+
+  localStorage.setItem(CUSTOM_BACKENDS_KEY, JSON.stringify(stored));
+  localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(persistentTokens));
+  sessionStorage.setItem(
+    CUSTOM_SESSION_TOKENS_KEY,
+    JSON.stringify(sessionTokens),
+  );
+}
+
+function readStoredCustomBackends(): CustomBackendConfig[] {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(CUSTOM_BACKENDS_KEY) || "[]",
+    );
+    if (!Array.isArray(stored)) return [];
+    const persistentTokens = readRecord(localStorage, CUSTOM_TOKENS_KEY);
+    const sessionTokens = readRecord(sessionStorage, CUSTOM_SESSION_TOKENS_KEY);
+
+    return stored.flatMap((value): CustomBackendConfig[] => {
+      if (
+        !value ||
+        typeof value !== "object" ||
+        typeof value.id !== "string" ||
+        typeof value.url !== "string"
+      ) {
+        return [];
+      }
+      const rememberToken = value.rememberToken === true;
+      return [
+        {
+          id: value.id,
+          name:
+            typeof value.name === "string" && value.name.trim()
+              ? value.name.trim()
+              : value.url,
+          url: value.url,
+          rememberToken,
+          token: rememberToken
+            ? persistentTokens[value.id] || ""
+            : sessionTokens[value.id] || "",
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function migrateLegacyCustomBackend(): CustomBackendConfig[] {
+  const url = localStorage.getItem(LEGACY_CUSTOM_URL_KEY);
+  if (!url) return [];
+
+  const id = createCustomBackendId();
+  const rememberToken =
+    localStorage.getItem(LEGACY_CUSTOM_REMEMBER_KEY) === "true";
+  const backend: CustomBackendConfig = {
+    id,
+    name: url,
+    url,
+    rememberToken,
+    token: rememberToken
+      ? localStorage.getItem(LEGACY_CUSTOM_TOKEN_KEY) || ""
+      : sessionStorage.getItem(LEGACY_CUSTOM_SESSION_TOKEN_KEY) || "",
+  };
+
+  persistCustomBackends([backend]);
+  localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, id);
+  localStorage.removeItem(LEGACY_CUSTOM_URL_KEY);
+  localStorage.removeItem(LEGACY_CUSTOM_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_CUSTOM_REMEMBER_KEY);
+  sessionStorage.removeItem(LEGACY_CUSTOM_SESSION_TOKEN_KEY);
+  return [backend];
 }
 
 async function checkBackend(url: string, token: string): Promise<boolean> {
@@ -137,7 +252,7 @@ export const useBackendStore = create<BackendState>((set, get) => {
     activeProfile: "",
     profiles: [],
     instances: {},
-    customBackend: null,
+    customBackends: [],
     managedExternalUrl: "",
     apiBase: makeApiBase(0),
     port: 0,
@@ -146,13 +261,15 @@ export const useBackendStore = create<BackendState>((set, get) => {
 
     probeBackend: async () => {
       const version = ++probeVersion;
-      const { apiBase, activeBackendId, customBackend } = get();
+      const { apiBase, activeBackendId, customBackends } = get();
       if (!activeBackendId || !apiBase || apiBase.endsWith(":0")) return;
       set({ status: "connecting" });
-      const token =
-        activeBackendId === "custom:default"
-          ? customBackend?.token || ""
-          : window.darox?.getAuthToken?.() || "";
+      const customId = activeBackendId.startsWith("custom:")
+        ? activeBackendId.slice("custom:".length)
+        : null;
+      const token = customId
+        ? customBackends.find((backend) => backend.id === customId)?.token || ""
+        : window.darox?.getAuthToken?.() || "";
       const ok = await checkBackend(apiBase, token);
       if (
         version === probeVersion &&
@@ -225,20 +342,27 @@ export const useBackendStore = create<BackendState>((set, get) => {
         }
         return false;
       }
-      const normalized = { ...config, url };
-      localStorage.setItem(CUSTOM_URL_KEY, url);
-      localStorage.setItem(CUSTOM_REMEMBER_KEY, String(config.rememberToken));
-      if (config.rememberToken) {
-        localStorage.setItem(CUSTOM_TOKEN_KEY, config.token);
-        sessionStorage.removeItem(CUSTOM_SESSION_TOKEN_KEY);
-      } else {
-        localStorage.removeItem(CUSTOM_TOKEN_KEY);
-        sessionStorage.setItem(CUSTOM_SESSION_TOKEN_KEY, config.token);
-      }
+
+      const id = config.id || createCustomBackendId();
+      const normalized: CustomBackendConfig = {
+        ...config,
+        id,
+        name: config.name.trim() || url,
+        url,
+      };
+      const customBackends = get().customBackends.some(
+        (backend) => backend.id === id,
+      )
+        ? get().customBackends.map((backend) =>
+            backend.id === id ? normalized : backend,
+          )
+        : [...get().customBackends, normalized];
+      persistCustomBackends(customBackends);
+      localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, id);
       setCustomBackendAuth(config.token);
       set({
-        customBackend: normalized,
-        activeBackendId: "custom:default",
+        customBackends,
+        activeBackendId: `custom:${id}`,
         activeProfile: "",
         apiBase: url,
         port:
@@ -249,27 +373,57 @@ export const useBackendStore = create<BackendState>((set, get) => {
       return true;
     },
 
-    selectCustomBackend: async () => {
-      const config = get().customBackend;
+    selectCustomBackend: async (id) => {
+      const targetId = id || localStorage.getItem(ACTIVE_CUSTOM_BACKEND_KEY);
+      const config = get().customBackends.find(
+        (backend) => backend.id === targetId,
+      );
       if (!config) return false;
       return get().connectCustomBackend(config);
     },
 
-    disconnectCustomBackend: () => {
-      if (get().activeBackendId !== "custom:default") return;
+    disconnectCustomBackend: (id) => {
+      if (get().activeBackendId !== `custom:${id}`) return;
       probeVersion++;
       set({ status: "disconnected", processStatus: "stopped" });
     },
 
-    hydrateCustomBackend: () => {
-      const url = localStorage.getItem(CUSTOM_URL_KEY);
-      if (!url) return;
-      const rememberToken =
-        localStorage.getItem(CUSTOM_REMEMBER_KEY) === "true";
-      const token = rememberToken
-        ? localStorage.getItem(CUSTOM_TOKEN_KEY) || ""
-        : sessionStorage.getItem(CUSTOM_SESSION_TOKEN_KEY) || "";
-      set({ customBackend: { url, token, rememberToken } });
+    deleteCustomBackend: (id) => {
+      probeVersion++;
+      const customBackends = get().customBackends.filter(
+        (backend) => backend.id !== id,
+      );
+      persistCustomBackends(customBackends);
+      if (localStorage.getItem(ACTIVE_CUSTOM_BACKEND_KEY) === id) {
+        const replacementId = customBackends[0]?.id;
+        if (replacementId) {
+          localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, replacementId);
+        } else {
+          localStorage.removeItem(ACTIVE_CUSTOM_BACKEND_KEY);
+        }
+      }
+      if (get().activeBackendId === `custom:${id}`) {
+        setManagedBackendAuth();
+        set({
+          customBackends,
+          activeBackendId: null,
+          activeProfile: "",
+          apiBase: makeApiBase(0),
+          port: 0,
+          status: "disconnected",
+          processStatus: "stopped",
+        });
+      } else {
+        set({ customBackends });
+      }
+    },
+
+    hydrateCustomBackends: () => {
+      const stored = readStoredCustomBackends();
+      set({
+        customBackends:
+          stored.length > 0 ? stored : migrateLegacyCustomBackend(),
+      });
     },
 
     setupDesktopListeners: async () => {
@@ -285,7 +439,7 @@ export const useBackendStore = create<BackendState>((set, get) => {
           managedExternalUrl: payload.externalUrl || "",
         });
         const activeId = get().activeBackendId;
-        if (activeId === "custom:default") return;
+        if (activeId?.startsWith("custom:")) return;
         const profile = activeId?.startsWith("profile:")
           ? activeId.slice("profile:".length)
           : payload.activeProfile;
