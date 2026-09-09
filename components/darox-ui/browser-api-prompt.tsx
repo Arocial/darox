@@ -78,7 +78,10 @@ function CustomBackendForm({
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          placeholder="http://localhost:8000"
+          placeholder="https://arox.example.com"
+          autoCapitalize="none"
+          autoCorrect="off"
+          inputMode="url"
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
@@ -87,6 +90,8 @@ function CustomBackendForm({
         <div className="relative">
           <input
             type={showToken ? "text" : "password"}
+            autoCapitalize="none"
+            autoCorrect="off"
             value={token}
             onChange={(event) => setToken(event.target.value)}
             placeholder="Optional"
@@ -182,7 +187,7 @@ export function BrowserApiPrompt() {
   };
 
   return (
-    <div className="flex h-dvh items-center justify-center bg-background p-4 text-foreground">
+    <div className="flex h-full items-center justify-center overflow-y-auto bg-background p-4 text-foreground">
       <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
         <h2 className="mb-2 font-semibold text-xl">Connect to Backend</h2>
         <p className="mb-5 text-muted-foreground text-sm">

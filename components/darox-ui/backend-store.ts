@@ -210,9 +210,10 @@ async function checkBackend(url: string, token: string): Promise<boolean> {
   try {
     const headers = new Headers();
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    const response = await fetch(`${url}/api/health`, {
+    const response = await fetch(`${url}/api/sessions`, {
       headers,
       signal: controller.signal,
+      cache: "no-store",
     });
     return response.ok;
   } catch {

@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
+import { ConnectionRecovery } from "@/components/darox-ui/connection-recovery";
 import {
   useAgentTabs,
   sessionToAgentTab,
@@ -159,6 +160,7 @@ function AgentChat({
   workspace,
   initialMessages,
   streamMode,
+  visible,
 }: {
   agentId: string;
   subagentId: string;
@@ -167,6 +169,7 @@ function AgentChat({
   workspace: string;
   initialMessages: UIMessage[];
   streamMode: StreamMode;
+  visible: boolean;
 }) {
   const apiBase = useBackendStore((s) => s.apiBase);
 
@@ -599,7 +602,7 @@ function AgentChat({
                       <CommandInputsContext.Provider value={commandInputs}>
                         <AssistantRuntimeProvider runtime={runtime}>
                           <div
-                            className="h-full"
+                            className="flex h-full flex-col"
                             onMouseDown={() =>
                               isActive && clearCompletionUnread(agentId)
                             }
@@ -607,7 +610,14 @@ function AgentChat({
                               isActive && clearCompletionUnread(agentId)
                             }
                           >
-                            <Thread />
+                            <ConnectionRecovery
+                              transport={transport}
+                              active={visible && status !== "closed"}
+                              resume={resumeChatStream}
+                            />
+                            <div className="min-h-0 flex-1">
+                              <Thread />
+                            </div>
                           </div>
                         </AssistantRuntimeProvider>
                       </CommandInputsContext.Provider>
@@ -700,6 +710,7 @@ function AgentChatLoader({
       workspace={workspace}
       initialMessages={initialMessages}
       streamMode={connectionMode}
+      visible={isActive}
     />
   );
 }
@@ -746,9 +757,9 @@ export function AgentTabPanel({
         return (
           <div
             key={id}
-            className={`absolute inset-0 ${
-              activeSubagentId === id ? "visible z-10" : "invisible z-0"
-            }`}
+            className={`absolute inset-x-0 bottom-0 ${
+              agents.length > 1 ? "top-12 md:top-0" : "top-0"
+            } ${activeSubagentId === id ? "visible z-10" : "invisible z-0"}`}
           >
             <AgentChatLoader
               agentId={agentId}
@@ -772,7 +783,22 @@ export function AgentTabPanel({
         </div>
       )}
       {agents.length > 1 && (
-        <div className="absolute top-3 right-3 z-20 flex min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm">
+        <select
+          aria-label="Active agent"
+          value={activeSubagentId}
+          onChange={(event) => handleSelect(event.target.value)}
+          className="absolute top-2 right-3 z-20 h-9 max-w-[45%] rounded-md border bg-background px-2 md:hidden"
+        >
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.name}
+              {agent.id === agentTab.id ? " (main)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+      {agents.length > 1 && (
+        <div className="absolute top-3 right-3 z-20 hidden min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm md:flex">
           <div className="mb-2 rounded-t-md border-border border-b bg-muted/60 px-3 py-1.5 font-semibold text-foreground/80 text-xs uppercase tracking-wider">
             Agents
           </div>

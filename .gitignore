@@ -44,3 +44,6 @@ next-env.d.ts
 .streams
 
 certificates
+
+# Machine-specific development helpers
+scripts/start-caddy-proxy.mjs

@@ -63,6 +63,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private ws: WebSocket | null = null;
   private openPromise: Promise<void> | null = null;
   private closingPromise: Promise<void> | null = null;
+  private connectionTimer: ReturnType<typeof setTimeout> | null = null;
+  private rejectOpening: ((error: Error) => void) | null = null;
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
@@ -81,6 +83,17 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private pendingCommands: BackendCommand[] = [];
   private stateListeners: Set<StateListener> = new Set();
   private latestState: SessionState | null = null;
+  private disconnectListeners = new Set<(code: number) => void>();
+  public replaced = false;
+  public get connected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+  public onDisconnect(listener: (code: number) => void): () => void {
+    this.disconnectListeners.add(listener);
+    return () => {
+      this.disconnectListeners.delete(listener);
+    };
+  }
   private stateWaiters: Array<{
     resolve: (state: SessionState) => void;
     reject: (error: Error) => void;
@@ -97,21 +110,36 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     if (this.openPromise) return this.openPromise;
 
     this.openPromise = new Promise<void>((resolve, reject) => {
+      this.rejectOpening = reject;
       let ws: WebSocket;
       try {
         ws = new WebSocket(this.url);
       } catch (err) {
+        this.rejectOpening = null;
         this.openPromise = null;
         reject(err);
         return;
       }
       this.latestState = null;
+      this.replaced = false;
       this.ws = ws;
-      ws.onopen = () => resolve();
+      this.connectionTimer = setTimeout(() => {
+        reject(new Error("WebSocket connection timed out"));
+        ws.close();
+      }, 10000);
+      ws.onopen = () => {
+        this.rejectOpening = null;
+        if (this.connectionTimer) clearTimeout(this.connectionTimer);
+        this.connectionTimer = null;
+        resolve();
+      };
       ws.onerror = () => {
         // onclose will follow — let it handle reject + cleanup
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        this.rejectOpening = null;
+        if (this.connectionTimer) clearTimeout(this.connectionTimer);
+        this.connectionTimer = null;
         const wasOpening = this.openPromise;
         this.ws = null;
         this.openPromise = null;
@@ -123,6 +151,10 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         });
         this.commandCompletions.clear();
         this.failController(error);
+        this.replaced = event.code === 4000;
+        this.disconnectListeners.forEach((listener) => {
+          listener(event.code);
+        });
       };
       ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
@@ -149,7 +181,23 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     await this.ensureOpen();
     if (this.latestState) return this.latestState;
     return new Promise<SessionState>((resolve, reject) => {
-      this.stateWaiters.push({ resolve, reject });
+      const timer = setTimeout(() => {
+        this.stateWaiters = this.stateWaiters.filter(
+          (entry) => entry !== waiter,
+        );
+        reject(new Error("Session state timed out"));
+      }, 10000);
+      const waiter = {
+        resolve: (state: SessionState) => {
+          clearTimeout(timer);
+          resolve(state);
+        },
+        reject: (error: Error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      };
+      this.stateWaiters.push(waiter);
     });
   }
 
@@ -475,6 +523,17 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     };
 
   close() {
+    const error = new Error("WebSocket connection closed");
+    this.rejectOpening?.(error);
+    this.rejectOpening = null;
+    for (const waiter of this.stateWaiters.splice(0)) waiter.reject(error);
+    this.commandCompletions.forEach((completion) => {
+      completion.reject(error);
+    });
+    this.commandCompletions.clear();
+    this.latestState = null;
+    if (this.connectionTimer) clearTimeout(this.connectionTimer);
+    this.connectionTimer = null;
     const ws = this.ws;
     this.ws = null;
     this.openPromise = null;

@@ -32,7 +32,7 @@ All server-side code and advanced features from the original AI SDK example have
    pnpm dev
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Open [http://localhost:3140](http://localhost:3140) with your browser to see the result.
 
 ## Note on API Integration
 
@@ -46,13 +46,20 @@ By default, the `useChat` hook expects an API route at `/api/chat` to handle the
    });
    ```
 
-## Backend configuration
+## Integrated development stack
+
+`npm run dev:stack` starts the Next development server, every Arox profile with
+`autostart` enabled, and Caddy. Caddy terminates HTTPS, routes each profile
+prefix to its backend, and proxies all other requests to Next on
+`127.0.0.1:3140`. Next hot reload continues to work through Caddy.
+
+## Desktop backend configuration
 
 The backend binary (`arox`) is spawned and managed automatically by the Electron main process. It reads launch settings from `~/.config/arox/profiles/chat/darox.json` when that file exists:
 
 ```json
 {
-  "defaultProfile": "coder",
+  "apiToken": "replace-with-at-least-32-random-characters",
   "backend": {
     "command": "arox",
     "args": [],
@@ -63,13 +70,26 @@ The backend binary (`arox`) is spawned and managed automatically by the Electron
   "profiles": {
     "coder": {
       "args": ["--log-level", "debug"],
+      "autostart": true,
       "port": 8201
     }
+  },
+  "caddy": {
+    "domain": "darox.home.arpa",
+    "bind": "0.0.0.0",
+    "port": 3145
   }
 }
 ```
 
-`command`, `args`, `host`, `port`, and `startupTimeoutMs` can be overridden per profile. Use `"auto"` to allocate a port automatically. Darox only reads this file; edit it directly to change launch settings. `AROX_API_TOKEN` can override the auto-generated Bearer token used for authentication.
+`command`, `args`, `host`, `port`, and `startupTimeoutMs` can be overridden per
+profile. Use `"auto"` to allocate a port automatically for Electron. Profiles
+started by `dev:stack` need distinct fixed ports so Caddy has stable upstreams.
+The `caddy.port` setting defaults to `3145`. The configured domain must resolve
+to this computer, and clients must trust Caddy's local root CA. The development
+stack reads `apiToken`, `caddy`, and each profile's `autostart` option; if
+`apiToken` is absent, it generates and saves one. Electron reads the same file
+without modifying it. `AROX_API_TOKEN` can override the token used by Electron.
 
 ## Learn More
 

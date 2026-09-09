@@ -5,6 +5,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+@media (max-width: 767px) {
+  input:not([type="checkbox"]), textarea, select { font-size: 16px; }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

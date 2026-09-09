@@ -11,10 +11,9 @@ import {
   ChevronDownIcon,
   TrashIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
-import { useBackendStore } from "@/components/darox-ui/backend-store";
 import { SidebarSettings } from "@/components/darox-ui/sidebar-settings";
 import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
 
@@ -61,7 +60,7 @@ async function pickDirectory(): Promise<string | null> {
       return null;
     }
   }
-  const dir = prompt("Enter workspace directory path:");
+  const dir = prompt("Enter workspace directory path on the backend computer:");
   return dir || null;
 }
 
@@ -232,7 +231,6 @@ export const AgentTabBar = () => {
     deleteAgent,
     completionUnread,
     sessions,
-    loadAgents,
     loadSessions,
     deleteSession,
     openSession,
@@ -240,13 +238,6 @@ export const AgentTabBar = () => {
 
   const [showWorkspaces, setShowWorkspaces] = useState(true);
   const [showSessions, setShowSessions] = useState(true);
-
-  const backendStatus = useBackendStore((s) => s.status);
-  useEffect(() => {
-    if (backendStatus === "connected") {
-      loadAgents();
-    }
-  }, [backendStatus, loadAgents]);
 
   const handleAdd = useCallback(async () => {
     const workspace = await pickDirectory();

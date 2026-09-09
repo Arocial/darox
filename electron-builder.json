@@ -5,7 +5,12 @@
     "output": "release",
     "buildResources": "resources"
   },
-  "files": ["electron/dist/**/*", "out/**/*", "package.json"],
+  "files": [
+    "electron/dist/**/*",
+    "electron/backend-config.cjs",
+    "out/**/*",
+    "package.json"
+  ],
   "extraMetadata": {
     "main": "electron/dist/main.js"
   },

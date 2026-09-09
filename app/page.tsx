@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
-import { AgentTabBar } from "@/components/darox-ui/agent-tab-bar";
+import { AgentNavigation } from "@/components/darox-ui/agent-navigation";
 import { AgentTabPanel } from "@/components/darox-ui/agent-tab-panel";
 import {
   useBackendStore,
@@ -25,6 +25,11 @@ export default function Chat() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (backendStatus === "connected")
+      void useAgentTabs.getState().loadAgents();
+  }, [backendStatus]);
 
   useEffect(() => {
     if (activeId) {
@@ -64,7 +69,7 @@ export default function Chat() {
 
   if (processStatus === "starting" && backendStatus !== "connected") {
     return (
-      <div className="flex h-dvh items-center justify-center text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <div className="flex flex-col items-center gap-2">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
           <span>Starting backend...</span>
@@ -79,17 +84,17 @@ export default function Chat() {
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         Loading agents...
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh flex-row">
+    <div className="flex h-full flex-col md:flex-row">
       <WindowTitleUpdater />
-      <AgentTabBar />
-      <div className="relative min-h-0 flex-1">
+      <AgentNavigation />
+      <div className="relative min-h-0 min-w-0 flex-1">
         {backendStatus === "connected" &&
           tabs.map((tab) => {
             if (!renderedTabs.includes(tab.id)) return null;

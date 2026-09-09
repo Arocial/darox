@@ -6,6 +6,9 @@ const nextConfig = {
   // Allow overriding the build directory via env var so a verification build
   // (e.g. `npm run build:check`) does not clobber the running dev server's `.next`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  allowedDevOrigins: process.env.DAROX_DEV_HOST
+    ? [process.env.DAROX_DEV_HOST]
+    : undefined,
   images: {
     unoptimized: true,
   },

@@ -44,6 +44,7 @@ interface ProfileConfig {
   host?: string;
   port?: PortConfig;
   startupTimeoutMs?: number;
+  autostart?: boolean;
 }
 
 interface DaroxBackendConfig {
@@ -82,115 +83,25 @@ const DEFAULT_CONFIG: DaroxBackendConfig = {
   },
   profiles: {},
 };
-const MANAGED_ARGS = new Set(["--profile", "--ui", "--host", "--port"]);
 const STDERR_LIMIT = 16 * 1024;
+
+const { parseBackendConfig } = require("../backend-config.cjs") as {
+  parseBackendConfig: (
+    value: unknown,
+    error: (message: string) => Error,
+  ) => DaroxBackendConfig;
+};
 
 function configError(message: string): Error {
   return new Error(`Invalid ${CONFIG_PATH}: ${message}`);
 }
 
-function validateArgs(value: unknown, field: string): string[] {
-  if (!Array.isArray(value) || !value.every((arg) => typeof arg === "string")) {
-    throw configError(`${field} must be an array of strings`);
-  }
-  for (const arg of value) {
-    const name = arg.split("=", 1)[0];
-    if (MANAGED_ARGS.has(name)) {
-      throw configError(`${field} cannot override managed argument ${name}`);
-    }
-  }
-  return value;
-}
-
-function validatePort(value: unknown, field: string): PortConfig {
-  if (value === "auto") return value;
-  if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value < 1 ||
-    value > 65535
-  ) {
-    throw configError(`${field} must be "auto" or an integer from 1 to 65535`);
-  }
-  return value;
-}
-
-function validateConfig(value: unknown): DaroxBackendConfig {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw configError("root must be an object");
-  }
-  const raw = value as Record<string, unknown>;
-  const backendRaw = (raw.backend ?? {}) as Record<string, unknown>;
-  const profilesRaw = (raw.profiles ?? {}) as Record<string, unknown>;
-  const backend: BackendDefaults = {
-    command:
-      backendRaw.command === undefined ? "arox" : String(backendRaw.command),
-    args: validateArgs(backendRaw.args ?? [], "backend.args"),
-    host: backendRaw.host === undefined ? "127.0.0.1" : String(backendRaw.host),
-    port: validatePort(backendRaw.port ?? "auto", "backend.port"),
-    startupTimeoutMs:
-      backendRaw.startupTimeoutMs === undefined
-        ? 30_000
-        : Number(backendRaw.startupTimeoutMs),
-  };
-  if (!backend.command.trim())
-    throw configError("backend.command cannot be empty");
-  if (!backend.host.trim()) throw configError("backend.host cannot be empty");
-  if (
-    !Number.isFinite(backend.startupTimeoutMs) ||
-    backend.startupTimeoutMs < 1
-  ) {
-    throw configError("backend.startupTimeoutMs must be a positive number");
-  }
-  if (
-    !profilesRaw ||
-    typeof profilesRaw !== "object" ||
-    Array.isArray(profilesRaw)
-  ) {
-    throw configError("profiles must be an object");
-  }
-  const profiles: Record<string, ProfileConfig> = {};
-  for (const [name, entry] of Object.entries(profilesRaw)) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      throw configError(`profiles.${name} must be an object`);
-    }
-    const item = entry as Record<string, unknown>;
-    const profile: ProfileConfig = {};
-    if (item.command !== undefined) {
-      profile.command = String(item.command);
-      if (!profile.command.trim())
-        throw configError(`profiles.${name}.command cannot be empty`);
-    }
-    if (item.args !== undefined)
-      profile.args = validateArgs(item.args, `profiles.${name}.args`);
-    if (item.host !== undefined) {
-      profile.host = String(item.host);
-      if (!profile.host.trim())
-        throw configError(`profiles.${name}.host cannot be empty`);
-    }
-    if (item.port !== undefined)
-      profile.port = validatePort(item.port, `profiles.${name}.port`);
-    if (item.startupTimeoutMs !== undefined) {
-      profile.startupTimeoutMs = Number(item.startupTimeoutMs);
-      if (
-        !Number.isFinite(profile.startupTimeoutMs) ||
-        profile.startupTimeoutMs < 1
-      ) {
-        throw configError(
-          `profiles.${name}.startupTimeoutMs must be a positive number`,
-        );
-      }
-    }
-    profiles[name] = profile;
-  }
-  const defaultProfile =
-    raw.defaultProfile === undefined ? undefined : String(raw.defaultProfile);
-  return { defaultProfile, backend, profiles };
-}
-
 function readConfig(): DaroxBackendConfig {
   try {
-    return validateConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")));
+    return parseBackendConfig(
+      JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")),
+      configError,
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return structuredClone(DEFAULT_CONFIG);

@@ -10,6 +10,7 @@ Darox is a chatbot UI built with Next.js (static export) and Electron for cross-
 
 ```bash
 npm run dev           # Next dev server on http://localhost:3140
+npm run dev:stack     # Next dev + autostart Arox profiles + HTTPS Caddy proxy
 npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
 npm run lint          # Biome check
 npm run electron:dev  # Run Next dev + Electron shell together
@@ -75,6 +76,15 @@ User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back ove
 - **Zustand** for component-level state (e.g., attachment handling)
 - **localStorage** for command history, backend configuration, and the global stream-mode preference
 - Custom backends are stored as a named list with stable `custom:<id>` identities. The browser restores the last selected custom backend; remembered tokens use localStorage and session-only tokens use sessionStorage.
+
+### Integrated development stack
+
+`scripts/start-dev-stack.mjs` starts the Next development server on loopback,
+all Arox profiles whose `autostart` setting is enabled, and Caddy. Profile paths
+are routed to their corresponding backends before the catch-all route proxies
+the frontend, including its hot-reload WebSocket, to Next. The `caddy` section
+of `~/.config/arox/profiles/chat/darox.json` configures the HTTPS domain, bind
+address, and port.
 
 ### Key Patterns
 
