@@ -92,8 +92,21 @@ the Electron shell. The shell injects that Manager connection into the frontend
 without persisting it in browser storage. For browser-only development, run
 `npm run dev` and `npm run manager` separately. Manager commands require
 `arox-manager` on PATH; the standalone shortcut accepts `-- --config <path>` and
-inherits the project working directory and shell environment. Caddy is no longer
-part of Darox.
+inherits the project working directory and shell environment. An optional
+`npm run https -- <host[:port]>... [--manager <upstream>] [--web <upstream>]`
+script runs Caddy independently, binding `0.0.0.0:3143` by default with
+`tls internal` for every required host/IP argument. It proxies `/api/*` to the
+configured Manager (default port 3145) and other requests to the configured web
+upstream (default Next on port 3140);
+it never starts upstream services. Clients must resolve the supplied host and
+trust Caddy's root CA. Use the same HTTPS origin as both the web and Manager URL.
+See README for overrides and certificate setup.
+
+### PWA
+
+The root-hosted web app has a static manifest in `public/manifest.webmanifest`
+and install icons in `public/icons`, referenced by `app/layout.tsx`. Installation
+uses browser UI; there is no service worker or offline cache.
 
 ### Key Patterns
 

@@ -6,6 +6,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Darox",
   description: "Darox Chatbot UI",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Darox",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {

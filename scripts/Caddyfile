@@ -1,0 +1,17 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+https://{$DAROX_HTTPS_ADDRESSES} {
+	bind 0.0.0.0
+	tls internal
+
+	handle /api/* {
+		reverse_proxy {$DAROX_MANAGER_UPSTREAM:127.0.0.1:3145}
+	}
+
+	handle {
+		reverse_proxy {$DAROX_WEB_UPSTREAM:127.0.0.1:3140}
+	}
+}
