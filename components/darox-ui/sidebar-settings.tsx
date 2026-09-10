@@ -11,8 +11,8 @@ import {
 import { Popover } from "radix-ui";
 import { useId, useState } from "react";
 import { toast } from "sonner";
-import { isDesktop, useBackendStore } from "./backend-store";
-import { CustomBackendDialog } from "./browser-api-prompt";
+import { profileKey, useBackendStore } from "./backend-store";
+import { ManagerDialog } from "./manager-connections";
 import {
   useStreamModeStore,
   type StreamModePreference,
@@ -40,123 +40,39 @@ const modes: {
   },
 ];
 
-function BackendActions({
-  custom,
-  pending,
-  spinning,
-  connecting,
-  canStop,
-  onRestart,
-  onStop,
-}: {
-  custom: boolean;
-  pending: boolean;
-  spinning: boolean;
-  connecting: boolean;
-  canStop: boolean;
-  onRestart: () => void;
-  onStop: () => void;
-}) {
-  const restartLabel = custom ? "Reconnect" : "Restart Backend";
-  const stopLabel = custom ? "Disconnect" : "Stop Backend";
-
-  return (
-    <div className="flex shrink-0 items-center gap-0.5">
-      <button
-        type="button"
-        aria-label={restartLabel}
-        title={restartLabel}
-        disabled={pending || connecting}
-        onClick={onRestart}
-        className="rounded p-1.5 text-muted-foreground hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-      >
-        <RotateCwIcon
-          className={`size-3.5 ${spinning ? "animate-spin" : ""}`}
-        />
-      </button>
-      {canStop && (
-        <button
-          type="button"
-          aria-label={stopLabel}
-          title={stopLabel}
-          disabled={pending}
-          onClick={onStop}
-          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-        >
-          <PowerIcon className="size-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
+const actionClass =
+  "rounded p-1.5 text-muted-foreground hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
 
 export function SidebarSettings() {
   const backend = useBackendStore();
   const { preference, resolvedMode, setPreference } = useStreamModeStore();
   const [open, setOpen] = useState(false);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [editingCustomId, setEditingCustomId] = useState<string>();
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const pending = pendingAction !== null;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string>();
   const id = useId();
-  const activeCustomId = backend.activeBackendId?.startsWith("custom:")
-    ? backend.activeBackendId.slice("custom:".length)
-    : undefined;
-  const activeCustom = backend.customBackends.find(
-    (item) => item.id === activeCustomId,
+  const activeManager = backend.managers.find(
+    (manager) => manager.id === backend.activeManagerId,
   );
-  const custom = Boolean(activeCustom);
-  const name = custom
-    ? activeCustom?.name || "Custom Backend"
-    : backend.activeProfile || "No Backend";
+  const name = activeManager
+    ? `${activeManager.name}${backend.activeProfile ? ` / ${backend.activeProfile}` : ""}`
+    : "No Manager";
   const resolvedLabel = resolvedMode === "full" ? "Full" : "Concise";
   const modeLabel =
     preference === "auto" ? `Auto · ${resolvedLabel}` : resolvedLabel;
-  const status =
-    backend.status === "connected"
-      ? "Connected"
-      : backend.status === "connecting"
-        ? "Connecting"
-        : "Disconnected";
   const statusColor =
     backend.status === "connected"
       ? "bg-green-500"
       : backend.status === "connecting"
         ? "animate-pulse bg-yellow-500"
         : "bg-red-500";
-  const activeInstance = backend.activeProfile
-    ? backend.instances[backend.activeProfile]
-    : undefined;
-  function profileStatus(profile: string) {
-    if (backend.activeBackendId === `profile:${profile}`) {
-      return { label: status, color: statusColor };
-    }
-    const processStatus = backend.instances[profile]?.status || "Stopped";
-    if (processStatus === "Running") {
-      return { label: "Running", color: "bg-green-500" };
-    }
-    if (processStatus === "Starting") {
-      return { label: "Starting", color: "animate-pulse bg-yellow-500" };
-    }
-    if (processStatus === "StartFailed" || processStatus === "Crashed") {
-      return { label: processStatus, color: "bg-red-500" };
-    }
-    return { label: "Stopped", color: "bg-muted-foreground/40" };
-  }
 
-  async function runAction(actionId: string, action: () => unknown) {
-    setPendingAction(actionId);
+  async function run(action: () => Promise<void>) {
     try {
-      const result = await action();
-      if (result === false) {
-        toast.error("Unable to connect. Check the Backend URL and token.");
-      }
+      await action();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Backend operation failed",
+        error instanceof Error ? error.message : "Manager operation failed.",
       );
-    } finally {
-      setPendingAction(null);
     }
   }
 
@@ -166,8 +82,8 @@ export function SidebarSettings() {
         <Popover.Trigger asChild>
           <button
             type="button"
-            aria-label={`Backend and response settings: ${name}, ${status}, ${modeLabel}`}
-            title={`${name} · ${status} · ${modeLabel}`}
+            aria-label={`Backend and response settings: ${name}, ${backend.status}, ${modeLabel}`}
+            title={`${name} · ${backend.status} · ${modeLabel}`}
             className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2.5 text-left text-xs transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted/50"
           >
             <span className={`size-2 shrink-0 rounded-full ${statusColor}`} />
@@ -183,208 +99,198 @@ export function SidebarSettings() {
             sideOffset={10}
             collisionPadding={12}
             aria-label="Backend and response settings"
-            className="z-50 max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none"
+            className="z-50 max-h-[var(--radix-popover-content-available-height)] w-96 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none"
           >
             <div className="space-y-3 p-4">
-              <h2 className="font-medium text-sm">Backend</h2>
+              <h2 className="font-medium text-sm">Managers</h2>
               <div
+                className="max-h-80 space-y-3 overflow-y-auto"
                 role="list"
-                aria-label="Backend"
-                className="-mx-1 max-h-52 space-y-0.5 overflow-y-auto px-1"
+                aria-label="Managers"
               >
-                {isDesktop &&
-                  backend.profiles.map((profile) => {
-                    const active =
-                      backend.activeBackendId === `profile:${profile}`;
-                    const itemStatus = profileStatus(profile);
-                    return (
-                      <div
-                        key={profile}
-                        role="listitem"
-                        className={`flex min-w-0 items-center rounded-md transition-colors hover:bg-accent ${active ? "bg-accent/60" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          aria-current={active ? "true" : undefined}
-                          disabled={pending}
-                          title={`${profile} · ${itemStatus.label}`}
-                          onClick={() => {
-                            if (!active) {
-                              void runAction(`switch:${profile}`, () =>
-                                backend.switchBackend(profile),
-                              );
-                            }
-                          }}
-                          className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50"
-                        >
-                          <span
-                            className={`size-1.5 shrink-0 rounded-full ${itemStatus.color}`}
-                          />
-                          <span
-                            className={`min-w-0 flex-1 truncate ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}
-                          >
-                            {profile}
-                          </span>
-                        </button>
-                        <BackendActions
-                          custom={false}
-                          pending={pending}
-                          spinning={pendingAction === `restart:${profile}`}
-                          connecting={
-                            itemStatus.label === "Connecting" ||
-                            itemStatus.label === "Starting"
-                          }
-                          canStop={
-                            backend.instances[profile]?.status === "Running" ||
-                            backend.instances[profile]?.status === "Starting"
-                          }
-                          onRestart={() =>
-                            void runAction(`restart:${profile}`, () =>
-                              backend.restartBackend(profile),
-                            )
-                          }
-                          onStop={() =>
-                            void runAction(`stop:${profile}`, () =>
-                              backend.closeBackend(profile),
-                            )
-                          }
-                        />
-                      </div>
-                    );
-                  })}
-                {backend.customBackends.map((customBackend) => {
-                  const active = activeCustomId === customBackend.id;
-                  const itemStatus = active
-                    ? { label: status, color: statusColor }
-                    : {
-                        label: "Not selected",
-                        color: "bg-muted-foreground/40",
-                      };
+                {backend.managers.map((manager) => {
+                  const connection = backend.connections[manager.id];
                   return (
                     <div
-                      key={customBackend.id}
+                      key={manager.id}
                       role="listitem"
-                      className={`flex min-w-0 items-center rounded-md transition-colors hover:bg-accent ${active ? "bg-accent/60" : ""}`}
+                      className="rounded-md border p-2"
                     >
-                      <button
-                        type="button"
-                        aria-current={active ? "true" : undefined}
-                        disabled={pending}
-                        title={`${customBackend.name} · ${customBackend.url} · ${itemStatus.label}`}
-                        onClick={() => {
-                          if (!active) {
-                            void runAction(
-                              `switch:custom:${customBackend.id}`,
-                              () =>
-                                backend.selectCustomBackend(customBackend.id),
-                            );
-                          }
-                        }}
-                        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50"
-                      >
-                        <span
-                          className={`size-1.5 shrink-0 rounded-full ${itemStatus.color}`}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span
-                            className={`block truncate ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}
-                          >
-                            {customBackend.name}
-                          </span>
-                          <span className="block truncate text-[10px] text-muted-foreground/70">
-                            {customBackend.url}
-                          </span>
-                        </span>
-                      </button>
-                      <div className="flex shrink-0 items-center gap-0.5">
+                      <div className="flex min-w-0 items-center gap-1">
+                        <div className="min-w-0 flex-1" title={manager.url}>
+                          <div className="truncate font-medium text-sm">
+                            {manager.name}
+                          </div>
+                          <div className="truncate text-muted-foreground text-xs">
+                            {manager.url}
+                          </div>
+                          <div className="text-muted-foreground text-xs">
+                            {connection?.status || "disconnected"}
+                          </div>
+                        </div>
                         <button
                           type="button"
-                          aria-label={`Edit ${customBackend.name}`}
-                          title="Edit"
-                          disabled={pending}
+                          aria-label={`Refresh ${manager.name}`}
+                          title="Refresh connection"
+                          className={actionClass}
+                          onClick={() =>
+                            void run(() => backend.refreshManager(manager.id))
+                          }
+                        >
+                          <RotateCwIcon className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Edit ${manager.name}`}
+                          title="Edit connection"
+                          className={actionClass}
                           onClick={() => {
-                            setEditingCustomId(customBackend.id);
+                            setEditingId(manager.id);
                             setOpen(false);
-                            setCustomOpen(true);
+                            setDialogOpen(true);
                           }}
-                          className="rounded p-1.5 text-muted-foreground hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <PencilIcon className="size-3.5" />
                         </button>
-                        <BackendActions
-                          custom
-                          pending={pending}
-                          spinning={
-                            pendingAction ===
-                            `restart:custom:${customBackend.id}`
-                          }
-                          connecting={active && backend.status === "connecting"}
-                          canStop={active && backend.status !== "disconnected"}
-                          onRestart={() =>
-                            void runAction(
-                              `restart:custom:${customBackend.id}`,
-                              () =>
-                                backend.selectCustomBackend(customBackend.id),
-                            )
-                          }
-                          onStop={() =>
-                            void runAction(
-                              `stop:custom:${customBackend.id}`,
-                              () =>
-                                backend.disconnectCustomBackend(
-                                  customBackend.id,
-                                ),
-                            )
-                          }
-                        />
                         <button
                           type="button"
-                          aria-label={`Delete ${customBackend.name}`}
-                          title="Delete"
-                          disabled={pending}
+                          aria-label={`Delete ${manager.name}`}
+                          title="Delete connection"
+                          className={actionClass}
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Delete custom backend “${customBackend.name}”?`,
+                                `Delete Manager connection “${manager.name}”? This will not stop its profiles.`,
                               )
                             ) {
-                              backend.deleteCustomBackend(customBackend.id);
+                              backend.deleteManager(manager.id);
                             }
                           }}
-                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <Trash2Icon className="size-3.5" />
                         </button>
                       </div>
+                      {connection?.error && (
+                        <p
+                          role="alert"
+                          className="mt-2 break-words text-destructive text-xs"
+                        >
+                          {connection.error}
+                        </p>
+                      )}
+                      {connection?.status === "connected" &&
+                        connection.profiles.length === 0 && (
+                          <p className="mt-2 text-muted-foreground text-xs">
+                            No profiles configured in this Manager.
+                          </p>
+                        )}
+                      {connection?.profiles.map((profile) => {
+                        const key = profileKey(manager.id, profile.id);
+                        const active = backend.activeBackendId === key;
+                        const pending = backend.pending[key];
+                        const busy =
+                          Boolean(pending) ||
+                          profile.status === "starting" ||
+                          profile.status === "stopping";
+                        const unavailable = connection.status !== "connected";
+                        return (
+                          <div key={profile.id} className="mt-1">
+                            <div
+                              className={`flex min-w-0 items-center rounded-md hover:bg-accent ${active ? "bg-accent/60" : ""}`}
+                            >
+                              <button
+                                type="button"
+                                aria-current={active ? "true" : undefined}
+                                disabled={busy || unavailable}
+                                onClick={() =>
+                                  void run(() =>
+                                    backend.selectProfile(
+                                      manager.id,
+                                      profile.id,
+                                    ),
+                                  )
+                                }
+                                className="min-w-0 flex-1 rounded px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                              >
+                                <span
+                                  className={`block truncate ${active ? "font-semibold" : ""}`}
+                                >
+                                  {profile.id}
+                                </span>
+                                <span className="block text-muted-foreground text-xs">
+                                  {profile.status}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Restart ${manager.name} / ${profile.id}`}
+                                title="Restart profile"
+                                disabled={busy || unavailable}
+                                className={actionClass}
+                                onClick={() =>
+                                  void run(() =>
+                                    backend.profileAction(
+                                      manager.id,
+                                      profile.id,
+                                      "restart",
+                                    ),
+                                  )
+                                }
+                              >
+                                <RotateCwIcon
+                                  className={`size-3.5 ${pending === "restart" ? "animate-spin" : ""}`}
+                                />
+                              </button>
+                              {profile.status === "running" && (
+                                <button
+                                  type="button"
+                                  aria-label={`Stop ${manager.name} / ${profile.id}`}
+                                  title="Stop profile"
+                                  disabled={busy || unavailable}
+                                  className={actionClass}
+                                  onClick={() =>
+                                    void run(() =>
+                                      backend.profileAction(
+                                        manager.id,
+                                        profile.id,
+                                        "stop",
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <PowerIcon className="size-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {profile.last_error && (
+                              <p
+                                role="alert"
+                                className="break-words px-2 text-destructive text-xs"
+                              >
+                                {profile.last_error}
+                                {profile.exit_code !== null
+                                  ? ` (exit ${profile.exit_code})`
+                                  : ""}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
-                {backend.profiles.length === 0 &&
-                  backend.customBackends.length === 0 && (
-                    <div className="px-2 py-2 text-muted-foreground text-xs">
-                      No Backend configured
-                    </div>
-                  )}
               </div>
-              {!custom && activeInstance?.error && (
-                <p
-                  role="alert"
-                  className="break-words text-destructive text-xs"
-                >
-                  {activeInstance.error.message}
-                </p>
-              )}
               <button
                 type="button"
                 onClick={() => {
-                  setEditingCustomId(undefined);
+                  setEditingId(undefined);
                   setOpen(false);
-                  setCustomOpen(true);
+                  setDialogOpen(true);
                 }}
                 className="inline-flex items-center gap-1 rounded text-muted-foreground text-xs hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlusIcon className="size-3.5" />
-                Add Custom Backend…
+                Add Manager…
               </button>
             </div>
             <fieldset className="min-w-0 border-t p-4">
@@ -426,10 +332,10 @@ export function SidebarSettings() {
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-      <CustomBackendDialog
-        open={customOpen}
-        onOpenChange={setCustomOpen}
-        backendId={editingCustomId}
+      <ManagerDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        backendId={editingId}
       />
     </div>
   );

@@ -14,10 +14,8 @@ import {
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
-import { BackendManager } from "./backend";
 
 const isDev = !!process.env.ELECTRON_DEV;
-const mgr = new BackendManager();
 let mainWindow: BrowserWindow | null = null;
 let findView: WebContentsView | null = null;
 let findViewVisible = false;
@@ -231,7 +229,6 @@ async function createWindow() {
   }
 
   mainWindow.setMenuBarVisibility(false);
-  mgr.attach(mainWindow);
 
   findView = new WebContentsView({
     webPreferences: {
@@ -332,7 +329,7 @@ app.whenReady().then(async () => {
   });
 
   // Content-Security-Policy: only allow same-origin resources and inline styles
-  // (needed for Tailwind), plus WebSocket connections to the local backend.
+  // (needed for Tailwind), plus HTTP and WebSocket Manager connections.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const csp = isDev
       ? [
@@ -356,23 +353,6 @@ app.whenReady().then(async () => {
     });
   });
 
-  ipcMain.handle("start_backend", (_e, profile?: string) => {
-    if (profile) return mgr.startProfile(profile);
-    return mgr.start();
-  });
-  ipcMain.handle("stop_backend", async () => {
-    await mgr.stop();
-  });
-  ipcMain.handle("restart_backend", (_e, profile: string) =>
-    mgr.restartProfile(profile),
-  );
-  ipcMain.handle("close_backend", (_e, profile: string) => {
-    return mgr.closeBackend(profile);
-  });
-  ipcMain.on("get_auth_token", (event) => {
-    event.returnValue = mgr.getApiToken();
-  });
-  ipcMain.handle("get_backend_status", () => mgr.getStatus());
   ipcMain.handle("dialog:open", async (_e, opts) => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
     return dialog.showOpenDialog(mainWindow, opts ?? {});
@@ -415,37 +395,17 @@ app.whenReady().then(async () => {
 
   await createWindow();
 
-  // Auto-start backend on launch
-  try {
-    const port = await mgr.start();
-    console.log(`[main] backend auto-started on port ${port}`);
-  } catch (e) {
-    console.error("[main] failed to auto-start backend:", e);
-  }
-
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-let quitting = false;
-app.on("before-quit", async (e) => {
-  if (quitting) return;
-  e.preventDefault();
-  quitting = true;
-
+app.on("before-quit", () => {
+  if (saveTimeout) clearTimeout(saveTimeout);
   try {
-    if (mainWindow) {
-      saveWindowState(captureWindowState(mainWindow));
-    }
+    if (mainWindow) saveWindowState(captureWindowState(mainWindow));
   } catch (err) {
     console.error("Failed to save window state during quit:", err);
-  }
-
-  try {
-    await mgr.stop();
-  } finally {
-    app.exit(0);
   }
 });
 

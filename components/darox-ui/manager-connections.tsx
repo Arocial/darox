@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import {
-  type CustomBackendConfig,
+  type ManagerConfig,
   useBackendStore,
 } from "@/components/darox-ui/backend-store";
 import { Button } from "@/components/ui/button";
@@ -15,49 +15,48 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-function CustomBackendForm({
-  backend,
+function ManagerForm({
+  manager,
   onConnected,
 }: {
-  backend?: CustomBackendConfig;
+  manager?: ManagerConfig;
   onConnected?: () => void;
 }) {
-  const connect = useBackendStore((state) => state.connectCustomBackend);
-  const [name, setName] = useState(backend?.name || "");
-  const [url, setUrl] = useState(backend?.url || "");
-  const [token, setToken] = useState(backend?.token || "");
+  const saveManager = useBackendStore((state) => state.saveManager);
+  const [name, setName] = useState(manager?.name || "");
+  const [url, setUrl] = useState(manager?.url || "");
+  const [token, setToken] = useState(manager?.token || "");
   const [rememberToken, setRememberToken] = useState(
-    backend?.rememberToken || false,
+    manager?.rememberToken || false,
   );
   const [showToken, setShowToken] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setName(backend?.name || "");
-    setUrl(backend?.url || "");
-    setToken(backend?.token || "");
-    setRememberToken(backend?.rememberToken || false);
+    setName(manager?.name || "");
+    setUrl(manager?.url || "");
+    setToken(manager?.token || "");
+    setRememberToken(manager?.rememberToken || false);
     setError("");
-  }, [backend]);
+  }, [manager]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
-    const connected = await connect({
-      id: backend?.id,
-      name,
-      url,
-      token,
-      rememberToken,
-    });
-    setSubmitting(false);
-    if (connected) onConnected?.();
-    else
+    try {
+      await saveManager({ id: manager?.id, name, url, token, rememberToken });
+      onConnected?.();
+    } catch (error) {
       setError(
-        "Unable to connect. Check the URL, token, and backend CORS settings.",
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to Manager.",
       );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -74,11 +73,11 @@ function CustomBackendForm({
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">Backend URL</span>
+        <span className="font-medium">Manager URL</span>
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          placeholder="https://arox.example.com"
+          placeholder="http://127.0.0.1:3145"
           autoCapitalize="none"
           autoCorrect="off"
           inputMode="url"
@@ -125,7 +124,7 @@ function CustomBackendForm({
         <Button type="submit" disabled={!url.trim() || submitting}>
           {submitting
             ? "Connecting…"
-            : backend
+            : manager
               ? "Save and connect"
               : "Add and connect"}
         </Button>
@@ -134,7 +133,7 @@ function CustomBackendForm({
   );
 }
 
-export function CustomBackendDialog({
+export function ManagerDialog({
   open,
   onOpenChange,
   backendId,
@@ -143,20 +142,18 @@ export function CustomBackendDialog({
   onOpenChange: (open: boolean) => void;
   backendId?: string;
 }) {
-  const backend = useBackendStore((state) =>
-    state.customBackends.find((item) => item.id === backendId),
+  const manager = useBackendStore((state) =>
+    state.managers.find((item) => item.id === backendId),
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {backend ? "Edit Custom Backend" : "Add Custom Backend"}
-          </DialogTitle>
+          <DialogTitle>{manager ? "Edit Manager" : "Add Manager"}</DialogTitle>
         </DialogHeader>
-        <CustomBackendForm
-          backend={backend}
+        <ManagerForm
+          manager={manager}
           onConnected={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -164,92 +161,15 @@ export function CustomBackendDialog({
   );
 }
 
-export function BrowserApiPrompt() {
-  const customBackends = useBackendStore((state) => state.customBackends);
-  const selectCustomBackend = useBackendStore(
-    (state) => state.selectCustomBackend,
-  );
-  const [editingId, setEditingId] = useState<string>();
-  const [connectingId, setConnectingId] = useState<string>();
-  const [error, setError] = useState("");
-  const editingBackend = customBackends.find(
-    (backend) => backend.id === editingId,
-  );
-
-  const connect = async (id: string) => {
-    setError("");
-    setConnectingId(id);
-    const connected = await selectCustomBackend(id);
-    setConnectingId(undefined);
-    if (!connected) {
-      setError("Unable to connect to the selected backend.");
-    }
-  };
-
+export function ManagerConnectionPrompt() {
   return (
     <div className="flex h-full items-center justify-center overflow-y-auto bg-background p-4 text-foreground">
       <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
-        <h2 className="mb-2 font-semibold text-xl">Connect to Backend</h2>
+        <h1 className="mb-2 font-semibold text-xl">Connect to Arox Manager</h1>
         <p className="mb-5 text-muted-foreground text-sm">
-          Select a saved backend or add another Darox backend.
+          Add a Manager connection to view and manage its profiles.
         </p>
-        {customBackends.length > 0 && (
-          <div className="mb-5 space-y-2">
-            {customBackends.map((backend) => (
-              <div
-                key={backend.id}
-                className="flex min-w-0 items-center gap-2 rounded-md border p-2"
-              >
-                <button
-                  type="button"
-                  disabled={Boolean(connectingId)}
-                  onClick={() => void connect(backend.id)}
-                  className="min-w-0 flex-1 text-left disabled:opacity-50"
-                >
-                  <span className="block truncate font-medium text-sm">
-                    {backend.name}
-                  </span>
-                  <span className="block truncate text-muted-foreground text-xs">
-                    {backend.url}
-                  </span>
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setEditingId(backend.id)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={Boolean(connectingId)}
-                  onClick={() => void connect(backend.id)}
-                >
-                  {connectingId === backend.id ? "Connecting…" : "Connect"}
-                </Button>
-              </div>
-            ))}
-            {error && <p className="text-destructive text-sm">{error}</p>}
-          </div>
-        )}
-        <div className="mb-4 flex items-center justify-between border-t pt-4">
-          <h3 className="font-medium text-sm">
-            {editingBackend ? "Edit backend" : "Add backend"}
-          </h3>
-          {editingBackend && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setEditingId(undefined)}
-            >
-              Add new
-            </Button>
-          )}
-        </div>
-        <CustomBackendForm backend={editingBackend} />
+        <ManagerForm />
       </div>
     </div>
   );

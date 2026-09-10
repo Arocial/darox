@@ -4,20 +4,20 @@ import { useEffect, useState } from "react";
 import { useAgentTabs } from "@/components/darox-ui/agent-store";
 import { AgentNavigation } from "@/components/darox-ui/agent-navigation";
 import { AgentTabPanel } from "@/components/darox-ui/agent-tab-panel";
-import {
-  useBackendStore,
-  isDesktop,
-} from "@/components/darox-ui/backend-store";
-import { BrowserApiPrompt } from "@/components/darox-ui/browser-api-prompt";
+import { useBackendStore } from "@/components/darox-ui/backend-store";
+import { ManagerConnectionPrompt } from "@/components/darox-ui/manager-connections";
 import { WindowTitleUpdater } from "@/components/darox-ui/window-title-updater";
 
 export default function Chat() {
   const { tabs, activeId, loading } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
-  const processStatus = useBackendStore((s) => s.processStatus);
+  const managers = useBackendStore((s) => s.managers);
+  const connectionRevision = useBackendStore((s) => s.connectionRevision);
+  const activeManagerId = useBackendStore((s) => s.activeManagerId);
+  const connections = useBackendStore((s) => s.connections);
   const activeBackendId = useBackendStore((s) => s.activeBackendId);
   const activeProfile = useBackendStore((s) => s.activeProfile);
-  const instances = useBackendStore((s) => s.instances);
+
   const [mounted, setMounted] = useState(false);
   const [renderedTabs, setRenderedTabs] = useState<string[]>([]);
   const MAX_TABS = 5;
@@ -26,10 +26,12 @@ export default function Chat() {
     setMounted(true);
   }, []);
 
+  // A different profile or worker execution needs a fresh session list.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: identity changes can keep the same connected status.
   useEffect(() => {
     if (backendStatus === "connected")
       void useAgentTabs.getState().loadAgents();
-  }, [backendStatus]);
+  }, [backendStatus, activeBackendId, connectionRevision]);
 
   useEffect(() => {
     if (activeId) {
@@ -44,45 +46,23 @@ export default function Chat() {
     }
   }, [activeId]);
 
-  useEffect(() => {
-    const backend = useBackendStore.getState();
-    let unlisten: (() => void) | undefined;
-    backend.hydrateCustomBackends();
-    backend.setupDesktopListeners().then((fn) => {
-      unlisten = fn;
-    });
-    if (!isDesktop) {
-      useBackendStore.getState().selectCustomBackend();
-    }
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
+  useEffect(() => useBackendStore.getState().initialize(), []);
 
   if (!mounted) {
     return null;
   }
 
-  if (!isDesktop && !activeBackendId) {
-    return <BrowserApiPrompt />;
+  if (managers.length === 0) {
+    return <ManagerConnectionPrompt />;
   }
 
-  if (processStatus === "starting" && backendStatus !== "connected") {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-          <span>Starting backend...</span>
-        </div>
-      </div>
-    );
-  }
+  const connection = activeManagerId ? connections[activeManagerId] : undefined;
+  const profile = connection?.profiles.find(
+    (item) => item.id === activeProfile,
+  );
+  const backendError = connection?.error || profile?.last_error;
 
-  const backendError = activeProfile
-    ? instances[activeProfile]?.error
-    : undefined;
-
-  if (loading) {
+  if (loading && backendStatus === "connected") {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         Loading agents...
@@ -100,7 +80,7 @@ export default function Chat() {
             if (!renderedTabs.includes(tab.id)) return null;
             return (
               <div
-                key={`${activeBackendId}:${tab.id}`}
+                key={`${activeBackendId}:${connectionRevision}:${tab.id}`}
                 className={`absolute inset-0 ${
                   activeId === tab.id ? "visible z-10" : "invisible z-0"
                 }`}
@@ -117,31 +97,26 @@ export default function Chat() {
           <div className="flex h-full items-center justify-center p-6">
             <div className="w-full max-w-2xl rounded-lg border border-destructive/40 bg-card p-5 shadow-sm">
               <h1 className="font-semibold text-destructive">
-                Backend{" "}
-                {processStatus === "start-failed"
-                  ? "failed to start"
-                  : "crashed"}
+                Backend unavailable
               </h1>
-              <p className="mt-2 text-sm">{backendError.message}</p>
-              {backendError.exitCode !== undefined && (
+              <p className="mt-2 text-sm">{backendError}</p>
+              {profile?.exit_code != null && (
                 <p className="mt-1 text-muted-foreground text-xs">
-                  Exit code: {backendError.exitCode ?? "unknown"}
+                  Exit code: {profile.exit_code}
                 </p>
               )}
-              {backendError.stderr && (
-                <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-xs">
-                  {backendError.stderr}
-                </pre>
-              )}
               <p className="mt-3 text-muted-foreground text-xs">
-                Use the Backend menu to adjust launch arguments or retry.
+                Use the Backend menu to edit the Manager connection or restart a
+                profile.
               </p>
             </div>
           </div>
         )}
         {backendStatus !== "connected" && !backendError && (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            Backend disconnected. Use the Backend menu to reconnect or switch.
+            {backendStatus === "connecting"
+              ? "Connecting…"
+              : "Select a profile in the Backend menu to connect or start it."}
           </div>
         )}
         {backendStatus === "connected" && tabs.length === 0 && (

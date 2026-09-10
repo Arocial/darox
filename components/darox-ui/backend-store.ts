@@ -1,464 +1,380 @@
 "use client";
 
 import { create } from "zustand";
+import { setBackendAuthToken } from "@/lib/backend-auth";
+import { createUuid } from "@/lib/id";
 import {
-  setCustomBackendAuth,
-  setManagedBackendAuth,
-} from "@/lib/backend-auth";
+  listProfiles,
+  managerRequest,
+  normalizeManagerUrl,
+  profileApiBase,
+  type ManagerConfig,
+  type ProfileView,
+} from "@/lib/manager-client";
 
+export type { ManagerConfig } from "@/lib/manager-client";
 export type BackendStatus = "disconnected" | "connecting" | "connected";
-export type BackendProcessStatus =
-  | "stopped"
-  | "starting"
-  | "running"
-  | "start-failed"
-  | "crashed";
-export type BackendId = `profile:${string}` | `custom:${string}`;
-
-export interface InstanceState {
-  status: string;
-  port: number;
-  host?: string;
-  command?: string[];
-  error?: BackendError;
-}
-
-export interface BackendError {
-  kind: string;
-  message: string;
-  exitCode?: number | null;
-  stderr?: string;
-  occurredAt: string;
-}
-
-export interface CustomBackendConfig {
-  id: string;
-  name: string;
-  url: string;
-  token: string;
-  rememberToken: boolean;
-}
-
-export type CustomBackendInput = Omit<CustomBackendConfig, "id"> & {
-  id?: string;
-};
-
-type StoredCustomBackendConfig = Omit<CustomBackendConfig, "token">;
-
-type BackendState = {
-  activeBackendId: BackendId | null;
-  activeProfile: string;
-  profiles: string[];
-  instances: Record<string, InstanceState>;
-  customBackends: CustomBackendConfig[];
-  managedExternalUrl: string;
-
-  apiBase: string;
-  port: number;
+type ProfileAction = "start" | "stop" | "restart";
+export interface ManagerConnection {
   status: BackendStatus;
-  processStatus: BackendProcessStatus;
-
-  probeBackend: () => Promise<void>;
-  restartBackend: (profile?: string) => Promise<void>;
-  switchBackend: (profile: string) => Promise<void>;
-  closeBackend: (profile: string) => Promise<void>;
-  connectCustomBackend: (config: CustomBackendInput) => Promise<boolean>;
-  selectCustomBackend: (id?: string) => Promise<boolean>;
-  disconnectCustomBackend: (id: string) => void;
-  deleteCustomBackend: (id: string) => void;
-  hydrateCustomBackends: () => void;
-  setupDesktopListeners: () => Promise<(() => void) | undefined>;
-};
-
-const CUSTOM_BACKENDS_KEY = "darox_custom_backends_v1";
-const CUSTOM_TOKENS_KEY = "darox_custom_backend_tokens_v1";
-const CUSTOM_SESSION_TOKENS_KEY = "darox_custom_backend_session_tokens_v1";
-const ACTIVE_CUSTOM_BACKEND_KEY = "darox_active_custom_backend_id";
-
-const LEGACY_CUSTOM_URL_KEY = "darox_custom_backend_url";
-const LEGACY_CUSTOM_TOKEN_KEY = "darox_custom_backend_token";
-const LEGACY_CUSTOM_SESSION_TOKEN_KEY = "darox_custom_backend_session_token";
-const LEGACY_CUSTOM_REMEMBER_KEY = "darox_custom_backend_remember_token";
-
-export const isDesktop =
-  typeof window !== "undefined" && typeof window.darox !== "undefined";
-
-function makeApiBase(port: number): string {
-  const hostname =
-    typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
-  return `http://${hostname}:${port}`;
+  profiles: ProfileView[];
+  error?: string;
 }
 
-function normalizeUrl(value: string): string {
-  let url = value.trim();
-  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
-  return new URL(url).toString().replace(/\/$/, "");
+interface BackendState {
+  managers: ManagerConfig[];
+  connections: Record<string, ManagerConnection>;
+  pending: Record<string, ProfileAction>;
+  activeManagerId: string | null;
+  activeProfile: string;
+  activeBackendId: string | null;
+  apiBase: string;
+  status: BackendStatus;
+  connectionRevision: number;
+  saveManager: (
+    input: Omit<ManagerConfig, "id"> & { id?: string },
+  ) => Promise<void>;
+  deleteManager: (id: string) => void;
+  refreshManager: (id: string) => Promise<void>;
+  selectProfile: (managerId: string, profileId: string) => Promise<void>;
+  profileAction: (
+    managerId: string,
+    profileId: string,
+    action: ProfileAction,
+  ) => Promise<void>;
+  initialize: () => () => void;
 }
 
-function createCustomBackendId(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+const MANAGERS_KEY = "darox_managers_v1";
+const TOKENS_KEY = "darox_manager_tokens_v1";
+const SESSION_TOKENS_KEY = "darox_manager_session_tokens_v1";
+const SELECTION_KEY = "darox_manager_selection_v1";
 
-function processStatusFromStr(status: string): BackendProcessStatus {
-  if (status === "Starting") return "starting";
-  if (status === "Running") return "running";
-  if (status === "StartFailed") return "start-failed";
-  if (status === "Crashed") return "crashed";
-  return "stopped";
-}
-
-function readRecord(storage: Storage, key: string): Record<string, string> {
+function readJson(storage: Storage, key: string, fallback: unknown): any {
   try {
-    const value = JSON.parse(storage.getItem(key) || "{}");
-    return value && typeof value === "object" ? value : {};
+    return JSON.parse(storage.getItem(key) || "null") ?? fallback;
   } catch {
-    return {};
+    return fallback;
   }
 }
 
-function persistCustomBackends(backends: CustomBackendConfig[]): void {
-  const stored: StoredCustomBackendConfig[] = backends.map(
-    ({ token: _token, ...backend }) => backend,
+function persist(managers: ManagerConfig[]) {
+  localStorage.setItem(
+    MANAGERS_KEY,
+    JSON.stringify(managers.map(({ token: _token, ...manager }) => manager)),
   );
-  const persistentTokens: Record<string, string> = {};
-  const sessionTokens: Record<string, string> = {};
-
-  for (const backend of backends) {
-    if (backend.rememberToken) persistentTokens[backend.id] = backend.token;
-    else sessionTokens[backend.id] = backend.token;
-  }
-
-  localStorage.setItem(CUSTOM_BACKENDS_KEY, JSON.stringify(stored));
-  localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(persistentTokens));
+  localStorage.setItem(
+    TOKENS_KEY,
+    JSON.stringify(
+      Object.fromEntries(
+        managers.filter((m) => m.rememberToken).map((m) => [m.id, m.token]),
+      ),
+    ),
+  );
   sessionStorage.setItem(
-    CUSTOM_SESSION_TOKENS_KEY,
-    JSON.stringify(sessionTokens),
+    SESSION_TOKENS_KEY,
+    JSON.stringify(
+      Object.fromEntries(
+        managers.filter((m) => !m.rememberToken).map((m) => [m.id, m.token]),
+      ),
+    ),
   );
 }
 
-function readStoredCustomBackends(): CustomBackendConfig[] {
-  try {
-    const stored = JSON.parse(
-      localStorage.getItem(CUSTOM_BACKENDS_KEY) || "[]",
-    );
-    if (!Array.isArray(stored)) return [];
-    const persistentTokens = readRecord(localStorage, CUSTOM_TOKENS_KEY);
-    const sessionTokens = readRecord(sessionStorage, CUSTOM_SESSION_TOKENS_KEY);
-
-    return stored.flatMap((value): CustomBackendConfig[] => {
-      if (
-        !value ||
-        typeof value !== "object" ||
-        typeof value.id !== "string" ||
-        typeof value.url !== "string"
-      ) {
-        return [];
-      }
-      const rememberToken = value.rememberToken === true;
+function readManagers(): ManagerConfig[] {
+  const stored = readJson(localStorage, MANAGERS_KEY, []);
+  const tokens = readJson(localStorage, TOKENS_KEY, {});
+  const sessionTokens = readJson(sessionStorage, SESSION_TOKENS_KEY, {});
+  if (!Array.isArray(stored)) return [];
+  return stored.flatMap((manager): ManagerConfig[] => {
+    if (
+      !manager ||
+      typeof manager.id !== "string" ||
+      typeof manager.url !== "string" ||
+      typeof manager.name !== "string"
+    )
+      return [];
+    try {
+      const token = (manager.rememberToken ? tokens : sessionTokens)?.[
+        manager.id
+      ];
       return [
         {
-          id: value.id,
-          name:
-            typeof value.name === "string" && value.name.trim()
-              ? value.name.trim()
-              : value.url,
-          url: value.url,
-          rememberToken,
-          token: rememberToken
-            ? persistentTokens[value.id] || ""
-            : sessionTokens[value.id] || "",
+          id: manager.id,
+          name: manager.name,
+          url: normalizeManagerUrl(manager.url),
+          rememberToken: manager.rememberToken === true,
+          token: typeof token === "string" ? token : "",
         },
       ];
-    });
-  } catch {
-    return [];
-  }
+    } catch {
+      return [];
+    }
+  });
 }
 
-function migrateLegacyCustomBackend(): CustomBackendConfig[] {
-  const url = localStorage.getItem(LEGACY_CUSTOM_URL_KEY);
-  if (!url) return [];
-
-  const id = createCustomBackendId();
-  const rememberToken =
-    localStorage.getItem(LEGACY_CUSTOM_REMEMBER_KEY) === "true";
-  const backend: CustomBackendConfig = {
-    id,
-    name: url,
-    url,
-    rememberToken,
-    token: rememberToken
-      ? localStorage.getItem(LEGACY_CUSTOM_TOKEN_KEY) || ""
-      : sessionStorage.getItem(LEGACY_CUSTOM_SESSION_TOKEN_KEY) || "",
-  };
-
-  persistCustomBackends([backend]);
-  localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, id);
-  localStorage.removeItem(LEGACY_CUSTOM_URL_KEY);
-  localStorage.removeItem(LEGACY_CUSTOM_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_CUSTOM_REMEMBER_KEY);
-  sessionStorage.removeItem(LEGACY_CUSTOM_SESSION_TOKEN_KEY);
-  return [backend];
+export function profileKey(managerId: string, profileId: string): string {
+  return `${managerId}:${profileId}`;
 }
-
-async function checkBackend(url: string, token: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  try {
-    const headers = new Headers();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    const response = await fetch(`${url}/api/sessions`, {
-      headers,
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-let probeVersion = 0;
 
 export const useBackendStore = create<BackendState>((set, get) => {
-  const activateProfile = (
-    profile: string,
-    instances: Record<string, InstanceState>,
-    externalUrl?: string,
-  ) => {
-    const instance = instances[profile];
-    const processStatus = processStatusFromStr(instance?.status || "Stopped");
-    setManagedBackendAuth();
+  const versions = new Map<string, number>();
+  let initialized = false;
+  let pollingUsers = 0;
+  let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  let pollGeneration = 0;
+  let lastExecution: string | null = null;
+
+  const syncActive = () => {
+    const state = get();
+    const manager = state.managers.find((m) => m.id === state.activeManagerId);
+    const connection = manager ? state.connections[manager.id] : undefined;
+    const profile = connection?.profiles.find(
+      (p) => p.id === state.activeProfile,
+    );
+    const activeBackendId =
+      manager && profile ? profileKey(manager.id, profile.id) : null;
+    const execution =
+      activeBackendId && profile?.status === "running"
+        ? `${activeBackendId}:${profile.started_at}`
+        : null;
+    const changedExecution =
+      execution !== null &&
+      lastExecution !== null &&
+      execution !== lastExecution;
+    if (execution) lastExecution = execution;
+    setBackendAuthToken(manager?.token);
     set({
-      activeBackendId: `profile:${profile}`,
-      activeProfile: profile,
-      apiBase:
-        externalUrl ||
-        (profile === "external" && get().managedExternalUrl
-          ? get().managedExternalUrl
-          : makeApiBase(instance?.port || 0)),
-      port: instance?.port || 0,
-      processStatus,
-      status: processStatus === "running" ? "connecting" : "disconnected",
+      activeBackendId,
+      apiBase: manager && profile ? profileApiBase(manager, profile.id) : "",
+      status:
+        connection?.status === "connected" && profile?.status === "running"
+          ? "connected"
+          : connection?.status === "connecting" ||
+              (connection?.status === "connected" &&
+                (profile?.status === "starting" ||
+                  profile?.status === "stopping"))
+            ? "connecting"
+            : "disconnected",
+      connectionRevision: state.connectionRevision + (changedExecution ? 1 : 0),
     });
+  };
+
+  const select = (managerId: string | null, profileId: string) => {
+    set({ activeManagerId: managerId, activeProfile: profileId });
+    localStorage.setItem(
+      SELECTION_KEY,
+      JSON.stringify({ managerId, profileId }),
+    );
+    syncActive();
+  };
+
+  const applyProfiles = (manager: ManagerConfig, profiles: ProfileView[]) => {
+    set((state) => ({
+      connections: {
+        ...state.connections,
+        [manager.id]: { status: "connected", profiles },
+      },
+    }));
+    if (
+      get().activeManagerId === manager.id &&
+      !profiles.some((p) => p.id === get().activeProfile)
+    ) {
+      select(
+        manager.id,
+        (profiles.find((p) => p.status === "running") || profiles[0])?.id || "",
+      );
+    } else syncActive();
   };
 
   return {
-    activeBackendId: null,
+    managers: [],
+    connections: {},
+    pending: {},
+    activeManagerId: null,
     activeProfile: "",
-    profiles: [],
-    instances: {},
-    customBackends: [],
-    managedExternalUrl: "",
-    apiBase: makeApiBase(0),
-    port: 0,
+    activeBackendId: null,
+    apiBase: "",
     status: "disconnected",
-    processStatus: "stopped",
+    connectionRevision: 0,
 
-    probeBackend: async () => {
-      const version = ++probeVersion;
-      const { apiBase, activeBackendId, customBackends } = get();
-      if (!activeBackendId || !apiBase || apiBase.endsWith(":0")) return;
-      set({ status: "connecting" });
-      const customId = activeBackendId.startsWith("custom:")
-        ? activeBackendId.slice("custom:".length)
-        : null;
-      const token = customId
-        ? customBackends.find((backend) => backend.id === customId)?.token || ""
-        : window.darox?.getAuthToken?.() || "";
-      const ok = await checkBackend(apiBase, token);
+    saveManager: async (input) => {
+      const manager: ManagerConfig = {
+        ...input,
+        id: input.id || createUuid(),
+        url: normalizeManagerUrl(input.url),
+        name: input.name.trim() || input.url.trim(),
+      };
+      const original = input.id
+        ? get().managers.find((m) => m.id === input.id)
+        : undefined;
+      const profiles = await listProfiles(manager);
       if (
-        version === probeVersion &&
-        get().activeBackendId === activeBackendId
-      ) {
-        set({ status: ok ? "connected" : "disconnected" });
-      }
-    },
-
-    restartBackend: async (profile) => {
-      const api = window.darox;
-      if (!api) return;
-      const activeBackendId = get().activeBackendId;
-      const target =
-        profile ||
-        (activeBackendId?.startsWith("profile:")
-          ? activeBackendId.slice("profile:".length)
-          : undefined);
-      if (!target) return;
-      if (get().activeBackendId === `profile:${target}`) {
-        set({ processStatus: "starting", status: "connecting" });
-      }
-      try {
-        await api.restartBackend(target);
-      } catch (error) {
-        console.error("Failed to restart backend", error);
-      }
-    },
-
-    switchBackend: async (profile) => {
-      const api = window.darox;
-      if (!api) return;
-      probeVersion++;
-      activateProfile(profile, get().instances);
-      set({ processStatus: "starting", status: "connecting" });
-      try {
-        await api.switchBackend(profile);
-      } catch (error) {
-        console.error("Failed to switch backend", error);
-      }
-    },
-
-    closeBackend: async (profile) => {
-      const api = window.darox;
-      if (!api) return;
-      await api.closeBackend(profile);
-      if (get().activeBackendId === `profile:${profile}`) {
-        set({ processStatus: "stopped", status: "disconnected" });
-      }
-    },
-
-    connectCustomBackend: async (config) => {
-      let url: string;
-      try {
-        url = normalizeUrl(config.url);
-      } catch {
-        return false;
-      }
-      const version = ++probeVersion;
-      const previousStatus = get().status;
-      const previousBackendId = get().activeBackendId;
-      if (!previousBackendId || previousStatus === "disconnected") {
-        set({ status: "connecting" });
-      }
-      const ok = await checkBackend(url, config.token);
-      if (version !== probeVersion) return false;
-      if (!ok) {
-        if (!previousBackendId || previousStatus === "disconnected") {
-          set({ status: "disconnected" });
-        }
-        return false;
-      }
-
-      const id = config.id || createCustomBackendId();
-      const normalized: CustomBackendConfig = {
-        ...config,
-        id,
-        name: config.name.trim() || url,
-        url,
-      };
-      const customBackends = get().customBackends.some(
-        (backend) => backend.id === id,
+        input.id &&
+        get().managers.find((m) => m.id === input.id) !== original
       )
-        ? get().customBackends.map((backend) =>
-            backend.id === id ? normalized : backend,
-          )
-        : [...get().customBackends, normalized];
-      persistCustomBackends(customBackends);
-      localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, id);
-      setCustomBackendAuth(config.token);
-      set({
-        customBackends,
-        activeBackendId: `custom:${id}`,
-        activeProfile: "",
-        apiBase: url,
-        port:
-          Number(new URL(url).port) || (url.startsWith("https:") ? 443 : 80),
-        processStatus: "running",
-        status: "connected",
-      });
-      return true;
-    },
-
-    selectCustomBackend: async (id) => {
-      const targetId = id || localStorage.getItem(ACTIVE_CUSTOM_BACKEND_KEY);
-      const config = get().customBackends.find(
-        (backend) => backend.id === targetId,
+        throw new Error("This Manager connection changed. Please try again.");
+      const managers = original
+        ? get().managers.map((m) => (m.id === manager.id ? manager : m))
+        : [...get().managers, manager];
+      persist(managers);
+      set({ managers, connectionRevision: get().connectionRevision + 1 });
+      applyProfiles(manager, profiles);
+      select(
+        manager.id,
+        profiles.find((p) => p.id === get().activeProfile)?.id ||
+          (profiles.find((p) => p.status === "running") || profiles[0])?.id ||
+          "",
       );
-      if (!config) return false;
-      return get().connectCustomBackend(config);
     },
 
-    disconnectCustomBackend: (id) => {
-      if (get().activeBackendId !== `custom:${id}`) return;
-      probeVersion++;
-      set({ status: "disconnected", processStatus: "stopped" });
-    },
-
-    deleteCustomBackend: (id) => {
-      probeVersion++;
-      const customBackends = get().customBackends.filter(
-        (backend) => backend.id !== id,
-      );
-      persistCustomBackends(customBackends);
-      if (localStorage.getItem(ACTIVE_CUSTOM_BACKEND_KEY) === id) {
-        const replacementId = customBackends[0]?.id;
-        if (replacementId) {
-          localStorage.setItem(ACTIVE_CUSTOM_BACKEND_KEY, replacementId);
-        } else {
-          localStorage.removeItem(ACTIVE_CUSTOM_BACKEND_KEY);
-        }
-      }
-      if (get().activeBackendId === `custom:${id}`) {
-        setManagedBackendAuth();
-        set({
-          customBackends,
-          activeBackendId: null,
-          activeProfile: "",
-          apiBase: makeApiBase(0),
-          port: 0,
-          status: "disconnected",
-          processStatus: "stopped",
-        });
-      } else {
-        set({ customBackends });
+    deleteManager: (id) => {
+      const managers = get().managers.filter((m) => m.id !== id);
+      const connections = { ...get().connections };
+      delete connections[id];
+      persist(managers);
+      set({ managers, connections });
+      if (get().activeManagerId === id) {
+        const manager = managers[0];
+        const profiles = manager ? connections[manager.id]?.profiles || [] : [];
+        select(
+          manager?.id || null,
+          (profiles.find((p) => p.status === "running") || profiles[0])?.id ||
+            "",
+        );
       }
     },
 
-    hydrateCustomBackends: () => {
-      const stored = readStoredCustomBackends();
-      set({
-        customBackends:
-          stored.length > 0 ? stored : migrateLegacyCustomBackend(),
-      });
-    },
-
-    setupDesktopListeners: async () => {
-      const api = window.darox;
-      if (!api) return;
-      const applyPayload = (payload: any) => {
-        const profiles: string[] = payload.profiles || [];
-        const instances: Record<string, InstanceState> =
-          payload.instances || {};
-        set({
-          profiles,
-          instances,
-          managedExternalUrl: payload.externalUrl || "",
-        });
-        const activeId = get().activeBackendId;
-        if (activeId?.startsWith("custom:")) return;
-        const profile = activeId?.startsWith("profile:")
-          ? activeId.slice("profile:".length)
-          : payload.activeProfile;
-        if (!profile) return;
-        activateProfile(profile, instances, payload.externalUrl);
+    refreshManager: async (id) => {
+      const manager = get().managers.find((m) => m.id === id);
+      if (!manager) return;
+      const version = (versions.get(id) || 0) + 1;
+      versions.set(id, version);
+      try {
+        const profiles = await listProfiles(manager);
         if (
-          processStatusFromStr(instances[profile]?.status || "") === "running"
-        ) {
-          get().probeBackend();
+          versions.get(id) !== version ||
+          get().managers.find((m) => m.id === id) !== manager
+        )
+          return;
+        applyProfiles(manager, profiles);
+      } catch (error) {
+        if (
+          versions.get(id) !== version ||
+          get().managers.find((m) => m.id === id) !== manager
+        )
+          return;
+        set((state) => ({
+          connections: {
+            ...state.connections,
+            [id]: {
+              status: "disconnected",
+              profiles: state.connections[id]?.profiles || [],
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unable to reach Manager.",
+            },
+          },
+        }));
+        syncActive();
+      }
+    },
+
+    selectProfile: async (managerId, profileId) => {
+      const profile = get().connections[managerId]?.profiles.find(
+        (p) => p.id === profileId,
+      );
+      if (!profile) return;
+      select(managerId, profileId);
+      if (profile.status === "stopped" || profile.status === "failed")
+        await get().profileAction(managerId, profileId, "start");
+    },
+
+    profileAction: async (managerId, profileId, action) => {
+      const manager = get().managers.find((m) => m.id === managerId);
+      const key = profileKey(managerId, profileId);
+      if (!manager || get().pending[key]) return;
+      set((state) => ({ pending: { ...state.pending, [key]: action } }));
+      try {
+        const accepted = await managerRequest<ProfileView>(
+          manager,
+          `/${encodeURIComponent(profileId)}/${action}`,
+          "POST",
+        );
+        if (get().managers.find((m) => m.id === managerId) !== manager) return;
+        versions.set(managerId, (versions.get(managerId) || 0) + 1);
+        applyProfiles(
+          manager,
+          (get().connections[managerId]?.profiles || []).map((p) =>
+            p.id === profileId ? accepted : p,
+          ),
+        );
+        // A 202 acknowledges the operation; only a subsequent terminal view completes it.
+        const deadline = Date.now() + 45000;
+        while (get().managers.find((m) => m.id === managerId) === manager) {
+          await get().refreshManager(managerId);
+          const connection = get().connections[managerId];
+          if (connection?.status !== "connected")
+            throw new Error(connection?.error || "Manager disconnected.");
+          const profile = connection.profiles.find((p) => p.id === profileId);
+          if (!profile)
+            throw new Error("Profile is no longer configured in this Manager.");
+          if (profile.status === "failed")
+            throw new Error(profile.last_error || "Profile operation failed.");
+          if (profile.status === (action === "stop" ? "stopped" : "running"))
+            return;
+          if (Date.now() >= deadline)
+            throw new Error(
+              "Profile operation is still pending. Its status will continue to refresh.",
+            );
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      } finally {
+        const pending = { ...get().pending };
+        delete pending[key];
+        set({ pending });
+        await get().refreshManager(managerId);
+      }
+    },
+
+    initialize: () => {
+      if (!initialized) {
+        initialized = true;
+        const managers = readManagers();
+        const selection = readJson(localStorage, SELECTION_KEY, {});
+        const manager =
+          managers.find((m) => m.id === selection?.managerId) || managers[0];
+        set({
+          managers,
+          connections: Object.fromEntries(
+            managers.map((m) => [m.id, { status: "connecting", profiles: [] }]),
+          ),
+        });
+        select(
+          manager?.id || null,
+          typeof selection?.profileId === "string" ? selection.profileId : "",
+        );
+      }
+      pollingUsers++;
+      if (pollingUsers === 1) {
+        const generation = ++pollGeneration;
+        const poll = async () => {
+          await Promise.allSettled(
+            get().managers.map((m) => get().refreshManager(m.id)),
+          );
+          if (pollingUsers && generation === pollGeneration)
+            pollTimer = setTimeout(poll, 2000);
+        };
+        void poll();
+      }
+      return () => {
+        pollingUsers--;
+        if (!pollingUsers) {
+          pollGeneration++;
+          clearTimeout(pollTimer);
         }
       };
-      const unlisten = api.onBackendStatus(applyPayload);
-      try {
-        applyPayload(await api.getBackendStatus());
-      } catch (error) {
-        console.error("Failed to get initial backend status", error);
-      }
-      return unlisten;
     },
   };
 });

@@ -74,6 +74,22 @@ type AgentTabsState = {
   clearAgents: () => void;
 };
 
+function activeBackendRequestContext() {
+  const { apiBase, activeBackendId, connectionRevision } =
+    useBackendStore.getState();
+  return {
+    apiBase,
+    isCurrent: () => {
+      const current = useBackendStore.getState();
+      return (
+        current.activeBackendId === activeBackendId &&
+        current.apiBase === apiBase &&
+        current.connectionRevision === connectionRevision
+      );
+    },
+  };
+}
+
 export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   tabs: [],
   activeId: null,
@@ -130,7 +146,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   createAgent: async (workspace: string) => {
     try {
-      const apiBase = useBackendStore.getState().apiBase;
+      const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,6 +154,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       });
       if (!res.ok) throw new Error("Failed to create agent");
       const tab = sessionToAgentTab(await res.json());
+      if (!isCurrent()) return null;
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
@@ -150,8 +167,8 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   },
 
   deleteAgent: async (id: string) => {
+    const { apiBase, isCurrent } = activeBackendRequestContext();
     try {
-      const apiBase = useBackendStore.getState().apiBase;
       const res = await daroxFetch(`${apiBase}/api/sessions/${id}/stop`, {
         method: "POST",
       });
@@ -159,6 +176,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     } catch (e) {
       console.error("Failed to delete agent", e);
     }
+    if (!isCurrent()) return;
     set((state) => {
       const tabs = state.tabs.filter((t) => t.id !== id);
       const nextCompletionUnread = { ...state.completionUnread };
@@ -184,11 +202,12 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   deleteSession: async (id: string) => {
     try {
-      const apiBase = useBackendStore.getState().apiBase;
+      const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete session");
+      if (!isCurrent()) return false;
       await get().loadSessions();
       return true;
     } catch (e) {
@@ -199,10 +218,11 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   loadSessions: async () => {
     try {
-      const apiBase = useBackendStore.getState().apiBase;
+      const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error("Failed to load sessions");
       const sessions: SessionInfo[] = await res.json();
+      if (!isCurrent()) return;
       set({ sessions });
     } catch (e) {
       console.error("Failed to load sessions", e);
@@ -211,10 +231,11 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   loadAgents: async () => {
     try {
-      const apiBase = useBackendStore.getState().apiBase;
+      const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error("Failed to load active sessions");
       const sessions: SessionInfo[] = await res.json();
+      if (!isCurrent()) return;
       const agents = sessions
         .filter((session) => session.active)
         .map(sessionToAgentTab);
@@ -237,7 +258,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   openSession: async (sessionId: string) => {
     try {
-      const apiBase = useBackendStore.getState().apiBase;
+      const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(
         `${apiBase}/api/sessions/${sessionId}/start`,
         {
@@ -246,6 +267,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       );
       if (!res.ok) throw new Error("Failed to open session");
       const tab = sessionToAgentTab(await res.json());
+      if (!isCurrent()) return null;
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,

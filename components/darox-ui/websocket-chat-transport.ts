@@ -1,4 +1,5 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
+import { createUuid } from "@/lib/id";
 
 type WsServerFrame =
   | {
@@ -466,7 +467,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     [key: string]: unknown;
   }): Promise<AgentCommandResult> {
     await this.ensureOpen();
-    const clientMessageId = crypto.randomUUID();
+    const clientMessageId = createUuid();
     const completionPromise = new Promise<AgentCommandResult>(
       (resolve, reject) => {
         this.commandCompletions.set(clientMessageId, { resolve, reject });

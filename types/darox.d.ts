@@ -1,7 +1,5 @@
 export {};
 
-type Unsub = () => void;
-
 interface OpenDialogResult {
   canceled: boolean;
   filePaths: string[];
@@ -25,13 +23,6 @@ interface OpenDialogOptions {
 }
 
 interface DaroxApi {
-  // Backend lifecycle
-  getAuthToken(): string | undefined;
-  restartBackend(profile: string): Promise<number>;
-  switchBackend(profile: string): Promise<number>;
-  closeBackend(profile: string): Promise<void>;
-  getBackendStatus(): Promise<any>;
-  onBackendStatus(cb: (payload: any) => void): Unsub;
   // Dialogs
   openDialog(opts: OpenDialogOptions): Promise<OpenDialogResult>;
 }
