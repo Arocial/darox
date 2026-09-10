@@ -25,6 +25,13 @@ interface OpenDialogOptions {
 interface DaroxApi {
   // Dialogs
   openDialog(opts: OpenDialogOptions): Promise<OpenDialogResult>;
+  getBootstrapManager(): Promise<BootstrapManagerConfig | null>;
+}
+
+interface BootstrapManagerConfig {
+  name: string;
+  url: string;
+  token: string;
 }
 
 declare global {

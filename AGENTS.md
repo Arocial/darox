@@ -88,10 +88,12 @@ User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back ove
 ### Development services
 
 `npm run electron:dev` starts Next, a local Manager with `AROX_API_TOKEN=1`, and
-the Electron shell. For browser-only development, run `npm run dev` and
-`npm run manager` separately. Manager commands require `arox-manager` on PATH;
-the standalone shortcut accepts `-- --config <path>` and inherits the project
-working directory and shell environment. Caddy is no longer part of Darox.
+the Electron shell. The shell injects that Manager connection into the frontend
+without persisting it in browser storage. For browser-only development, run
+`npm run dev` and `npm run manager` separately. Manager commands require
+`arox-manager` on PATH; the standalone shortcut accepts `-- --config <path>` and
+inherits the project working directory and shell environment. Caddy is no longer
+part of Darox.
 
 ### Key Patterns
 

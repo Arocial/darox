@@ -216,3 +216,56 @@ test("UUID generation works when crypto.randomUUID is unavailable", () => {
   });
   assert.equal(uuid, "00000000-0000-4000-8000-000000000000");
 });
+
+test("Electron bootstrap Manager connects without persisting its token", async () => {
+  Object.defineProperty(globalThis, "window", {
+    value: {
+      darox: {
+        getBootstrapManager: async () => ({
+          name: "Default",
+          url: "http://127.0.0.1:3145",
+          token: "electron-secret",
+        }),
+      },
+    },
+    configurable: true,
+  });
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return response([profile()]);
+  };
+
+  const dispose = store.getState().initialize();
+  while (!store.getState().hydrated || store.getState().status !== "connected")
+    await new Promise((resolve) => setImmediate(resolve));
+  dispose();
+
+  const manager = store.getState().managers[0];
+  assert.equal(manager.id, "electron-default");
+  assert.equal(manager.electronManaged, true);
+  assert.equal(
+    store.getState().activeBackendId,
+    profileKey(manager.id, "coder"),
+  );
+  assert.equal(
+    calls[0].options.headers.get("Authorization"),
+    "Bearer electron-secret",
+  );
+  await store.getState().saveManager(config("remote"));
+  assert.ok(
+    !(localStorage.getItem("darox_managers_v1") || "").includes(
+      "electron-default",
+    ),
+  );
+  assert.ok(
+    !(localStorage.getItem("darox_manager_tokens_v1") || "").includes(
+      "electron-secret",
+    ),
+  );
+  assert.ok(
+    !(sessionStorage.getItem("darox_manager_session_tokens_v1") || "").includes(
+      "electron-secret",
+    ),
+  );
+});

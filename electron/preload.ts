@@ -22,10 +22,18 @@ interface OpenDialogResult {
   filePaths: string[];
 }
 
+interface BootstrapManagerConfig {
+  name: string;
+  url: string;
+  token: string;
+}
+
 const darox = {
   // ── Dialogs ────────────────────────────────────────────────────────
   openDialog: (opts: OpenDialogOptions): Promise<OpenDialogResult> =>
     ipcRenderer.invoke("dialog:open", opts),
+  getBootstrapManager: (): Promise<BootstrapManagerConfig | null> =>
+    ipcRenderer.invoke("backend:get-bootstrap-manager"),
 };
 
 contextBridge.exposeInMainWorld("darox", darox);

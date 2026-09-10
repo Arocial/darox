@@ -11,6 +11,7 @@ import { WindowTitleUpdater } from "@/components/darox-ui/window-title-updater";
 export default function Chat() {
   const { tabs, activeId, loading } = useAgentTabs();
   const backendStatus = useBackendStore((s) => s.status);
+  const backendHydrated = useBackendStore((s) => s.hydrated);
   const managers = useBackendStore((s) => s.managers);
   const connectionRevision = useBackendStore((s) => s.connectionRevision);
   const activeManagerId = useBackendStore((s) => s.activeManagerId);
@@ -48,7 +49,7 @@ export default function Chat() {
 
   useEffect(() => useBackendStore.getState().initialize(), []);
 
-  if (!mounted) {
+  if (!mounted || !backendHydrated) {
     return null;
   }
 

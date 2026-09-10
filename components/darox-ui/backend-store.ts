@@ -14,6 +14,9 @@ import {
 
 export type { ManagerConfig } from "@/lib/manager-client";
 export type BackendStatus = "disconnected" | "connecting" | "connected";
+interface BackendManagerConfig extends ManagerConfig {
+  electronManaged?: boolean;
+}
 type ProfileAction = "start" | "stop" | "restart";
 export interface ManagerConnection {
   status: BackendStatus;
@@ -22,7 +25,7 @@ export interface ManagerConnection {
 }
 
 interface BackendState {
-  managers: ManagerConfig[];
+  managers: BackendManagerConfig[];
   connections: Record<string, ManagerConnection>;
   pending: Record<string, ProfileAction>;
   activeManagerId: string | null;
@@ -30,6 +33,7 @@ interface BackendState {
   activeBackendId: string | null;
   apiBase: string;
   status: BackendStatus;
+  hydrated: boolean;
   connectionRevision: number;
   saveManager: (
     input: Omit<ManagerConfig, "id"> & { id?: string },
@@ -49,6 +53,7 @@ const MANAGERS_KEY = "darox_managers_v1";
 const TOKENS_KEY = "darox_manager_tokens_v1";
 const SESSION_TOKENS_KEY = "darox_manager_session_tokens_v1";
 const SELECTION_KEY = "darox_manager_selection_v1";
+const ELECTRON_MANAGER_ID = "electron-default";
 
 function readJson(storage: Storage, key: string, fallback: unknown): any {
   try {
@@ -58,16 +63,21 @@ function readJson(storage: Storage, key: string, fallback: unknown): any {
   }
 }
 
-function persist(managers: ManagerConfig[]) {
+function persist(managers: BackendManagerConfig[]) {
+  const persistentManagers = managers.filter((m) => !m.electronManaged);
   localStorage.setItem(
     MANAGERS_KEY,
-    JSON.stringify(managers.map(({ token: _token, ...manager }) => manager)),
+    JSON.stringify(
+      persistentManagers.map(({ token: _token, ...manager }) => manager),
+    ),
   );
   localStorage.setItem(
     TOKENS_KEY,
     JSON.stringify(
       Object.fromEntries(
-        managers.filter((m) => m.rememberToken).map((m) => [m.id, m.token]),
+        persistentManagers
+          .filter((m) => m.rememberToken)
+          .map((m) => [m.id, m.token]),
       ),
     ),
   );
@@ -75,7 +85,9 @@ function persist(managers: ManagerConfig[]) {
     SESSION_TOKENS_KEY,
     JSON.stringify(
       Object.fromEntries(
-        managers.filter((m) => !m.rememberToken).map((m) => [m.id, m.token]),
+        persistentManagers
+          .filter((m) => !m.rememberToken)
+          .map((m) => [m.id, m.token]),
       ),
     ),
   );
@@ -196,18 +208,20 @@ export const useBackendStore = create<BackendState>((set, get) => {
     activeBackendId: null,
     apiBase: "",
     status: "disconnected",
+    hydrated: false,
     connectionRevision: 0,
 
     saveManager: async (input) => {
+      const original = input.id
+        ? get().managers.find((m) => m.id === input.id)
+        : undefined;
       const manager: ManagerConfig = {
         ...input,
         id: input.id || createUuid(),
         url: normalizeManagerUrl(input.url),
         name: input.name.trim() || input.url.trim(),
+        ...(original?.electronManaged ? { electronManaged: true } : {}),
       };
-      const original = input.id
-        ? get().managers.find((m) => m.id === input.id)
-        : undefined;
       const profiles = await listProfiles(manager);
       if (
         input.id &&
@@ -341,33 +355,57 @@ export const useBackendStore = create<BackendState>((set, get) => {
     initialize: () => {
       if (!initialized) {
         initialized = true;
-        const managers = readManagers();
-        const selection = readJson(localStorage, SELECTION_KEY, {});
-        const manager =
-          managers.find((m) => m.id === selection?.managerId) || managers[0];
-        set({
-          managers,
-          connections: Object.fromEntries(
-            managers.map((m) => [m.id, { status: "connecting", profiles: [] }]),
-          ),
-        });
-        select(
-          manager?.id || null,
-          typeof selection?.profileId === "string" ? selection.profileId : "",
-        );
+        void (async () => {
+          const storedManagers = readManagers();
+          let electronManager: BackendManagerConfig | undefined;
+          try {
+            const bootstrap = await window.darox?.getBootstrapManager();
+            if (bootstrap) {
+              electronManager = {
+                id: ELECTRON_MANAGER_ID,
+                name: bootstrap.name.trim() || "Default",
+                url: normalizeManagerUrl(bootstrap.url),
+                token: bootstrap.token,
+                rememberToken: false,
+                electronManaged: true,
+              };
+            }
+          } catch (error) {
+            console.error(
+              "Unable to load Electron Manager configuration",
+              error,
+            );
+          }
+          const managers = electronManager
+            ? [
+                ...storedManagers.filter((m) => m.id !== ELECTRON_MANAGER_ID),
+                electronManager,
+              ]
+            : storedManagers;
+          const selection = readJson(localStorage, SELECTION_KEY, {});
+          const manager =
+            managers.find((m) => m.id === selection?.managerId) ||
+            electronManager ||
+            managers[0];
+          set({
+            managers,
+            connections: Object.fromEntries(
+              managers.map((m) => [
+                m.id,
+                { status: "connecting", profiles: [] },
+              ]),
+            ),
+            hydrated: true,
+          });
+          select(
+            manager?.id || null,
+            typeof selection?.profileId === "string" ? selection.profileId : "",
+          );
+          if (pollingUsers) startPolling();
+        })();
       }
       pollingUsers++;
-      if (pollingUsers === 1) {
-        const generation = ++pollGeneration;
-        const poll = async () => {
-          await Promise.allSettled(
-            get().managers.map((m) => get().refreshManager(m.id)),
-          );
-          if (pollingUsers && generation === pollGeneration)
-            pollTimer = setTimeout(poll, 2000);
-        };
-        void poll();
-      }
+      if (pollingUsers === 1 && get().hydrated) startPolling();
       return () => {
         pollingUsers--;
         if (!pollingUsers) {
@@ -377,4 +415,17 @@ export const useBackendStore = create<BackendState>((set, get) => {
       };
     },
   };
+
+  function startPolling() {
+    if (!pollingUsers) return;
+    const generation = ++pollGeneration;
+    const poll = async () => {
+      await Promise.allSettled(
+        get().managers.map((m) => get().refreshManager(m.id)),
+      );
+      if (pollingUsers && generation === pollGeneration)
+        pollTimer = setTimeout(poll, 2000);
+    };
+    void poll();
+  }
 });

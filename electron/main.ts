@@ -29,6 +29,12 @@ interface WindowState {
   isMaximized?: boolean;
 }
 
+interface BootstrapManagerConfig {
+  name: string;
+  url: string;
+  token: string;
+}
+
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const FIND_VIEW_WIDTH = 380;
@@ -99,6 +105,16 @@ function saveWindowStateDebounced(state: WindowState) {
   saveTimeout = setTimeout(() => {
     saveWindowState(state);
   }, 500);
+}
+
+function getBootstrapManager(): BootstrapManagerConfig | null {
+  const url = process.env.DAROX_MANAGER_URL?.trim();
+  if (!url) return null;
+  return {
+    name: process.env.DAROX_MANAGER_NAME?.trim() || "Default",
+    url,
+    token: process.env.AROX_API_TOKEN || "",
+  };
 }
 
 /** Read current bounds + maximized flag from a window. When maximized the
@@ -356,6 +372,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("dialog:open", async (_e, opts) => {
     if (!mainWindow) return { canceled: true, filePaths: [] };
     return dialog.showOpenDialog(mainWindow, opts ?? {});
+  });
+  ipcMain.handle("backend:get-bootstrap-manager", (event) => {
+    if (event.sender !== mainWindow?.webContents) return null;
+    return getBootstrapManager();
   });
   ipcMain.on(
     "find:start",

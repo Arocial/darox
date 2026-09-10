@@ -11,7 +11,7 @@
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "electron:compile": "tsc -p electron",
-    "electron:dev": "concurrently -k -n next,manager,electron -c blue,green,magenta \"npm run dev\" \"cross-env AROX_API_TOKEN=1 arox-manager\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
+    "electron:dev": "cross-env AROX_API_TOKEN=1 DAROX_MANAGER_URL=http://127.0.0.1:3145 concurrently -k -n next,manager,electron -c blue,green,magenta \"npm run dev\" \"arox-manager\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
     "electron:build": "next build && npm run electron:compile && electron-builder",
     "manager": "arox-manager",
     "test": "node --test tests/*.test.mjs"

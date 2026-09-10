@@ -14,7 +14,8 @@ npm run electron:dev     # Frontend, local Manager, and Electron shell
 
 `electron:dev` starts `arox-manager` from the project directory with the default
 development token `AROX_API_TOKEN=1`. The command requires `arox-manager` on
-PATH; enter `1` as the token when adding its connection in Darox.
+PATH. Electron injects this local connection automatically, so it does not need
+to be added through the frontend.
 
 For browser-only development, start a Manager independently in another terminal:
 
