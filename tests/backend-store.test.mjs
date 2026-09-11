@@ -115,7 +115,7 @@ test("saving a stopped or empty Manager does not start a worker; selecting a sto
   reset();
 });
 
-test("unchanged polling preserves connection revision; restart at the same URL changes it", async () => {
+test("unchanged refresh preserves connection revision; restart at the same URL changes it", async () => {
   let current = profile();
   globalThis.fetch = async () => response([current]);
   await store.getState().saveManager(config("one"));
@@ -236,12 +236,26 @@ test("Electron bootstrap Manager connects without persisting its token", async (
     return response([profile()]);
   };
 
-  const dispose = store.getState().initialize();
-  while (!store.getState().hydrated || store.getState().status !== "connected")
-    await new Promise((resolve) => setImmediate(resolve));
-  dispose();
+  const scheduledDelays = [];
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    scheduledDelays.push(delay);
+    return originalSetTimeout(callback, delay, ...args);
+  };
+  try {
+    store.getState().initialize();
+    while (
+      !store.getState().hydrated ||
+      store.getState().status !== "connected"
+    )
+      await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
 
   const manager = store.getState().managers[0];
+  assert.equal(calls.length, 1);
+  assert.ok(!scheduledDelays.includes(2000));
   assert.equal(manager.id, "electron-default");
   assert.equal(manager.electronManaged, true);
   assert.equal(

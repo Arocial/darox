@@ -46,7 +46,7 @@ interface BackendState {
     profileId: string,
     action: ProfileAction,
   ) => Promise<void>;
-  initialize: () => () => void;
+  initialize: () => void;
 }
 
 const MANAGERS_KEY = "darox_managers_v1";
@@ -132,9 +132,6 @@ export function profileKey(managerId: string, profileId: string): string {
 export const useBackendStore = create<BackendState>((set, get) => {
   const versions = new Map<string, number>();
   let initialized = false;
-  let pollingUsers = 0;
-  let pollTimer: ReturnType<typeof setTimeout> | undefined;
-  let pollGeneration = 0;
   let lastExecution: string | null = null;
 
   const syncActive = () => {
@@ -296,10 +293,13 @@ export const useBackendStore = create<BackendState>((set, get) => {
     },
 
     selectProfile: async (managerId, profileId) => {
-      const profile = get().connections[managerId]?.profiles.find(
-        (p) => p.id === profileId,
-      );
-      if (!profile) return;
+      await get().refreshManager(managerId);
+      const connection = get().connections[managerId];
+      if (connection?.status !== "connected")
+        throw new Error(connection?.error || "Manager disconnected.");
+      const profile = connection.profiles.find((p) => p.id === profileId);
+      if (!profile)
+        throw new Error("Profile is no longer configured in this Manager.");
       select(managerId, profileId);
       if (profile.status === "stopped" || profile.status === "failed")
         await get().profileAction(managerId, profileId, "start");
@@ -340,7 +340,7 @@ export const useBackendStore = create<BackendState>((set, get) => {
             return;
           if (Date.now() >= deadline)
             throw new Error(
-              "Profile operation is still pending. Its status will continue to refresh.",
+              "Profile operation is still pending. Refresh its status later.",
             );
           await new Promise((resolve) => setTimeout(resolve, 300));
         }
@@ -353,79 +353,52 @@ export const useBackendStore = create<BackendState>((set, get) => {
     },
 
     initialize: () => {
-      if (!initialized) {
-        initialized = true;
-        void (async () => {
-          const storedManagers = readManagers();
-          let electronManager: BackendManagerConfig | undefined;
-          try {
-            const bootstrap = await window.darox?.getBootstrapManager();
-            if (bootstrap) {
-              electronManager = {
-                id: ELECTRON_MANAGER_ID,
-                name: bootstrap.name.trim() || "Default",
-                url: normalizeManagerUrl(bootstrap.url),
-                token: bootstrap.token,
-                rememberToken: false,
-                electronManaged: true,
-              };
-            }
-          } catch (error) {
-            console.error(
-              "Unable to load Electron Manager configuration",
-              error,
-            );
+      if (initialized) return;
+      initialized = true;
+      void (async () => {
+        const storedManagers = readManagers();
+        let electronManager: BackendManagerConfig | undefined;
+        try {
+          const bootstrap = await window.darox?.getBootstrapManager();
+          if (bootstrap) {
+            electronManager = {
+              id: ELECTRON_MANAGER_ID,
+              name: bootstrap.name.trim() || "Default",
+              url: normalizeManagerUrl(bootstrap.url),
+              token: bootstrap.token,
+              rememberToken: false,
+              electronManaged: true,
+            };
           }
-          const managers = electronManager
-            ? [
-                ...storedManagers.filter((m) => m.id !== ELECTRON_MANAGER_ID),
-                electronManager,
-              ]
-            : storedManagers;
-          const selection = readJson(localStorage, SELECTION_KEY, {});
-          const manager =
-            managers.find((m) => m.id === selection?.managerId) ||
-            electronManager ||
-            managers[0];
-          set({
-            managers,
-            connections: Object.fromEntries(
-              managers.map((m) => [
-                m.id,
-                { status: "connecting", profiles: [] },
-              ]),
-            ),
-            hydrated: true,
-          });
-          select(
-            manager?.id || null,
-            typeof selection?.profileId === "string" ? selection.profileId : "",
-          );
-          if (pollingUsers) startPolling();
-        })();
-      }
-      pollingUsers++;
-      if (pollingUsers === 1 && get().hydrated) startPolling();
-      return () => {
-        pollingUsers--;
-        if (!pollingUsers) {
-          pollGeneration++;
-          clearTimeout(pollTimer);
+        } catch (error) {
+          console.error("Unable to load Electron Manager configuration", error);
         }
-      };
+        const managers = electronManager
+          ? [
+              ...storedManagers.filter((m) => m.id !== ELECTRON_MANAGER_ID),
+              electronManager,
+            ]
+          : storedManagers;
+        const selection = readJson(localStorage, SELECTION_KEY, {});
+        const manager =
+          managers.find((m) => m.id === selection?.managerId) ||
+          electronManager ||
+          managers[0];
+        set({
+          managers,
+          connections: Object.fromEntries(
+            managers.map((m) => [m.id, { status: "connecting", profiles: [] }]),
+          ),
+          hydrated: true,
+        });
+        select(
+          manager?.id || null,
+          typeof selection?.profileId === "string" ? selection.profileId : "",
+        );
+        await Promise.allSettled(
+          managers.map((item) => get().refreshManager(item.id)),
+        );
+      })();
     },
   };
-
-  function startPolling() {
-    if (!pollingUsers) return;
-    const generation = ++pollGeneration;
-    const poll = async () => {
-      await Promise.allSettled(
-        get().managers.map((m) => get().refreshManager(m.id)),
-      );
-      if (pollingUsers && generation === pollGeneration)
-        pollTimer = setTimeout(poll, 2000);
-    };
-    void poll();
-  }
 });

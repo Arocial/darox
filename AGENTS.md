@@ -47,7 +47,8 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
   directory defines profile ports and autostart settings.
 - `AROX_API_TOKEN` configures Manager authentication; users enter the same token
   when adding the connection in Darox.
-- The frontend polls `/api/profiles` and calls profile start/stop/restart APIs.
+- The frontend fetches `/api/profiles` on initial load and explicit profile-related
+  interactions, then calls profile start/stop/restart APIs as needed.
   HTTP 202 acknowledges an operation; poll for completion and handle HTTP 409.
 - Chat API bases are `<manager-url>/api/profiles/<profile>/proxy`. HTTP Bearer
   authentication and WebSocket token queries use the active Manager's token.

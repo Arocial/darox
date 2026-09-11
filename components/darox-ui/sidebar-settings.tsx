@@ -76,9 +76,17 @@ export function SidebarSettings() {
     }
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen)
+      void Promise.all(
+        backend.managers.map((manager) => backend.refreshManager(manager.id)),
+      );
+  }
+
   return (
     <div className="shrink-0 border-t p-2">
-      <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Root open={open} onOpenChange={handleOpenChange}>
         <Popover.Trigger asChild>
           <button
             type="button"
