@@ -24,7 +24,6 @@ import {
   type SessionState,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
-import { UserTurnAnchorsContext } from "@/components/darox-ui/user-turn-anchors-context";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
 import {
   ChatSubmitContext,
@@ -535,17 +534,6 @@ function AgentChat({
     };
   }, [url]);
 
-  const anchorsValue = useMemo(
-    () => ({
-      forkAt: (inputId: string) =>
-        transport.sendCommand({
-          type: "ForkEvent",
-          input_id: inputId,
-        }),
-    }),
-    [transport],
-  );
-
   const submitUserMessage = useCallback(
     async (message: UIMessage) => {
       const clientMessageId = getClientMessageId(message);
@@ -581,34 +569,30 @@ function AgentChat({
                 <PendingUserMessagesContext.Provider
                   value={pendingUserMessages}
                 >
-                  <UserTurnAnchorsContext.Provider value={anchorsValue}>
-                    <CompactionMarkersContext.Provider
-                      value={compactionMarkers}
-                    >
-                      <CommandInputsContext.Provider value={commandInputs}>
-                        <AssistantRuntimeProvider runtime={runtime}>
-                          <div
-                            className="flex h-full flex-col"
-                            onMouseDown={() =>
-                              isActive && clearCompletionUnread(agentId)
-                            }
-                            onKeyDown={() =>
-                              isActive && clearCompletionUnread(agentId)
-                            }
-                          >
-                            <ConnectionRecovery
-                              transport={transport}
-                              active={visible && status !== "closed"}
-                              resume={resumeChatStream}
-                            />
-                            <div className="min-h-0 flex-1">
-                              <Thread />
-                            </div>
+                  <CompactionMarkersContext.Provider value={compactionMarkers}>
+                    <CommandInputsContext.Provider value={commandInputs}>
+                      <AssistantRuntimeProvider runtime={runtime}>
+                        <div
+                          className="flex h-full flex-col"
+                          onMouseDown={() =>
+                            isActive && clearCompletionUnread(agentId)
+                          }
+                          onKeyDown={() =>
+                            isActive && clearCompletionUnread(agentId)
+                          }
+                        >
+                          <ConnectionRecovery
+                            transport={transport}
+                            active={visible && status !== "closed"}
+                            resume={resumeChatStream}
+                          />
+                          <div className="min-h-0 flex-1">
+                            <Thread />
                           </div>
-                        </AssistantRuntimeProvider>
-                      </CommandInputsContext.Provider>
-                    </CompactionMarkersContext.Provider>
-                  </UserTurnAnchorsContext.Provider>
+                        </div>
+                      </AssistantRuntimeProvider>
+                    </CommandInputsContext.Provider>
+                  </CompactionMarkersContext.Provider>
                 </PendingUserMessagesContext.Provider>
               </ChatSubmitContext.Provider>
             </AgentStatusContext.Provider>

@@ -52,8 +52,8 @@ opening the WebSocket initiates snapshot and event replay.
 
 The backend permits one WebSocket per session node. `acquireTransport(url)` and
 `releaseTransport(url)` maintain one ref-counted transport for each node URL so
-chat, model selection, and fork commands all reuse the same connection. Opening
-a separate one-shot command socket would replace and close the chat socket.
+chat and model selection commands reuse the same connection. Opening a separate
+one-shot command socket would replace and close the chat socket.
 
 The transport opens lazily through `waitForState()`, `reconnectToStream()`,
 `sendMessages()`, or `sendCommand()`. A 200 ms delayed close allows React
@@ -92,7 +92,8 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
 - Send `cmd-turn-state busy=false` only after the final output chunk.
 - Echo the connection-local `client_message_id` and trusted `input_id` for a
   newly accepted client input. Replayed inputs contain only `input_id`; user
-  message metadata carries that same value as `user_input_id` for fork anchors.
+  message metadata carries that same value as `user_input_id` so timeline
+  boundaries retain stable identity across snapshots.
 - `finish`, `stream-close`, and `step-done` are not needed by this frontend.
 
 ## Limitations

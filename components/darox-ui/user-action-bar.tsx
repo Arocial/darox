@@ -1,52 +1,9 @@
 import type { FC } from "react";
-import { CheckIcon, CopyIcon, GitBranchIcon, PencilIcon } from "lucide-react";
-import { toast } from "sonner";
-import { ActionBarPrimitive, AuiIf, useAuiState } from "@assistant-ui/react";
+import { CheckIcon, CopyIcon, PencilIcon } from "lucide-react";
+import { ActionBarPrimitive, AuiIf } from "@assistant-ui/react";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import {
-  useUserTurnAnchors,
-  USER_INPUT_ID_KEY,
-} from "@/components/darox-ui/user-turn-anchors-context";
-import { useAgentTabs } from "@/components/darox-ui/agent-store";
 
 export const UserActionBar: FC = () => {
-  const anchorsCtx = useUserTurnAnchors();
-  const anchorValue = useAuiState(
-    (s) => s.message.metadata?.custom?.[USER_INPUT_ID_KEY],
-  );
-  const anchor = typeof anchorValue === "string" ? anchorValue : null;
-  const openSession = useAgentTabs((s) => s.openSession);
-
-  const onFork = async () => {
-    if (anchorsCtx === null || anchor === null) {
-      toast.error("Fork not available: missing turn anchor.");
-      return;
-    }
-    try {
-      const result = await anchorsCtx.forkAt(anchor);
-      if (result.status !== "handled") {
-        toast.error(
-          result.error || result.output || `Fork failed: ${result.status}`,
-        );
-        return;
-      }
-      const match = result.output?.match(/New branch session id:\s*(\S+)/);
-      const newSessionId = match?.[1];
-      if (!newSessionId) {
-        toast.error(
-          result.output || "Fork succeeded but no session id returned.",
-        );
-        return;
-      }
-      const tab = await openSession(newSessionId);
-      if (!tab) {
-        toast.error("Forked, but failed to open new session.");
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Fork request failed.");
-    }
-  };
-
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -68,14 +25,6 @@ export const UserActionBar: FC = () => {
           <PencilIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
-      <TooltipIconButton
-        tooltip={anchor !== null ? "Fork from this turn" : "Fork unavailable"}
-        className="aui-user-action-fork"
-        onClick={onFork}
-        disabled={anchor === null}
-      >
-        <GitBranchIcon />
-      </TooltipIconButton>
     </ActionBarPrimitive.Root>
   );
 };
