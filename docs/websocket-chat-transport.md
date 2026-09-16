@@ -48,6 +48,12 @@ Client frames are `{ "reply": <UIMessage> }`, `{ "cancel": true }`, or
 `{ "command": <event> }`. The transport no longer sends `{ "resume": true }`;
 opening the WebSocket initiates snapshot and event replay.
 
+Stop invokes `cancelTurn()` through the assistant-ui runtime's stop handler.
+It sends `{ "cancel": true }` on the existing socket and keeps consuming final
+output until the backend reports `busy=false`. AI SDK recovery streams do not
+receive an abort signal, so cancellation does not depend on `chat.stop()`.
+Closing a stream for a user-message boundary or disconnect never cancels a turn.
+
 ## Connection lifecycle
 
 The backend permits one WebSocket per session node. `acquireTransport(url)` and

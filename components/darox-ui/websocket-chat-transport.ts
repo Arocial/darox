@@ -70,7 +70,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controllerClosed = true;
   private pendingChunks: UIMessageChunk[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private abortCleanup: (() => void) | null = null;
   private commandCompletions = new Map<
     string,
     {
@@ -288,10 +287,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     this.controller = null;
     this.controllerClosed = true;
-    if (this.abortCleanup) {
-      this.abortCleanup();
-      this.abortCleanup = null;
-    }
   }
 
   private failController(err: Error) {
@@ -306,10 +301,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     }
     this.controller = null;
     this.controllerClosed = true;
-    if (this.abortCleanup) {
-      this.abortCleanup();
-      this.abortCleanup = null;
-    }
   }
 
   private handleMessage(raw: unknown) {
@@ -436,23 +427,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       },
     });
 
-    if (options.abortSignal) {
-      const signal = options.abortSignal;
-      const onAbort = () => {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          try {
-            this.ws.send(JSON.stringify({ cancel: true }));
-          } catch {}
-        }
-      };
-      if (signal.aborted) {
-        onAbort();
-      } else {
-        signal.addEventListener("abort", onAbort, { once: true });
-        this.abortCleanup = () => signal.removeEventListener("abort", onAbort);
-      }
-    }
-
     try {
       this.ws!.send(JSON.stringify({ reply }));
     } catch (err) {
@@ -461,6 +435,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     return stream;
   };
+
+  /** Cancel the backend turn without interrupting its final output delivery. */
+  public cancelTurn(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error("Cannot stop generation while disconnected");
+    }
+    this.ws.send(JSON.stringify({ cancel: true }));
+  }
 
   /** Send input; the caller owns optimistic timeline insertion and rollback. */
   public async sendUserInput(reply: UI_MESSAGE): Promise<void> {
@@ -502,8 +484,6 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       // where mount → unmount → mount races a CONNECTING socket against a new
       // ensureOpen(), and prevents the stale onclose from clobbering the new
       // controller.
-      // Note: We are caching websocket connection for now and hence no closingPromise.
-      // As a result, the closingPromise mechanism is not necessary in current impl.
       if (this.closingPromise) {
         await this.closingPromise;
       }

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
+import { toast } from "sonner";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
@@ -254,13 +255,25 @@ function AgentChat({
   useEffect(() => {
     if (status === "closed") {
       transport.close();
-      if (chat.status === "submitted" || chat.status === "streaming") {
-        chat.stop();
-      }
     }
-  }, [status, transport, chat.status, chat.stop]);
+  }, [status, transport]);
 
-  const runtime = useAISDKRuntime(chat, { joinStrategy: "none" });
+  const cancelTurn = useCallback(async () => {
+    try {
+      transport.cancelTurn();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to stop generation",
+      );
+    }
+  }, [transport]);
+
+  // Recovery streams have no SDK abort signal. Stop the retained backend turn
+  // explicitly and keep reading until its busy=false frame closes the stream.
+  const runtime = useAISDKRuntime(
+    { ...chat, stop: cancelTurn },
+    { joinStrategy: "none" },
+  );
 
   const setCompletionUnread = useAgentTabs((s) => s.setCompletionUnread);
   const clearCompletionUnread = useAgentTabs((s) => s.clearCompletionUnread);
