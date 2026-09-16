@@ -20,6 +20,8 @@ import {
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 import type { SuggestionItem } from "@/types/chat";
 
+const TOUCH_PRIMARY_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
+
 function useCommandHistory(workspace: string, text: string) {
   const [history, setHistory] = useState<string[]>([]);
 
@@ -310,6 +312,7 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
         autoFocus
         aria-label="Message input"
         submitMode={showMenu ? "none" : "enter"}
+        unstable_insertNewlineOnTouchEnter
         onFocus={() => {
           setIsFocused(true);
           if (text.length > 0) setOpen(true);
@@ -323,7 +326,8 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
             isRunning &&
             !showMenu &&
             !isModifier &&
-            !e.nativeEvent.isComposing
+            !e.nativeEvent.isComposing &&
+            !window.matchMedia(TOUCH_PRIMARY_QUERY).matches
           ) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
