@@ -41,7 +41,7 @@ those pending buffers because it establishes a newer recovery boundary.
 | `compaction` | Dispatch a live compaction marker outside the AI SDK stream |
 | `cmd-client-input` with a started message payload | Establish the canonical user-message timeline boundary: flush the preceding assistant segment, append the echoed user turn, and attach a fresh AI SDK sink for later output |
 | `cmd-client-input` with an accepted command payload | Move pending input into the separate command view without touching the AI SDK stream |
-| `cmd-command-completed` | Update the matching command by `client_message_id` and resolve callers waiting for its result |
+| `cmd-command-completed` | Update the matching command by `input_id` and resolve callers waiting for its result |
 | `cmd-turn-state` | Start/end the retained turn's reading epoch and publish busy/idle state for title and completion UI |
 
 Client frames are `{ "reply": <UIMessage> }`, `{ "cancel": true }`, or
@@ -90,9 +90,9 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
 - Treat a started message payload in `cmd-client-input` as an ordered barrier: preceding assistant chunks
   belong above that user message and later chunks belong below it.
 - Send `cmd-turn-state busy=false` only after the final output chunk.
-- Echo the top-level `client_message_id` for client-originated input so replay
-  is idempotent, and include the fork anchor's `user_input_id` in the echoed
-  message metadata.
+- Echo the connection-local `client_message_id` and trusted `input_id` for a
+  newly accepted client input. Replayed inputs contain only `input_id`; user
+  message metadata carries that same value as `user_input_id` for fork anchors.
 - `finish`, `stream-close`, and `step-done` are not needed by this frontend.
 
 ## Limitations

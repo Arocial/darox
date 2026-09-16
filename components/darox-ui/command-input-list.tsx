@@ -26,7 +26,7 @@ export function CommandInputList({
     const failed = item.status !== "handled" && !pending;
     return (
       <div
-        key={item.clientMessageId}
+        key={item.inputId}
         className="rounded-lg border border-border bg-muted/35 px-3 py-2 font-mono text-foreground text-sm"
         data-slot="command-input"
       >

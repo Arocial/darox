@@ -3,9 +3,9 @@
 import { createContext, useContext } from "react";
 
 export type CommandInputItem = {
-  clientMessageId: string;
+  inputId: string;
+  clientMessageId?: string;
   beforeMessageIndex: number;
-  serverMessageId?: string;
   command: unknown;
   status: "accepted" | string;
   output?: string;

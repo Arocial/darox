@@ -351,11 +351,9 @@ function AgentChat({
             if (entry.type === "message") {
               messageIndex += 1;
             } else if (entry.type === "command") {
-              if (typeof entry.client_message_id !== "string") continue;
               commands.push({
-                clientMessageId: entry.client_message_id,
+                inputId: entry.input_id,
                 beforeMessageIndex: messageIndex,
-                serverMessageId: entry.server_message_id,
                 command: entry.command,
                 status: entry.status,
                 output: entry.output,
@@ -392,31 +390,30 @@ function AgentChat({
           }
         | undefined;
       const clientMessageId = cmd.client_message_id;
+      const inputId = cmd.input_id;
       if (
         payload?.type === "command" &&
         payload.status === "accepted" &&
-        typeof clientMessageId === "string"
+        typeof inputId === "string"
       ) {
-        setPendingUserMessages((current) =>
-          current.filter(
-            (pendingMessage) =>
-              pendingMessage.clientMessageId !== clientMessageId,
-          ),
-        );
+        if (typeof clientMessageId === "string") {
+          setPendingUserMessages((current) =>
+            current.filter(
+              (pendingMessage) =>
+                pendingMessage.clientMessageId !== clientMessageId,
+            ),
+          );
+        }
         setCommandInputs((current) => {
           const next: CommandInputItem = {
-            clientMessageId,
+            inputId,
+            clientMessageId:
+              typeof clientMessageId === "string" ? clientMessageId : undefined,
             beforeMessageIndex: chat.messages.length,
-            serverMessageId:
-              typeof cmd.server_message_id === "string"
-                ? cmd.server_message_id
-                : undefined,
             command: payload.command,
             status: "accepted",
           };
-          const index = current.findIndex(
-            (item) => item.clientMessageId === clientMessageId,
-          );
+          const index = current.findIndex((item) => item.inputId === inputId);
           if (index === -1) return [...current, next];
           return current.map((item, itemIndex) =>
             itemIndex === index ? { ...item, ...next } : item,
@@ -463,38 +460,27 @@ function AgentChat({
     } else if (cmd.type === "cmd-command-completed") {
       const input = cmd.input as
         | {
-            client_message_id?: unknown;
-            server_message_id?: unknown;
+            input_id?: unknown;
             payload?: { command?: unknown };
           }
         | undefined;
-      const clientMessageId = input?.client_message_id;
-      if (typeof clientMessageId !== "string") return;
-      setPendingUserMessages((current) =>
-        current.filter(
-          (pendingMessage) =>
-            pendingMessage.clientMessageId !== clientMessageId,
-        ),
-      );
+      const inputId = input?.input_id;
+      if (typeof inputId !== "string") return;
       setCommandInputs((current) => {
+        const existing = current.find((item) => item.inputId === inputId);
         const completed: CommandInputItem = {
-          clientMessageId,
+          inputId,
+          clientMessageId: existing?.clientMessageId,
           beforeMessageIndex: chat.messages.length,
-          serverMessageId:
-            typeof input?.server_message_id === "string"
-              ? input.server_message_id
-              : undefined,
           command: input?.payload?.command,
           status: typeof cmd.status === "string" ? cmd.status : "error",
           output: typeof cmd.output === "string" ? cmd.output : undefined,
           error: typeof cmd.error === "string" ? cmd.error : undefined,
         };
-        const found = current.some(
-          (item) => item.clientMessageId === clientMessageId,
-        );
+        const found = existing !== undefined;
         return found
           ? current.map((item) =>
-              item.clientMessageId === clientMessageId
+              item.inputId === inputId
                 ? {
                     ...completed,
                     beforeMessageIndex: item.beforeMessageIndex,
@@ -551,10 +537,10 @@ function AgentChat({
 
   const anchorsValue = useMemo(
     () => ({
-      forkAt: (server_message_id: string) =>
+      forkAt: (inputId: string) =>
         transport.sendCommand({
           type: "ForkEvent",
-          event_id: server_message_id,
+          input_id: inputId,
         }),
     }),
     [transport],

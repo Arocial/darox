@@ -74,7 +74,7 @@ The channel carries two types of data:
 1. **AI Generation Stream**: Standard Vercel AI SDK content parts (`text-*`, `tool-*`, etc.) flow directly into the chat thread UI.
 2. **Backend Commands (`cmd-*`)**: Application-level instructions pushed from the server. The transport intercepts any frame starting with `cmd-` and dispatches it globally via `useBackendCommands`.
    - `cmd-turn-state`: Reports the retained turn's busy/idle boundary.
-   - `cmd-client-input`: Reports typed client-input lifecycle changes. Started messages split the visible assistant timeline; accepted commands use a separate command view.
+   - `cmd-client-input`: Reports typed client-input lifecycle changes. Its trusted `input_id` persists in snapshots; `client_message_id` is only echoed for newly accepted inputs on the originating connection. Started messages split the visible assistant timeline; accepted commands use a separate command view.
    - `cmd-command-completed`: Completes an accepted command with its status and optional output or error.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
 

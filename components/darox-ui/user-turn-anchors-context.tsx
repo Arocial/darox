@@ -3,16 +3,16 @@
 import { createContext, useContext } from "react";
 import type { AgentCommandResult } from "./websocket-chat-transport";
 
-// Key under which a user message's fork anchor (the backend `user_input`
-// session-event id) is stored on its `metadata.custom`. Set live from the
+// Key under which a user message's backend input id is stored on its
+// `metadata.custom`. Set live from the
 // `cmd-client-input` event and delivered the same way by state snapshots,
 // so the message itself is the single source of truth — no id mapping.
 export const USER_INPUT_ID_KEY = "user_input_id";
 
 export type UserTurnAnchorsContextValue = {
-  // Fork the current session at the given event id. Resolves from the command
+  // Fork the current session at the given input id. Resolves from the command
   // completion event carrying the new session id in `output`.
-  forkAt: (server_message_id: string) => Promise<AgentCommandResult>;
+  forkAt: (inputId: string) => Promise<AgentCommandResult>;
 };
 
 export const UserTurnAnchorsContext =

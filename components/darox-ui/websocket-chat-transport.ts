@@ -39,8 +39,7 @@ export type CompactionState = {
 };
 
 export type CommandState = {
-  client_message_id?: string;
-  server_message_id?: string;
+  input_id: string;
   command: unknown;
   status: string;
   output?: string;
@@ -325,15 +324,26 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
     if (msg.type.startsWith("cmd-") || msg.type === "compaction") {
       const command = msg as BackendCommand;
-      if (msg.type === "cmd-command-completed") {
-        const input = command.input as
-          | { client_message_id?: unknown }
-          | undefined;
-        const clientMessageId = input?.client_message_id;
-        if (typeof clientMessageId === "string") {
+      if (msg.type === "cmd-client-input") {
+        const clientMessageId = command.client_message_id;
+        const inputId = command.input_id;
+        if (
+          typeof clientMessageId === "string" &&
+          typeof inputId === "string"
+        ) {
           const completion = this.commandCompletions.get(clientMessageId);
           if (completion) {
             this.commandCompletions.delete(clientMessageId);
+            this.commandCompletions.set(inputId, completion);
+          }
+        }
+      } else if (msg.type === "cmd-command-completed") {
+        const input = command.input as { input_id?: unknown } | undefined;
+        const inputId = input?.input_id;
+        if (typeof inputId === "string") {
+          const completion = this.commandCompletions.get(inputId);
+          if (completion) {
+            this.commandCompletions.delete(inputId);
             completion.resolve({
               status:
                 typeof command.status === "string" ? command.status : "error",
@@ -460,7 +470,8 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
   /**
    * Send a structured command (slash-equivalent) without going through the
-   * LLM. Completion is correlated by the stable client message id.
+   * LLM. The acceptance frame maps the local client id to the backend input id,
+   * which then correlates the completion frame.
    */
   async sendCommand(event: {
     type: string;
