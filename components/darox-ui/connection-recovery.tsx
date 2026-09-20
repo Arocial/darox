@@ -73,7 +73,7 @@ export function ConnectionRecovery({
       }
     });
     const foreground = () => {
-      if (!document.hidden) void recover(true);
+      if (!document.hidden) void recover();
     };
     const online = () => void recover(true);
     window.addEventListener("online", online);

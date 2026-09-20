@@ -102,9 +102,12 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     this.url = options.url;
   }
 
-  private ensureOpen(): Promise<void> {
+  private async ensureOpen(): Promise<void> {
+    if (this.closingPromise) {
+      await this.closingPromise;
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return Promise.resolve();
+      return;
     }
     if (this.openPromise) return this.openPromise;
 
