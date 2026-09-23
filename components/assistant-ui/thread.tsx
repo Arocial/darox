@@ -20,6 +20,7 @@ import {
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { displayMessageBoundary } from "@/components/darox-ui/display-message-boundary";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -28,6 +29,7 @@ import {
   BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
+  getExternalStoreMessages,
   groupPartByType,
   MessagePrimitive,
   SuggestionPrimitive,
@@ -53,6 +55,7 @@ import {
 import {
   createContext,
   useContext,
+  useMemo,
   type ComponentType,
   type FC,
   type PropsWithChildren,
@@ -66,8 +69,14 @@ import {
 } from "@/components/darox-ui/chat-submit-context";
 import { CommandInputList } from "@/components/darox-ui/command-input-list";
 import { CompactionMarkerList } from "@/components/darox-ui/compaction-marker-list";
-import { useCompactionMarkers } from "@/components/darox-ui/compaction-marker-context";
-import { useCommandInputs } from "@/components/darox-ui/command-input-context";
+import {
+  CompactionMarkersContext,
+  useCompactionMarkers,
+} from "@/components/darox-ui/compaction-marker-context";
+import {
+  CommandInputsContext,
+  useCommandInputs,
+} from "@/components/darox-ui/command-input-context";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -106,17 +115,48 @@ export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
   const pendingMessages = usePendingUserMessages();
   const commands = useCommandInputs();
   const compactionMarkers = useCompactionMarkers();
+  const messages = useAuiState((state) => state.thread.messages);
+  const sourceCounts = useMemo(
+    () => messages.map((message) => getExternalStoreMessages(message).length),
+    [messages],
+  );
+  const displayedCommands = useMemo(
+    () =>
+      commands.map((command) => ({
+        ...command,
+        beforeMessageIndex: displayMessageBoundary(
+          command.beforeMessageIndex,
+          sourceCounts,
+        ),
+      })),
+    [commands, sourceCounts],
+  );
+  const displayedCompactions = useMemo(
+    () =>
+      compactionMarkers.map((marker) => ({
+        ...marker,
+        beforeMessageIndex: displayMessageBoundary(
+          marker.beforeMessageIndex,
+          sourceCounts,
+        ),
+      })),
+    [compactionMarkers, sourceCounts],
+  );
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot
-        isEmpty={
-          isEmpty &&
-          pendingMessages.length === 0 &&
-          commands.length === 0 &&
-          compactionMarkers.length === 0
-        }
-      />
+      <CommandInputsContext.Provider value={displayedCommands}>
+        <CompactionMarkersContext.Provider value={displayedCompactions}>
+          <ThreadRoot
+            isEmpty={
+              isEmpty &&
+              pendingMessages.length === 0 &&
+              commands.length === 0 &&
+              compactionMarkers.length === 0
+            }
+          />
+        </CompactionMarkersContext.Provider>
+      </CommandInputsContext.Provider>
     </ThreadComponentsContext.Provider>
   );
 };

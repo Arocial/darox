@@ -271,10 +271,7 @@ function AgentChat({
 
   // Recovery streams have no SDK abort signal. Stop the retained backend turn
   // explicitly and keep reading until its busy=false frame closes the stream.
-  const runtime = useAISDKRuntime(
-    { ...chat, stop: cancelTurn },
-    { joinStrategy: "none" },
-  );
+  const runtime = useAISDKRuntime({ ...chat, stop: cancelTurn });
 
   const setCompletionUnread = useAgentTabs((s) => s.setCompletionUnread);
   const clearCompletionUnread = useAgentTabs((s) => s.clearCompletionUnread);
