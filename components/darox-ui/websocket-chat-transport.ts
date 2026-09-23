@@ -56,6 +56,13 @@ export type AgentCommandResult = {
 
 const STREAM_BATCH_INTERVAL_MS = 150;
 
+export class WebSocketConnectionClosedError extends Error {
+  constructor() {
+    super("WebSocket connection closed");
+    this.name = "WebSocketConnectionClosedError";
+  }
+}
+
 export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
 {
@@ -145,7 +152,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         const wasOpening = this.openPromise;
         this.ws = null;
         this.openPromise = null;
-        const error = new Error("WebSocket connection closed");
+        const error = new WebSocketConnectionClosedError();
         if (wasOpening) reject(error);
         for (const waiter of this.stateWaiters.splice(0)) waiter.reject(error);
         this.commandCompletions.forEach((completion) => {
@@ -518,7 +525,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     };
 
   close() {
-    const error = new Error("WebSocket connection closed");
+    const error = new WebSocketConnectionClosedError();
     this.rejectOpening?.(error);
     this.rejectOpening = null;
     for (const waiter of this.stateWaiters.splice(0)) waiter.reject(error);

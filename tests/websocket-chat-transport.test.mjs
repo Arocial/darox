@@ -13,7 +13,7 @@ registerHooks({
   },
 });
 
-const { WebSocketChatTransport } = await import(
+const { WebSocketChatTransport, WebSocketConnectionClosedError } = await import(
   "../components/darox-ui/websocket-chat-transport.ts"
 );
 
@@ -131,4 +131,49 @@ test("ensureOpen waits for pending socket closure before establishing a new conn
   assert.equal(sockets.length, 2);
   assert.deepEqual(state.history, []);
   assert.equal(transport.connected, true);
+});
+
+test("unexpected disconnect rejects pending state with a recoverable error", async (t) => {
+  const sockets = [];
+  class MockWebSocket {
+    static OPEN = 1;
+    static CLOSED = 3;
+    readyState = 0;
+    constructor() {
+      sockets.push(this);
+    }
+    open() {
+      this.readyState = 1;
+      this.onopen?.();
+    }
+    receive(frame) {
+      this.onmessage?.({ data: JSON.stringify(frame) });
+    }
+    close() {
+      this.readyState = 3;
+      this.onclose?.({ code: 1006 });
+    }
+  }
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = MockWebSocket;
+  t.after(() => {
+    globalThis.WebSocket = originalWebSocket;
+  });
+  const transport = new WebSocketChatTransport({ url: "ws://test-recovery" });
+  t.after(() => transport.close());
+
+  const opening = transport.waitForState();
+  sockets[0].close();
+  await assert.rejects(opening, WebSocketConnectionClosedError);
+
+  const waiting = transport.waitForState();
+  sockets[1].open();
+  await new Promise((resolve) => setImmediate(resolve));
+  sockets[1].close();
+  await assert.rejects(waiting, WebSocketConnectionClosedError);
+
+  const recovered = transport.waitForState();
+  sockets[2].open();
+  sockets[2].receive({ type: "state", history: [], busy: false });
+  assert.deepEqual((await recovered).history, []);
 });

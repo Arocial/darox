@@ -22,6 +22,7 @@ import {
   acquireTransport,
   releaseTransport,
   httpBaseToWsUrl,
+  WebSocketConnectionClosedError,
   type SessionState,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
@@ -663,8 +664,11 @@ function AgentChatLoader({
           setInitialMessages(ensureUniqueMessageIds(state.history));
       })
       .catch((err) => {
-        console.error("Failed to load session state", err);
-        if (!cancelled) setInitialMessages([]);
+        if (cancelled) return;
+        if (!(err instanceof WebSocketConnectionClosedError)) {
+          console.error("Failed to load session state", err);
+        }
+        setInitialMessages([]);
       });
     return () => {
       cancelled = true;
