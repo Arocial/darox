@@ -10,10 +10,12 @@ import {
   clipboard,
   screen,
   WebContentsView,
+  shell,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
+import { configureExternalLinks } from "./external-links";
 
 const isDev = !!process.env.ELECTRON_DEV;
 let mainWindow: BrowserWindow | null = null;
@@ -240,6 +242,11 @@ async function createWindow() {
     },
   });
 
+  const appUrl = isDev ? "http://localhost:3140" : "app://darox/index.html";
+  configureExternalLinks(mainWindow.webContents, appUrl, (url) =>
+    shell.openExternal(url),
+  );
+
   if (state.isMaximized) {
     mainWindow.maximize();
   }
@@ -312,11 +319,7 @@ async function createWindow() {
     findView?.webContents.focus();
   });
 
-  if (isDev) {
-    await mainWindow.loadURL("http://localhost:3140");
-  } else {
-    await mainWindow.loadURL("app://darox/index.html");
-  }
+  await mainWindow.loadURL(appUrl);
 
   mainWindow.on("closed", () => {
     findView?.webContents.close();

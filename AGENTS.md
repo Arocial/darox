@@ -33,6 +33,7 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 - **Electron** main process under `/electron` (compiled to `/electron/dist`)
   - `main.ts` — window, IPC handlers, `app://` protocol that serves `/out` in prod
+  - `external-links.ts` — opens external HTTP(S) links in the system browser and mail links in the system handler; blocks external navigation and new Electron windows while preserving same-origin app navigation
   - `preload.ts` — exposes `window.darox.openDialog` via `contextBridge`
   - Backend connections and profile lifecycle operations live in the shared frontend; Electron never starts or stops Manager processes.
 - Dev: `electron:dev` runs Next on 3140, starts a local Manager with token `1`,
