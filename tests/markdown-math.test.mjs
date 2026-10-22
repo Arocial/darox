@@ -4,13 +4,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import {
+  preprocessMath,
   rehypePlugins,
   remarkPlugins,
 } from "../components/darox-ui/markdown-plugins.ts";
 
 const render = (children) =>
   renderToStaticMarkup(
-    createElement(ReactMarkdown, { remarkPlugins, rehypePlugins, children }),
+    createElement(
+      ReactMarkdown,
+      { remarkPlugins, rehypePlugins },
+      preprocessMath(children),
+    ),
   );
 
 test("renders inline and block math with KaTeX", () => {
@@ -53,4 +58,41 @@ test("does not trust links or unbounded size commands in math", () => {
   const oversized = render("$\\rule{1000em}{1000em}$");
   assert.match(oversized, /border-right-width:20em/);
   assert.doesNotMatch(oversized, /(?:width|height)[=:]"?1000em/);
+});
+
+test("renders LaTeX bracket delimiters as display and inline math", () => {
+  for (const text of [
+    String.raw`\[x^2 + y^2 = z^2\]`,
+    "\\[\n\\frac{1}{2}\n\\]",
+    String.raw`Before \[x^2\] after.`,
+    String.raw`\\[x^2\\]`,
+  ]) {
+    assert.match(render(text), /class="katex-display"/);
+  }
+  const inline = render(String.raw`Energy: \(E = mc^2\).`);
+  assert.match(inline, /class="katex"/);
+  assert.doesNotMatch(inline, /katex-display/);
+});
+
+test("does not rewrite bracket delimiters in code or existing math", () => {
+  for (const text of [
+    "Code: `\\[x\\]` and `\\(y\\)`.",
+    "```latex\n\\[x\\]\n```",
+    "~~~latex\n\\(x\\)\n~~~",
+    "    \\[x\\]",
+    "```latex\n\\[x\\]",
+    String.raw`$\text{\(x\)}$`,
+    String.raw`$$
+\begin{matrix}a\\[2pt]b\end{matrix}
+$$`,
+  ]) {
+    assert.equal(preprocessMath(text), text);
+  }
+});
+
+test("keeps incomplete brackets unchanged until streaming closes them", () => {
+  const incomplete = String.raw`Before \[\frac{1}{2}`;
+  assert.equal(preprocessMath(incomplete), incomplete);
+  assert.match(render(`${incomplete}\\]`), /class="katex-display"/);
+  assert.equal(preprocessMath(String.raw`Before \(x`), String.raw`Before \(x`);
 });

@@ -63,7 +63,9 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 
 Markdown in responses and reasoning shares `MarkdownText`. Its plugin configuration
 lives in `components/darox-ui/markdown-plugins.ts`: GFM plus `remark-math` and
-`rehype-katex` support `$...$` inline math and multiline `$$` blocks. KaTeX CSS
+`rehype-katex` support `$...$` inline math and multiline `$$` blocks. Its
+`preprocessMath` also supports `\(...\)` inline and `\[...\]` display math,
+while preserving code, HTML, and existing dollar-delimited math. KaTeX CSS
 and fonts are bundled locally; display math scrolls horizontally. The npm KaTeX
 override keeps parser/rendering dependencies on the same version as its CSS.
 

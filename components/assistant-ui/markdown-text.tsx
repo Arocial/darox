@@ -8,7 +8,7 @@ import {
   unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
-import { rehypePlugins, remarkPlugins } from "@/components/darox-ui/markdown-plugins";
+import { preprocessMath, rehypePlugins, remarkPlugins } from "@/components/darox-ui/markdown-plugins";
 import { type FC, memo, useState } from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 
@@ -20,6 +20,7 @@ const MARKDOWN_SMOOTH_OPTIONS = { minCommitMs: 100 } as const;
 const MarkdownTextImpl = () => {
   return (
     <MarkdownTextPrimitive
+      preprocess={preprocessMath}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
       className="aui-md"
