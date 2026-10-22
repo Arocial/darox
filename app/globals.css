@@ -5,6 +5,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.aui-md .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25rem;
+}
+
 .app-frame {
   display: flex;
   flex-direction: column;

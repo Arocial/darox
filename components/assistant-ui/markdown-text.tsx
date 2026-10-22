@@ -8,7 +8,7 @@ import {
   unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
-import remarkGfm from "remark-gfm";
+import { rehypePlugins, remarkPlugins } from "@/components/darox-ui/markdown-plugins";
 import { type FC, memo, useState } from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 
@@ -20,7 +20,8 @@ const MARKDOWN_SMOOTH_OPTIONS = { minCommitMs: 100 } as const;
 const MarkdownTextImpl = () => {
   return (
     <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
       className="aui-md"
       components={defaultComponents}
       smooth={MARKDOWN_SMOOTH_OPTIONS}

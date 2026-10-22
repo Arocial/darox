@@ -11,7 +11,7 @@ Darox is a chatbot UI built with Next.js (static export) and Electron for cross-
 ```bash
 npm run dev           # Next dev server on http://localhost:3140
 npm run manager       # Run an independent arox-manager process (default port 3145)
-npm test              # Manager client/store regression tests (Node 22.18+)
+npm test              # Regression tests (Node 22.18+)
 npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
 npm run lint          # Biome check
 npm run electron:dev  # Run Next dev + local Manager + Electron shell together
@@ -60,6 +60,12 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 1. **`/components/ui`** — shadcn/ui Radix primitives. Minimize modifications (third-party origin).
 2. **`/components/assistant-ui`** — @assistant-ui conversation components (thread, markdown, attachments, tool-fallback). Minimize modifications (third-party origin).
 3. **`/components/darox-ui`** — Custom project components. **Put new components here.**
+
+Markdown in responses and reasoning shares `MarkdownText`. Its plugin configuration
+lives in `components/darox-ui/markdown-plugins.ts`: GFM plus `remark-math` and
+`rehype-katex` support `$...$` inline math and multiline `$$` blocks. KaTeX CSS
+and fonts are bundled locally; display math scrolls horizontally. The npm KaTeX
+override keeps parser/rendering dependencies on the same version as its CSS.
 
 ### Messaging Architecture
 
