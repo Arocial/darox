@@ -177,3 +177,105 @@ test("unexpected disconnect rejects pending state with a recoverable error", asy
   sockets[2].receive({ type: "state", history: [], busy: false });
   assert.deepEqual((await recovered).history, []);
 });
+
+test("model selection survives resubscription without replaying chat history", async (t) => {
+  const sockets = [];
+  class MockWebSocket {
+    static OPEN = 1;
+    static CLOSED = 3;
+    readyState = 1;
+    sent = [];
+    constructor() {
+      sockets.push(this);
+      queueMicrotask(() => {
+        this.onopen?.();
+        this.receive({
+          type: "state",
+          history: [],
+          model: "default",
+          busy: false,
+        });
+      });
+    }
+    send(data) {
+      this.sent.push(JSON.parse(data));
+    }
+    receive(frame) {
+      this.onmessage?.({ data: JSON.stringify(frame) });
+    }
+    close() {
+      this.readyState = 3;
+      this.onclose?.({ code: 1000 });
+    }
+  }
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = MockWebSocket;
+  const transport = new WebSocketChatTransport({ url: "ws://model-session" });
+  const other = new WebSocketChatTransport({ url: "ws://other-session" });
+  t.after(() => {
+    transport.close();
+    other.close();
+    globalThis.WebSocket = originalWebSocket;
+  });
+  await transport.waitForState();
+  await other.waitForState();
+  let stateNotifications = 0;
+  transport.onState(() => stateNotifications++);
+  const models = [];
+  const unsubscribe = transport.onModel((model) => models.push(model));
+  const complete = async (event, status) => {
+    const pending = transport.sendCommand(event);
+    await new Promise((resolve) => setImmediate(resolve));
+    const socket = sockets[0];
+    const { client_message_id } = socket.sent.at(-1);
+    socket.receive({
+      type: "cmd-client-input",
+      client_message_id,
+      input_id: client_message_id,
+      payload: { type: "command", command: event },
+    });
+    socket.receive({
+      type: "cmd-command-completed",
+      input: { input_id: client_message_id },
+      status,
+    });
+    return pending;
+  };
+
+  await complete({ type: "SetModelEvent", model_ref: "selected" }, "handled");
+  assert.deepEqual(models, ["default", "selected"]);
+  assert.equal(stateNotifications, 1);
+  unsubscribe();
+  const restored = [];
+  const off = transport.onModel((model) => restored.push(model));
+  assert.deepEqual(restored, ["selected"]);
+  assert.equal((await transport.waitForState()).model, "selected");
+  assert.equal((await other.waitForState()).model, "default");
+
+  await complete({ type: "SetModelEvent", model_ref: "rejected" }, "error");
+  await complete({ type: "OtherEvent", model_ref: "unrelated" }, "handled");
+  assert.deepEqual(restored, ["selected"]);
+  assert.equal((await transport.waitForState()).model, "selected");
+
+  sockets[0].receive({
+    type: "state",
+    history: [],
+    model: "server-model",
+    busy: false,
+  });
+  assert.deepEqual(restored, ["selected", "server-model"]);
+  assert.equal(stateNotifications, 2);
+  off();
+  sockets[0].receive({
+    type: "state",
+    history: [],
+    model: "latest",
+    busy: false,
+  });
+  assert.deepEqual(restored, ["selected", "server-model"]);
+  let latest;
+  transport.onModel((model) => {
+    latest = model;
+  });
+  assert.equal(latest, "latest");
+});

@@ -33,10 +33,10 @@ export const ModelPill: FC<{
     [apiBase, agentId, subagentId, streamMode],
   );
 
-  // The WebSocket state snapshot is the source of truth for the model.
+  // Restore the shared model cache on remount, including confirmed changes.
   useEffect(() => {
     const transport = acquireTransport(wsUrl);
-    const unsubscribe = transport.onState((state) => setModel(state.model));
+    const unsubscribe = transport.onModel(setModel);
     return () => {
       unsubscribe();
       releaseTransport(wsUrl);

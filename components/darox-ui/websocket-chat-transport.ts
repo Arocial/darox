@@ -88,6 +88,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private commandListeners: Set<CommandListener> = new Set();
   private pendingCommands: BackendCommand[] = [];
   private stateListeners: Set<StateListener> = new Set();
+  private modelListeners = new Set<(model: string | null) => void>();
   private latestState: SessionState | null = null;
   private disconnectListeners = new Set<(code: number) => void>();
   public replaced = false;
@@ -183,6 +184,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
     if (this.latestState) listener(this.latestState);
     return () => {
       this.stateListeners.delete(listener);
+    };
+  }
+
+  public onModel(listener: (model: string | null) => void): () => void {
+    this.modelListeners.add(listener);
+    if (this.latestState) listener(this.latestState.model);
+    return () => {
+      this.modelListeners.delete(listener);
     };
   }
 
@@ -402,6 +411,9 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         }
         this.pendingCommands = [];
         this.latestState = state;
+        this.modelListeners.forEach((listener) => {
+          listener(state.model);
+        });
         for (const waiter of this.stateWaiters.splice(0)) waiter.resolve(state);
         this.stateListeners.forEach((listener) => {
           listener(state);
@@ -484,7 +496,21 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
       this.commandCompletions.delete(clientMessageId);
       throw err instanceof Error ? err : new Error(String(err));
     }
-    return completionPromise;
+    const result = await completionPromise;
+    if (
+      result.status === "handled" &&
+      event.type === "SetModelEvent" &&
+      typeof event.model_ref === "string" &&
+      this.latestState
+    ) {
+      // Model-only changes must not replay a stale chat history snapshot.
+      const model = event.model_ref;
+      this.latestState.model = model;
+      this.modelListeners.forEach((listener) => {
+        listener(model);
+      });
+    }
+    return result;
   }
 
   reconnectToStream: ChatTransport<UI_MESSAGE>["reconnectToStream"] =

@@ -23,8 +23,10 @@ streaming live events.
 
 `waitForState()` replaces the former HTTP `/state` request. The agent panel uses
 its history to initialize `useChat`, while `ModelPill` subscribes through
-`onState()` for the model. Later `state` frames refresh both consumers after the
-runtime commits a new snapshot.
+`onModel()` for the model. Later `state` frames refresh both consumers after the
+runtime commits a new snapshot. Successful `SetModelEvent` commands also update
+the cached model and notify model subscribers without replaying chat history,
+so remounting the selector restores the selected model instead of a stale snapshot.
 
 Replay can begin before React installs the AI SDK stream controller or timeline
 listener. The transport therefore buffers UI chunks, `cmd-*` frames, and live
