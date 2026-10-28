@@ -108,7 +108,10 @@ markers and pending inputs remain outside folded history.
 The right-side input directory searches all confirmed user inputs, including
 attachment-only inputs, and expands the containing section before navigating.
 Navigation suppresses run-start anchoring until the viewport returns to the
-bottom. Fold/navigation state is local to each mounted session-node thread;
+bottom. On desktop, multi-agent panels reserve a separate scrollable right sidebar
+for the agent list so it cannot cover the input-directory button in the chat area;
+mobile keeps the agent selector above the thread. Fold/navigation state is local
+to each mounted session-node thread;
 remounting restores the default folding rather than persisting it in storage.
 
 ### State Management

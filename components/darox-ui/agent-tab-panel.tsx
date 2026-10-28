@@ -734,55 +734,60 @@ export function AgentTabPanel({
   };
 
   return (
-    <div className="relative h-full">
-      {Array.from(mounted).map((id) => {
-        const agent = agents.find((a) => a.id === id);
-        if (!agent) return null;
-        return (
-          <div
-            key={id}
-            className={`absolute inset-x-0 bottom-0 ${
-              agents.length > 1 ? "top-12 md:top-0" : "top-0"
-            } ${activeSubagentId === id ? "visible z-10" : "invisible z-0"}`}
-          >
-            <AgentChatLoader
+    <div className="flex h-full min-w-0">
+      <div className="relative min-w-0 flex-1" data-slot="agent-chat-area">
+        {Array.from(mounted).map((id) => {
+          const agent = agents.find((a) => a.id === id);
+          if (!agent) return null;
+          return (
+            <div
+              key={id}
+              className={`absolute inset-x-0 bottom-0 ${
+                agents.length > 1 ? "top-12 md:top-0" : "top-0"
+              } ${activeSubagentId === id ? "visible z-10" : "invisible z-0"}`}
+            >
+              <AgentChatLoader
+                agentId={agentId}
+                subagentId={agent.id}
+                agentName={agent.name}
+                status={agent.status}
+                workspace={workspace}
+                isActive={isRootActive && activeSubagentId === agent.id}
+                desiredStreamMode={desiredStreamMode}
+              />
+            </div>
+          );
+        })}
+        {isRootActive && (
+          <div className="absolute top-3 left-3 z-20">
+            <ModelPill
               agentId={agentId}
-              subagentId={agent.id}
-              agentName={agent.name}
-              status={agent.status}
-              workspace={workspace}
-              isActive={isRootActive && activeSubagentId === agent.id}
-              desiredStreamMode={desiredStreamMode}
+              subagentId={activeSubagentId}
+              streamMode={desiredStreamMode}
             />
           </div>
-        );
-      })}
-      {isRootActive && (
-        <div className="absolute top-3 left-3 z-20">
-          <ModelPill
-            agentId={agentId}
-            subagentId={activeSubagentId}
-            streamMode={desiredStreamMode}
-          />
-        </div>
-      )}
+        )}
+        {agents.length > 1 && (
+          <select
+            aria-label="Active agent"
+            value={activeSubagentId}
+            onChange={(event) => handleSelect(event.target.value)}
+            className="absolute top-2 right-3 z-20 h-9 max-w-[45%] rounded-md border bg-background px-2 md:hidden"
+          >
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+                {agent.id === agentTab.id ? " (main)" : ""}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       {agents.length > 1 && (
-        <select
-          aria-label="Active agent"
-          value={activeSubagentId}
-          onChange={(event) => handleSelect(event.target.value)}
-          className="absolute top-2 right-3 z-20 h-9 max-w-[45%] rounded-md border bg-background px-2 md:hidden"
+        <nav
+          aria-label="Agents"
+          className="hidden w-40 shrink-0 flex-col overflow-y-auto overscroll-contain border-l bg-popover/95 py-3 md:flex lg:w-48"
         >
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name}
-              {agent.id === agentTab.id ? " (main)" : ""}
-            </option>
-          ))}
-        </select>
-      )}
-      {agents.length > 1 && (
-        <div className="absolute top-3 right-3 z-20 hidden min-w-32 max-w-48 flex-col rounded-lg border bg-popover/95 py-1 shadow-md backdrop-blur-sm md:flex">
           <div className="mb-2 rounded-t-md border-border border-b bg-muted/60 px-3 py-1.5 font-semibold text-foreground/80 text-xs uppercase tracking-wider">
             Agents
           </div>
@@ -807,7 +812,7 @@ export function AgentTabPanel({
               )}
             </button>
           ))}
-        </div>
+        </nav>
       )}
     </div>
   );
