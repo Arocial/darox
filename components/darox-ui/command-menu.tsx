@@ -1,5 +1,6 @@
 "use client";
 import { daroxFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 import { Command } from "cmdk";
 import {
@@ -143,9 +144,10 @@ const SuggestionItemRenderer: FC<{
   </Command.Item>
 );
 
-export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
-  disabled,
-}) => {
+export const ComposerWithCommandMenu: FC<{
+  disabled?: boolean;
+  customHeight?: number | null;
+}> = ({ disabled, customHeight }) => {
   const agentId = useContext(AgentIdContext);
   const subagentId = useContext(SubagentIdContext);
   const workspace = useWorkspace();
@@ -307,7 +309,19 @@ export const ComposerWithCommandMenu: FC<{ disabled?: boolean }> = ({
       <ComposerPrimitive.Input
         disabled={disabled}
         placeholder="Send a message (Shift+Enter or Alt+Enter to insert newline)..."
-        className="aui-composer-input mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+        className={cn(
+          "aui-composer-input mb-1 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0",
+          customHeight
+            ? "h-[var(--composer-custom-height)] max-h-[var(--composer-custom-height)] min-h-[var(--composer-custom-height)] overflow-y-auto"
+            : "max-h-32 min-h-14",
+        )}
+        style={
+          customHeight
+            ? ({
+                ["--composer-custom-height" as string]: `${customHeight}px`,
+              } as unknown as ComposerPrimitive.Input.Props["style"])
+            : undefined
+        }
         rows={1}
         autoFocus
         aria-label="Message input"
