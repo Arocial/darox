@@ -20,29 +20,49 @@ const conversation = (count) =>
     },
   ]).flat();
 
-test("20/10/10: folding starts strictly above 20 inputs and preserves the latest 10", () => {
-  assert.equal(initialHistoryCount(0), 0);
-  assert.equal(initialHistoryCount(20), 0);
-  assert.equal(initialHistoryCount(21), 11);
-  const inputs = buildInputIndex(conversation(21));
-  const sections = buildHistorySections(
-    inputs,
-    initialHistoryCount(inputs.length),
+test("20/10/10: only complete groups fold, retaining at least ten recent inputs", () => {
+  for (const [total, folded] of [
+    [0, 0],
+    [20, 0],
+    [21, 10],
+    [29, 10],
+    [30, 20],
+    [33, 20],
+    [39, 20],
+    [40, 30],
+  ]) {
+    assert.equal(initialHistoryCount(total), folded, `total inputs: ${total}`);
+  }
+  const inputs = buildInputIndex(conversation(33));
+  assert.deepEqual(
+    buildHistorySections(inputs, initialHistoryCount(inputs.length)),
+    [
+      { id: "input-0", start: 0, end: 20, firstInput: 1, lastInput: 10 },
+      { id: "input-10", start: 20, end: 40, firstInput: 11, lastInput: 20 },
+    ],
   );
-  assert.deepEqual(sections, [
-    { id: "input-0", start: 0, end: 20, firstInput: 1, lastInput: 10 },
-    { id: "input-10", start: 20, end: 22, firstInput: 11, lastInput: 11 },
-  ]);
-  assert.equal(inputs.length - sections.at(-1).lastInput, 10);
 });
 
-test("sections are stable as new inputs arrive during the same visit", () => {
-  const original = buildInputIndex(conversation(31));
-  const count = initialHistoryCount(original.length);
-  assert.deepEqual(
-    buildHistorySections(buildInputIndex(conversation(35)), count),
-    buildHistorySections(original, count),
-  );
+test("continuous conversations advance by complete groups while existing section IDs stay stable", () => {
+  let previous = [];
+  const expanded = new Set(["input-0"]);
+  for (const total of [20, 21, 29, 30, 33, 39, 40, 50]) {
+    const inputs = buildInputIndex(conversation(total));
+    const sections = buildHistorySections(inputs, initialHistoryCount(total));
+    assert.deepEqual(sections.slice(0, previous.length), previous);
+    if (sections.length > 0) assert.ok(total - sections.at(-1).lastInput >= 10);
+    assert.ok(expanded.has("input-0"));
+    previous = sections;
+  }
+});
+
+test("deferred folding can catch up without producing partial groups", () => {
+  const inputs = buildInputIndex(conversation(43));
+  const deferred = buildHistorySections(inputs, initialHistoryCount(21));
+  assert.equal(deferred.at(-1).lastInput, 10);
+  const caughtUp = buildHistorySections(inputs, initialHistoryCount(43));
+  assert.equal(caughtUp.at(-1).lastInput, 30);
+  assert.deepEqual(caughtUp[0], deferred[0]);
 });
 
 test("all message indices are covered exactly once, including leading messages and consecutive inputs", () => {
@@ -68,7 +88,7 @@ test("all message indices are covered exactly once, including leading messages a
   );
   for (const section of sections) {
     assert.equal(messages[section.end].role, "user");
-    assert.ok(section.lastInput - section.firstInput < 10);
+    assert.equal(section.lastInput - section.firstInput + 1, 10);
   }
 });
 
@@ -113,7 +133,10 @@ test("input index excludes assistant output and provides attachment fallbacks", 
 test("short or replaced snapshots cannot produce an out-of-bounds section", () => {
   assert.deepEqual(buildHistorySections([], 30), []);
   const inputs = buildInputIndex(conversation(2));
-  assert.deepEqual(buildHistorySections(inputs, 30), [
-    { id: "input-0", start: 0, end: 2, firstInput: 1, lastInput: 1 },
+  assert.deepEqual(buildHistorySections(inputs, 30), []);
+  const longer = buildInputIndex(conversation(25));
+  assert.deepEqual(buildHistorySections(longer, 99), [
+    { id: "input-0", start: 0, end: 20, firstInput: 1, lastInput: 10 },
   ]);
+  assert.deepEqual(buildHistorySections(longer, 9), []);
 });

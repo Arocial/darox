@@ -61,6 +61,9 @@ export function ThreadHistory({
     () => JSON.parse(serializedIds) as string[],
     [serializedIds],
   );
+  const isEditing = useAuiState((s) =>
+    s.thread.messages.some((message) => message.composer.isEditing),
+  );
   const [historicalCount, setHistoricalCount] = useState(() =>
     initialHistoryCount(inputs.length),
   );
@@ -70,25 +73,39 @@ export function ThreadHistory({
   const [target, setTarget] = useState<string | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const frame = useRef<number | null>(null);
+  const restoreBottom = useRef(false);
   const anchor = useRef<{ element: HTMLElement; top: number } | null>(null);
   const sections = useMemo(
     () => buildHistorySections(inputs, historicalCount),
     [inputs, historicalCount],
   );
 
+  const foldIfSafe = useCallback(() => {
+    const nextCount = initialHistoryCount(inputs.length);
+    const root = viewport.current;
+    if (
+      isEditing ||
+      target ||
+      nextCount <= historicalCount ||
+      !root ||
+      root.clientHeight === 0 ||
+      root.scrollHeight - root.scrollTop - root.clientHeight >= 4
+    )
+      return;
+    restoreBottom.current = true;
+    setHistoricalCount(nextCount);
+  }, [inputs.length, historicalCount, isEditing, target]);
+
   useEffect(() => {
-    if (
-      readingHistory ||
-      historicalCount !== 0 ||
-      initialHistoryCount(inputs.length) === 0
-    )
-      return;
-    if (
-      viewport.current?.querySelector('[data-slot="aui_edit-composer-wrapper"]')
-    )
-      return;
-    setHistoricalCount(initialHistoryCount(inputs.length));
-  }, [inputs.length, historicalCount, readingHistory]);
+    if (!readingHistory) foldIfSafe();
+  }, [foldIfSafe, readingHistory]);
+
+  useLayoutEffect(() => {
+    const root = viewport.current;
+    if (!restoreBottom.current || !root) return;
+    restoreBottom.current = false;
+    root.scrollTo({ top: root.scrollHeight, behavior: "instant" });
+  }, [historicalCount]);
 
   const toggle = useCallback((id: string) => {
     const root = viewport.current;
@@ -176,10 +193,12 @@ export function ThreadHistory({
       frame.current = null;
       const root = viewport.current;
       if (!root || root.clientHeight === 0) return;
-      if (!target)
-        setReadingHistory(
-          root.scrollHeight - root.scrollTop - root.clientHeight >= 4,
-        );
+      if (!target) {
+        const atBottom =
+          root.scrollHeight - root.scrollTop - root.clientHeight < 4;
+        setReadingHistory(!atBottom);
+        if (atBottom) foldIfSafe();
+      }
       const top = root.getBoundingClientRect().top + 32;
       let current: string | null = null;
       for (const element of Array.from(
@@ -190,7 +209,7 @@ export function ThreadHistory({
       }
       setActiveId(current);
     });
-  }, [target]);
+  }, [target, foldIfSafe]);
 
   useEffect(
     () => () => {

@@ -57,7 +57,8 @@ export function buildInputIndex(
 
 export function initialHistoryCount(inputCount: number): number {
   return inputCount > HISTORY_THRESHOLD
-    ? inputCount - HISTORY_RECENT_INPUTS
+    ? Math.floor((inputCount - HISTORY_RECENT_INPUTS) / HISTORY_SECTION_SIZE) *
+        HISTORY_SECTION_SIZE
     : 0;
 }
 
@@ -65,7 +66,13 @@ export function buildHistorySections(
   inputs: readonly ThreadInput[],
   historicalInputCount: number,
 ): HistorySection[] {
-  const count = Math.min(historicalInputCount, Math.max(0, inputs.length - 1));
+  const count = Math.max(
+    0,
+    Math.floor(
+      Math.min(historicalInputCount, inputs.length - HISTORY_RECENT_INPUTS) /
+        HISTORY_SECTION_SIZE,
+    ) * HISTORY_SECTION_SIZE,
+  );
   const sections: HistorySection[] = [];
   for (let offset = 0; offset < count; offset += HISTORY_SECTION_SIZE) {
     const end = Math.min(offset + HISTORY_SECTION_SIZE, count);

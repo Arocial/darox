@@ -96,10 +96,12 @@ User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back ove
 ### Long conversation history
 
 `components/darox-ui/thread-history.tsx` window-controls presentation without
-trimming runtime messages. Above 20 confirmed user inputs, it initially folds
-older history into sections of at most 10 inputs, leaving the latest 10 visible.
-The fold boundary stays stable during a mounted visit; crossing the threshold
-while reading history or editing defers folding. Each section owns its messages
+trimming runtime messages. Above 20 confirmed user inputs, it folds only complete
+10-input sections, retaining the latest 10–19 inputs (33 inputs fold 1–10 and
+11–20). During a mounted visit the boundary advances in complete groups only
+when the visible viewport is at the bottom and no message is being edited or
+navigated to. Returning to the bottom or ending an edit retries deferred folding;
+manually expanded sections stay expanded. Each section owns its messages
 and the command/compaction markers immediately before those messages; trailing
 markers and pending inputs remain outside folded history.
 
