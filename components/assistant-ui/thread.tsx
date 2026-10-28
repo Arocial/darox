@@ -20,6 +20,7 @@ import {
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ThreadHistory, ThreadHistoryMessages } from "@/components/darox-ui/thread-history";
 import { displayMessageBoundary } from "@/components/darox-ui/display-message-boundary";
 import {
   ActionBarMorePrimitive,
@@ -166,68 +167,69 @@ const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
   const messageCount = useAuiState((state) => state.thread.messages.length);
 
   return (
-    <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
-      style={{
-        ["--thread-max-width" as string]: "44rem",
-        ["--composer-bg" as string]:
-          "color-mix(in oklab, var(--color-muted) 30%, var(--color-background))",
-        ["--composer-radius" as string]: "1.5rem",
-        ["--composer-padding" as string]: "8px",
-      }}
-    >
-      <ThreadPrimitive.Viewport
-        turnAnchor="top"
-        data-slot="aui_thread-viewport"
-        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
-      >
-        <div
-          className={cn(
-            "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
-            isEmpty && "justify-center",
-          )}
+    <ThreadHistory>
+      {({ viewport, readingHistory, onScroll, navigator }) => (
+        <ThreadPrimitive.Root
+          className="aui-root aui-thread-root bg-background @container relative flex h-full flex-col"
+          style={{
+            ["--thread-max-width" as string]: "44rem",
+            ["--composer-bg" as string]:
+              "color-mix(in oklab, var(--color-muted) 30%, var(--color-background))",
+            ["--composer-radius" as string]: "1.5rem",
+            ["--composer-padding" as string]: "8px",
+          }}
         >
-          {isEmpty && <Welcome />}
-
-          <div
-            data-slot="aui_message-group"
-            className={cn(
-              "mb-14 flex flex-col gap-y-6 empty:hidden",
-              isEmpty && "hidden",
-            )}
+          {navigator}
+          <ThreadPrimitive.Viewport
+            ref={viewport}
+            onScroll={onScroll}
+            turnAnchor={readingHistory ? "bottom" : "top"}
+            autoScroll={false}
+            scrollToBottomOnRunStart={!readingHistory}
+            data-slot="aui_thread-viewport"
+            className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
           >
-            <ThreadPrimitive.Messages>
-              {({ message }) => (
-                <>
-                  <CompactionMarkerList beforeMessageIndex={message.index} />
-                  <CommandInputList beforeMessageIndex={message.index} />
-                  <ThreadMessage />
-                </>
+            <div
+              className={cn(
+                "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
+                isEmpty && "justify-center",
               )}
-            </ThreadPrimitive.Messages>
-            <CompactionMarkerList beforeMessageIndex={messageCount} />
-            <CommandInputList beforeMessageIndex={messageCount} />
-            <PendingUserMessages />
-          </div>
+            >
+              {isEmpty && <Welcome />}
 
-          <ThreadPrimitive.ViewportFooter
-            className={cn(
-              "aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
-              !isEmpty &&
-                "sticky bottom-0 mt-auto rounded-t-(--composer-radius)",
-            )}
-          >
-            <ThreadScrollToBottom />
-            <Composer />
-            {isEmpty && (
-              <AuiIf condition={(s) => s.composer.isEmpty}>
-                <ThreadSuggestions />
-              </AuiIf>
-            )}
-          </ThreadPrimitive.ViewportFooter>
-        </div>
-      </ThreadPrimitive.Viewport>
-    </ThreadPrimitive.Root>
+              <div
+                data-slot="aui_message-group"
+                className={cn(
+                  "mb-14 flex flex-col gap-y-6 empty:hidden",
+                  isEmpty && "hidden",
+                )}
+              >
+                <ThreadHistoryMessages Message={ThreadMessage} />
+                <CompactionMarkerList beforeMessageIndex={messageCount} />
+                <CommandInputList beforeMessageIndex={messageCount} />
+                <PendingUserMessages />
+              </div>
+
+              <ThreadPrimitive.ViewportFooter
+                className={cn(
+                  "aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
+                  !isEmpty &&
+                    "sticky bottom-0 mt-auto rounded-t-(--composer-radius)",
+                )}
+              >
+                <ThreadScrollToBottom />
+                <Composer />
+                {isEmpty && (
+                  <AuiIf condition={(s) => s.composer.isEmpty}>
+                    <ThreadSuggestions />
+                  </AuiIf>
+                )}
+              </ThreadPrimitive.ViewportFooter>
+            </div>
+          </ThreadPrimitive.Viewport>
+        </ThreadPrimitive.Root>
+      )}
+    </ThreadHistory>
   );
 };
 

@@ -93,6 +93,22 @@ history; remounted selectors restore the cached model until a newer server snaps
 
 User replies are JSON-serialized (e.g. `ChatInputEventResult`) and sent back over the same socket at any time. A started message in `cmd-client-input` clears its pending UI and inserts the echoed user message into the visible timeline, so backend event order defines its placement. An accepted command clears pending UI into a separate command view and is later updated by `cmd-command-completed`; no client-side command detection is required. Inputs submitted while busy influence subsequent output in the same retained turn. Assistant-ui merges consecutive assistant messages for display; commands and compaction markers remain separate and are placed after their containing merged message when their snapshot position falls inside one.
 
+### Long conversation history
+
+`components/darox-ui/thread-history.tsx` window-controls presentation without
+trimming runtime messages. Above 20 confirmed user inputs, it initially folds
+older history into sections of at most 10 inputs, leaving the latest 10 visible.
+The fold boundary stays stable during a mounted visit; crossing the threshold
+while reading history or editing defers folding. Each section owns its messages
+and the command/compaction markers immediately before those messages; trailing
+markers and pending inputs remain outside folded history.
+
+The right-side input directory searches all confirmed user inputs, including
+attachment-only inputs, and expands the containing section before navigating.
+Navigation suppresses run-start anchoring until the viewport returns to the
+bottom. Fold/navigation state is local to each mounted session-node thread;
+remounting restores the default folding rather than persisting it in storage.
+
 ### State Management
 
 - **Zustand** for component-level state (e.g., attachment handling)
