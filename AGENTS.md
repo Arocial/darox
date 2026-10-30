@@ -16,6 +16,7 @@ npm run build:check   # Verification build into .next-check — safe to run whil
 npm run lint          # Biome check with fixes
 npm run electron:dev  # Run Next dev + local Manager + Electron shell together
 npm run electron:dir  # Static export + unpacked binary directory (fast, no compression)
+npm run electron:fast-run # Launch unpacked binary
 npm run electron:build # Static export + electron-builder package
 ```
 

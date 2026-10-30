@@ -177,6 +177,7 @@ npm run lint
 npm run electron:compile
 npm run build:check       # Isolated .next-check build, safe alongside npm run dev
 npm run electron:dir      # Fast unpacked binary build without compression (release/linux-unpacked/darox)
+npm run electron:fast-run # Launch unpacked binary
 npm run electron:build    # Production static export and desktop package
 ```
 
@@ -185,6 +186,7 @@ npm run electron:build    # Production static export and desktop package
 ```bash
 npm ci
 npm run electron:dir      # Local testing: builds release/linux-unpacked/ without compression
+npm run electron:fast-run # Builds and immediately launches unpacked binary
 npm run electron:build    # Production packages (pacman and tar.gz)
 ```
 
