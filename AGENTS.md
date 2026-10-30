@@ -20,6 +20,8 @@ npm run electron:build # Static export + electron-builder package
 
 **Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
 Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
+`build:check` disables static export and does not refresh `out/` or verify desktop packaging.
+`npm start` currently invokes `next start`, which is incompatible with the default static-export configuration; serve `out/` with a static HTTP server for production web hosting.
 
 ## Architecture
 
