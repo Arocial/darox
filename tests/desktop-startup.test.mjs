@@ -36,13 +36,7 @@ test("CSP allows exact inline script hashes without unsafe script execution", ()
 
 test("Manager tokens are encrypted, URL-bound, replaceable and permission restricted", (t) => {
   const file = path.join(temporary(t), "tokens.json");
-  const encryption = {
-    isEncryptionAvailable: () => true,
-    getSelectedStorageBackend: () => "gnome_libsecret",
-    encryptString: (value) => Buffer.from(value.split("").reverse().join("")),
-    decryptString: (value) => value.toString().split("").reverse().join(""),
-  };
-  const cache = tokenCache(file, encryption);
+  const cache = tokenCache(file);
   const url = "http://127.0.0.1:3145";
   assert.equal(cache.read(url), "");
   cache.write(url, "secret-one");
@@ -53,13 +47,10 @@ test("Manager tokens are encrypted, URL-bound, replaceable and permission restri
   assert.equal(cache.read(url), "replacement");
   if (process.platform !== "win32")
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
-  const insecure = tokenCache(file, {
-    ...encryption,
-    getSelectedStorageBackend: () => "basic_text",
-  });
-  assert.throws(() => insecure.write(url, "leak"), /secure storage/);
-  assert.throws(() => insecure.read(url), /secure storage/);
-  assert.equal(cache.read(url), "replacement");
+
+  const wrongKey = Buffer.alloc(32, 7);
+  const wrongCache = tokenCache(file, wrongKey);
+  assert.throws(() => wrongCache.read(url));
 });
 
 test("Manager startup reuses occupied ports and never spawns on authentication failure", async () => {

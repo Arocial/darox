@@ -69,11 +69,11 @@ Electron's user-data directory. Windows uses remote Managers only.
 Without it, Darox restores the cached token. Edit and save the injected Local
 Manager connection to cache the token for an already-running service. Local
 tokens are cached automatically, independent of the browser's Remember token
-option. The cache is encrypted with Electron safeStorage and stored as
-`manager-token.json` in user data, not in browser storage. Linux requires an
-available system secret store (for example KWallet or libsecret); Darox refuses
-`basic_text` encryption. If secure storage is unavailable, a warning explains
-that the token is session-only. Delete `manager-token.json` to clear the cache.
+option. The cache is encrypted with AES-256-GCM using keys derived from machine
+and user identity and stored with restricted `0600` permissions as
+`manager-token.json` in user data, without requiring desktop secret services or
+keyrings (such as KWallet or libsecret). Delete `manager-token.json` to clear
+the cache.
 
 An explicitly supplied `DAROX_MANAGER_URL` overrides the default connection;
 remote URLs are connected to but never auto-started. A custom local port must
@@ -186,19 +186,18 @@ npm ci
 npm run electron:build
 ```
 
-On Arch, install build prerequisites with `sudo pacman -S --needed libxcrypt-compat
-libarchive xz`. FPM requires the legacy `libcrypt.so.1` provided by
-`libxcrypt-compat`. Secure token caching also needs `libsecret` plus an unlocked
-Secret Service provider (such as `gnome-keyring`) or KWallet; installing the
-provider alone does not configure login/unlock integration.
+On Arch, install build prerequisites for pacman packaging with
+`sudo pacman -S --needed libxcrypt-compat libarchive xz`. FPM requires the legacy
+`libcrypt.so.1` provided by `libxcrypt-compat`.
 
 Desktop builds export to `.next-package/` and copy the verified export to `out/`, leaving the development
-`.next/` untouched. Packages are written to `release/`: Linux builds only an Arch
-Linux `pacman` package (no deb or AppImage); macOS builds dmg; Windows builds NSIS.
-Build and smoke-test on the target platform. The package includes the client,
-not Manager. On Arch, install the generated package with `sudo pacman -U <package>`
-and launch `darox`. No AUR PKGBUILD is generated. Signing/notarization credentials
-are not configured in this repository.
+`.next/` untouched. Packages are written to `release/`: Linux builds Arch Linux
+`pacman` and portable `tar.gz` packages (no deb or AppImage); macOS builds dmg;
+Windows builds NSIS. You can also run the unpacked binary directly at
+`release/linux-unpacked/darox`. Build and smoke-test on the target platform.
+The package includes the client, not Manager. On Arch, install the generated
+package with `sudo pacman -U <package>` and launch `darox`. No AUR PKGBUILD is generated.
+Signing/notarization credentials are not configured in this repository.
 
 The production `app://` handler adds a per-document CSP with hashes for Next's
 inline bootstrap scripts; it does not allow arbitrary inline scripts or eval.

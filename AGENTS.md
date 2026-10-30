@@ -21,7 +21,7 @@ npm run electron:build # Static export + electron-builder package
 **Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
 Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 `build:check` disables static export and does not refresh `out/` or verify desktop packaging.
-`npm start` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets only `pacman`; macOS dmg and Windows NSIS remain.
+`npm start` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets `pacman` and portable `tar.gz`; macOS dmg and Windows NSIS remain.
 
 ## Architecture
 
@@ -132,9 +132,9 @@ remounting restores the default folding rather than persisting it in storage.
 `npm run electron:dev` starts Next and Electron with `AROX_API_TOKEN=1`.
 Electron starts or reuses the local Manager, then injects its connection without
 persisting it in browser storage. `AROX_API_TOKEN` overrides and updates the
-safeStorage-encrypted `manager-token.json` cache; otherwise the cache is restored.
-Saving the injected connection updates this cache. Without a secure keyring
-(including Linux `basic_text`), tokens remain session-only with a warning.
+AES-256-GCM encrypted `manager-token.json` cache (derived from machine and user
+identity with `0600` permissions without requiring system keyrings); otherwise
+the cache is restored. Saving the injected connection updates this cache.
 Occupied ports are never replaced, including authentication failures; startup
 errors leave remote connections usable. Logs go to user-data `manager.log`. For browser-only development, run
 `npm run dev` and `npm run manager` separately. Manager commands require

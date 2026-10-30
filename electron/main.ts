@@ -11,7 +11,6 @@ import {
   screen,
   WebContentsView,
   shell,
-  safeStorage,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -128,10 +127,7 @@ let bootstrapManager: BootstrapManagerConfig | null = null;
 let startupWarning = "";
 
 function managerTokenCache() {
-  return tokenCache(
-    path.join(app.getPath("userData"), "manager-token.json"),
-    safeStorage,
-  );
+  return tokenCache(path.join(app.getPath("userData"), "manager-token.json"));
 }
 
 async function initializeManager() {

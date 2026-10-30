@@ -1,6 +1,7 @@
 {
   "appId": "net.solariar.darox",
   "productName": "darox",
+  "compression": "normal",
   "directories": {
     "output": "release",
     "buildResources": "resources"
@@ -27,10 +28,11 @@
     "category": "Development",
     "synopsis": "Arox chat desktop and web client",
     "description": "Arox chat desktop and web client",
-    "target": ["pacman"],
-    "artifactName": "${name}-${version}-${arch}.pkg.tar.xz"
+    "target": ["pacman", "tar.gz"],
+    "artifactName": "${name}-${version}-${arch}.${ext}"
   },
   "pacman": {
+    "artifactName": "${name}-${version}-${arch}.pkg.tar.xz",
     "depends": [
       "alsa-lib",
       "at-spi2-core",
