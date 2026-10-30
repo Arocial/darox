@@ -11,13 +11,28 @@ import {
   screen,
   WebContentsView,
   shell,
+  safeStorage,
 } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { configureExternalLinks } from "./external-links";
+import { productionCsp } from "./content-security";
+import {
+  ensureManager,
+  isLocalManager,
+  launchManager,
+  portInUse,
+  probeManager,
+} from "./local-manager";
+import { tokenCache } from "./token-cache";
 
-const isDev = !!process.env.ELECTRON_DEV;
+const isDev = !app.isPackaged && !!process.env.ELECTRON_DEV;
+if (process.env.DAROX_USER_DATA_DIR) {
+  app.setPath("userData", path.resolve(process.env.DAROX_USER_DATA_DIR));
+} else if (!isDev) {
+  app.setPath("userData", path.join(app.getPath("appData"), "darox"));
+}
 let mainWindow: BrowserWindow | null = null;
 let findView: WebContentsView | null = null;
 let findViewVisible = false;
@@ -109,14 +124,56 @@ function saveWindowStateDebounced(state: WindowState) {
   }, 500);
 }
 
-function getBootstrapManager(): BootstrapManagerConfig | null {
-  const url = process.env.DAROX_MANAGER_URL?.trim();
-  if (!url) return null;
-  return {
-    name: process.env.DAROX_MANAGER_NAME?.trim() || "Default",
+let bootstrapManager: BootstrapManagerConfig | null = null;
+let startupWarning = "";
+
+function managerTokenCache() {
+  return tokenCache(
+    path.join(app.getPath("userData"), "manager-token.json"),
+    safeStorage,
+  );
+}
+
+async function initializeManager() {
+  const url = (
+    process.env.DAROX_MANAGER_URL?.trim() ||
+    (process.platform === "win32" ? "" : "http://127.0.0.1:3145")
+  ).replace(/\/+$/, "");
+  if (!url) return;
+  let token = process.env.AROX_API_TOKEN;
+  try {
+    if (token === undefined) token = managerTokenCache().read(url);
+    else managerTokenCache().write(url, token);
+  } catch (error) {
+    startupWarning = error instanceof Error ? error.message : String(error);
+  }
+  bootstrapManager = {
+    name: process.env.DAROX_MANAGER_NAME?.trim() || "Local Manager",
     url,
-    token: process.env.AROX_API_TOKEN || "",
+    token: token ?? "",
   };
+  try {
+    if (process.platform === "win32" || !isLocalManager(url)) return;
+    await ensureManager({
+      url,
+      token: bootstrapManager.token,
+      occupied: () => portInUse(url),
+      probe: () => probeManager(url, bootstrapManager!.token),
+      launch: () =>
+        launchManager(
+          app.getPath("home"),
+          path.join(app.getPath("userData"), "manager.log"),
+          bootstrapManager!.token,
+        ),
+    });
+  } catch (error) {
+    startupWarning = [
+      startupWarning,
+      error instanceof Error ? error.message : String(error),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 }
 
 /** Read current bounds + maximized flag from a window. When maximized the
@@ -330,98 +387,142 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(async () => {
-  // Hide the default application menu globally (also hides macOS-style menu on Linux/Windows).
-  Menu.setApplicationMenu(null);
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+app.on("second-instance", () => {
+  if (mainWindow?.isMinimized()) mainWindow.restore();
+  mainWindow?.show();
+  mainWindow?.focus();
+});
 
-  protocol.handle("app", (request) => {
-    const url = new URL(request.url);
-    let pathname = decodeURIComponent(url.pathname);
-    if (pathname === "/" || pathname === "") pathname = "/index.html";
-    const outDir = resolveOutDir();
-    const filePath = path.resolve(outDir, pathname.replace(/^\//, ""));
-    // Prevent path traversal — resolved path must stay inside the out/ dir.
-    if (!filePath.startsWith(outDir + path.sep) && filePath !== outDir) {
-      return new Response("Forbidden", { status: 403 });
-    }
-    return net.fetch(pathToFileURL(filePath).toString());
-  });
+if (primaryInstance)
+  app.whenReady().then(async () => {
+    // Hide the default application menu globally (also hides macOS-style menu on Linux/Windows).
+    Menu.setApplicationMenu(null);
 
-  // Content-Security-Policy: only allow same-origin resources and inline styles
-  // (needed for Tailwind), plus HTTP and WebSocket Manager connections.
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const csp = isDev
-      ? [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: app: http://localhost:* ws://localhost:*;",
-          "connect-src http: https: ws: wss:;",
-        ].join(" ")
-      : [
-          "default-src 'self' app:;",
-          "script-src 'self' app:;",
-          "style-src 'self' app: 'unsafe-inline';",
-          "img-src 'self' app: data: blob:;",
-          "font-src 'self' app: data:;",
-          "connect-src 'self' app: http: https: ws: wss:;",
-        ].join(" ");
+    protocol.handle("app", async (request) => {
+      try {
+        const url = new URL(request.url);
+        if (url.hostname !== "darox")
+          return new Response("Forbidden", { status: 403 });
+        let pathname = decodeURIComponent(url.pathname);
+        if (pathname === "/" || pathname === "") pathname = "/index.html";
+        const outDir = resolveOutDir();
+        const filePath = path.resolve(outDir, pathname.replace(/^\//, ""));
+        // Prevent path traversal — resolved path must stay inside the out/ dir.
+        if (!filePath.startsWith(outDir + path.sep) && filePath !== outDir) {
+          return new Response("Forbidden", { status: 403 });
+        }
+        const response = await net.fetch(pathToFileURL(filePath).toString());
+        if (isDev || !filePath.endsWith(".html")) return response;
+        const html = await response.text();
+        const headers = new Headers(response.headers);
+        headers.set("Content-Security-Policy", productionCsp(html));
+        return new Response(html, { status: response.status, headers });
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    });
 
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": csp,
+    if (isDev)
+      session.defaultSession.webRequest.onHeadersReceived(
+        (details, callback) => {
+          callback({
+            responseHeaders: {
+              ...details.responseHeaders,
+              "Content-Security-Policy": [
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: app: http://localhost:* ws://localhost:*;",
+                "connect-src http: https: ws: wss:;",
+              ].join(" "),
+            },
+          });
+        },
+      );
+
+    ipcMain.handle("dialog:open", async (_e, opts) => {
+      if (!mainWindow) return { canceled: true, filePaths: [] };
+      return dialog.showOpenDialog(mainWindow, opts ?? {});
+    });
+    ipcMain.handle("backend:get-bootstrap-manager", (event) => {
+      if (event.sender !== mainWindow?.webContents) return null;
+      return bootstrapManager;
+    });
+    ipcMain.handle(
+      "backend:save-manager-token",
+      (event, input: { url: string; token: string }) => {
+        if (
+          event.sender !== mainWindow?.webContents ||
+          !bootstrapManager ||
+          !input ||
+          input.url !== bootstrapManager.url ||
+          typeof input.token !== "string" ||
+          input.token.length > 16384
+        ) {
+          throw new Error("Invalid local Manager token request.");
+        }
+        bootstrapManager.token = input.token;
+        try {
+          managerTokenCache().write(input.url, input.token);
+          return { cached: true };
+        } catch (error) {
+          return {
+            cached: false,
+            warning: error instanceof Error ? error.message : String(error),
+          };
+        }
       },
+    );
+    ipcMain.on(
+      "find:start",
+      (
+        event,
+        args: {
+          text: string;
+          forward?: boolean;
+          findNext?: boolean;
+          matchCase?: boolean;
+        },
+      ) => {
+        if (event.sender !== findView?.webContents) return;
+        if (!mainWindow || !args?.text) return null;
+        activeFindRequestId = mainWindow.webContents.findInPage(args.text, {
+          forward: args.forward ?? true,
+          findNext: args.findNext ?? true,
+          matchCase: args.matchCase ?? false,
+        });
+        findView?.webContents.focus();
+      },
+    );
+    ipcMain.on(
+      "find:stop",
+      (
+        event,
+        action?: "clearSelection" | "keepSelection" | "activateSelection",
+      ) => {
+        if (event.sender !== findView?.webContents) return;
+        mainWindow?.webContents.stopFindInPage(action ?? "clearSelection");
+        activeFindRequestId = null;
+      },
+    );
+    ipcMain.on("find:close", (event) => {
+      if (event.sender === findView?.webContents) closeFindView();
+    });
+
+    await initializeManager();
+    await createWindow();
+    if (startupWarning && mainWindow) {
+      void dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        title: "Local Manager",
+        message: "Local Manager needs attention",
+        detail: `${startupWarning}\n\nYou can edit the Local Manager connection or use a remote Manager. Startup logs: ${path.join(app.getPath("userData"), "manager.log")}`,
+      });
+    }
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
-
-  ipcMain.handle("dialog:open", async (_e, opts) => {
-    if (!mainWindow) return { canceled: true, filePaths: [] };
-    return dialog.showOpenDialog(mainWindow, opts ?? {});
-  });
-  ipcMain.handle("backend:get-bootstrap-manager", (event) => {
-    if (event.sender !== mainWindow?.webContents) return null;
-    return getBootstrapManager();
-  });
-  ipcMain.on(
-    "find:start",
-    (
-      event,
-      args: {
-        text: string;
-        forward?: boolean;
-        findNext?: boolean;
-        matchCase?: boolean;
-      },
-    ) => {
-      if (event.sender !== findView?.webContents) return;
-      if (!mainWindow || !args?.text) return null;
-      activeFindRequestId = mainWindow.webContents.findInPage(args.text, {
-        forward: args.forward ?? true,
-        findNext: args.findNext ?? true,
-        matchCase: args.matchCase ?? false,
-      });
-      findView?.webContents.focus();
-    },
-  );
-  ipcMain.on(
-    "find:stop",
-    (
-      event,
-      action?: "clearSelection" | "keepSelection" | "activateSelection",
-    ) => {
-      if (event.sender !== findView?.webContents) return;
-      mainWindow?.webContents.stopFindInPage(action ?? "clearSelection");
-      activeFindRequestId = null;
-    },
-  );
-  ipcMain.on("find:close", (event) => {
-    if (event.sender === findView?.webContents) closeFindView();
-  });
-
-  await createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
 
 app.on("before-quit", () => {
   if (saveTimeout) clearTimeout(saveTimeout);

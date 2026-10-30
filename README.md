@@ -1,8 +1,9 @@
 # Darox
 
 Darox is a Next.js chat UI with an Electron desktop shell. Both the browser and
-desktop app connect to Arox Profile Managers over HTTP and WebSocket. The app
-itself never starts or owns backend processes.
+desktop app connect to Arox Profile Managers over HTTP and WebSocket. The
+browser app never starts backend processes. On Linux/macOS, Electron starts or
+reuses a local Manager and leaves it running when Darox exits.
 
 ## Development
 
@@ -12,10 +13,12 @@ npm run dev              # Frontend at http://localhost:3140
 npm run electron:dev     # Frontend, local Manager, and Electron shell
 ```
 
-`electron:dev` starts `arox-manager` from the project directory with the default
-development token `AROX_API_TOKEN=1`. The command requires `arox-manager` on
-PATH. Electron injects this local connection automatically, so it does not need
-to be added through the frontend.
+`electron:dev` starts Next and Electron with the development token
+`AROX_API_TOKEN=1`. Electron reuses a local Manager or starts `arox-manager`
+from the user's home directory. It searches PATH and common user installation
+locations, including `~/.local/bin`. Electron injects the connection automatically.
+If an existing Manager uses another token, edit the Local Manager connection.
+Closing development services does not stop the detached Manager.
 
 For browser-only development, start a Manager independently in another terminal:
 
@@ -52,6 +55,37 @@ worker requires a unique fixed port. Edit this file and restart Manager to add
 or remove profiles or change autostart settings. Local Managers currently require
 Linux or macOS; Darox on Windows can connect to a remote Manager.
 
+## Desktop startup and token cache
+
+Install and configure Arox separately before opening Darox. On Linux/macOS,
+Darox checks `http://127.0.0.1:3145`: an existing listener is never replaced or
+stopped, including when authentication fails. Otherwise it launches
+`arox-manager` from the user's home directory, using its default `manager.toml`.
+Workers inherit that working directory and environment. Startup errors are shown
+without preventing remote connections; logs are in `manager.log` inside
+Electron's user-data directory. Windows uses remote Managers only.
+
+`AROX_API_TOKEN` takes precedence over the cached token and updates the cache.
+Without it, Darox restores the cached token. Edit and save the injected Local
+Manager connection to cache the token for an already-running service. Local
+tokens are cached automatically, independent of the browser's Remember token
+option. The cache is encrypted with Electron safeStorage and stored as
+`manager-token.json` in user data, not in browser storage. Linux requires an
+available system secret store (for example KWallet or libsecret); Darox refuses
+`basic_text` encryption. If secure storage is unavailable, a warning explains
+that the token is session-only. Delete `manager-token.json` to clear the cache.
+
+An explicitly supplied `DAROX_MANAGER_URL` overrides the default connection;
+remote URLs are connected to but never auto-started. A custom local port must
+match the existing Manager configuration; this does not rewrite `manager.toml`.
+`DAROX_MANAGER_NAME` sets the connection label. Add a separate connection in the
+UI for another URL. The default new local service has no token unless one is
+provided or cached; keep it bound to loopback, and set a token before exposing it.
+
+Packaged/production Electron uses the `darox` user-data directory, separate from
+the existing development `Electron` directory. `DAROX_USER_DATA_DIR` can isolate
+smoke tests; instances sharing a user-data directory are single-instance.
+
 ## Connections and profiles
 
 Open Darox and add a named Manager connection, such as `http://127.0.0.1:3145`.
@@ -68,7 +102,8 @@ connection lists its profiles with their current state and any operation error.
 - Profile identities include the Manager connection ID, so identically named
   profiles on different Managers have separate chat tabs.
 - Connection settings and the selected Manager/profile are saved locally.
-  Remembered tokens use localStorage; other tokens use sessionStorage.
+  Remembered tokens for user-added connections use localStorage; other tokens
+  use sessionStorage. The injected desktop connection uses the secure cache above.
 - Deleting a connection or closing Darox does not stop remote workers or Manager.
 
 Darox accesses worker APIs through `/api/profiles/<profile>/proxy` at the Manager
@@ -77,7 +112,7 @@ requests. Local development connects directly and requires no Caddy or combined
 stack script. For remote access, configure a reachable Manager address; an HTTPS
 frontend should use an HTTPS Manager endpoint.
 
-Old direct-worker connections, Electron backend lifecycle IPC, `dev:stack`, and
+Old direct-worker connections, worker lifecycle IPC, `dev:stack`, and
 `~/.config/arox/profiles/chat/darox.json` are no longer used. Add Manager connections
 in the UI and move profile ports/autostart settings to `manager.toml`.
 
@@ -143,3 +178,39 @@ npm run electron:compile
 npm run build:check       # Isolated .next-check build, safe alongside npm run dev
 npm run electron:build    # Production static export and desktop package
 ```
+
+### Desktop packages
+
+```bash
+npm ci
+npm run electron:build
+```
+
+On Arch, install build prerequisites with `sudo pacman -S --needed libxcrypt-compat
+libarchive xz`. FPM requires the legacy `libcrypt.so.1` provided by
+`libxcrypt-compat`. Secure token caching also needs `libsecret` plus an unlocked
+Secret Service provider (such as `gnome-keyring`) or KWallet; installing the
+provider alone does not configure login/unlock integration.
+
+Desktop builds export to `.next-package/` and copy the verified export to `out/`, leaving the development
+`.next/` untouched. Packages are written to `release/`: Linux builds only an Arch
+Linux `pacman` package (no deb or AppImage); macOS builds dmg; Windows builds NSIS.
+Build and smoke-test on the target platform. The package includes the client,
+not Manager. On Arch, install the generated package with `sudo pacman -U <package>`
+and launch `darox`. No AUR PKGBUILD is generated. Signing/notarization credentials
+are not configured in this repository.
+
+The production `app://` handler adds a per-document CSP with hashes for Next's
+inline bootstrap scripts; it does not allow arbitrary inline scripts or eval.
+
+### Production web hosting
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` serves `out/` on `127.0.0.1:3140`; use `PORT` and `HOST` to override.
+It requires a prior static build and never starts Manager. Serve the origin root,
+not a subpath. Run the default build separately from a running Next dev server;
+`build:check` disables static export and does not refresh `out/`.

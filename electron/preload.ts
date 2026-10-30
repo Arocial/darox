@@ -32,6 +32,11 @@ const darox = {
   // ── Dialogs ────────────────────────────────────────────────────────
   openDialog: (opts: OpenDialogOptions): Promise<OpenDialogResult> =>
     ipcRenderer.invoke("dialog:open", opts),
+  saveManagerToken: (input: {
+    url: string;
+    token: string;
+  }): Promise<{ cached: boolean; warning?: string }> =>
+    ipcRenderer.invoke("backend:save-manager-token", input),
   getBootstrapManager: (): Promise<BootstrapManagerConfig | null> =>
     ipcRenderer.invoke("backend:get-bootstrap-manager"),
 };

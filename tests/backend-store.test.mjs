@@ -230,6 +230,11 @@ test("Electron bootstrap Manager connects without persisting its token", async (
     },
     configurable: true,
   });
+  const cachedTokens = [];
+  window.darox.saveManagerToken = async (input) => {
+    cachedTokens.push(input);
+    return { cached: true };
+  };
   const calls = [];
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
@@ -266,6 +271,25 @@ test("Electron bootstrap Manager connects without persisting its token", async (
     calls[0].options.headers.get("Authorization"),
     "Bearer electron-secret",
   );
+  await store.getState().saveManager({ ...manager, token: "updated-secret" });
+  assert.deepEqual(cachedTokens, [
+    { url: manager.url, token: "updated-secret" },
+  ]);
+  assert.equal(store.getState().managers[0].token, "updated-secret");
+  await assert.rejects(
+    store.getState().saveManager({ ...manager, url: "http://other:3145" }),
+    /URL is set at startup/,
+  );
+  assert.equal(cachedTokens.length, 1);
+  const warnings = [];
+  window.alert = (message) => warnings.push(message);
+  window.darox.saveManagerToken = async () => ({
+    cached: false,
+    warning: "No secure keyring",
+  });
+  await store.getState().saveManager({ ...manager, token: "session-only" });
+  assert.equal(store.getState().managers[0].token, "session-only");
+  assert.deepEqual(warnings, ["No secure keyring"]);
   await store.getState().saveManager(config("remote"));
   assert.ok(
     !(localStorage.getItem("darox_managers_v1") || "").includes(

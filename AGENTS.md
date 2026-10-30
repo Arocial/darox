@@ -13,7 +13,7 @@ npm run dev           # Next dev server on http://localhost:3140
 npm run manager       # Run an independent arox-manager process (default port 3145)
 npm test              # Regression tests (Node 22.18+)
 npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
-npm run lint          # Biome check
+npm run lint          # Biome check with fixes
 npm run electron:dev  # Run Next dev + local Manager + Electron shell together
 npm run electron:build # Static export + electron-builder package
 ```
@@ -21,7 +21,7 @@ npm run electron:build # Static export + electron-builder package
 **Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
 Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 `build:check` disables static export and does not refresh `out/` or verify desktop packaging.
-`npm start` currently invokes `next start`, which is incompatible with the default static-export configuration; serve `out/` with a static HTTP server for production web hosting.
+`npm start` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets only `pacman`; macOS dmg and Windows NSIS remain.
 
 ## Architecture
 
@@ -37,14 +37,19 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
   - `main.ts` — window, IPC handlers, `app://` protocol that serves `/out` in prod
   - `external-links.ts` — opens external HTTP(S) links in the system browser and mail links in the system handler; blocks external navigation and new Electron windows while preserving same-origin app navigation
   - `preload.ts` — exposes `window.darox.openDialog` via `contextBridge`
-  - Backend connections and profile lifecycle operations live in the shared frontend; Electron never starts or stops Manager processes.
-- Dev: `electron:dev` runs Next on 3140, starts a local Manager with token `1`,
+  - Backend connections and profile lifecycle operations live in the shared frontend.
+  - On Linux/macOS Electron reuses the local Manager or spawns detached `arox-manager`
+    from the user home directory; exiting never stops it. Windows uses remote Managers.
+  - Production HTML responses receive CSP hashes for their inline bootstrap scripts;
+    arbitrary inline scripts/eval remain blocked. Production and development use
+    separate user-data directories; `DAROX_USER_DATA_DIR` isolates smoke tests.
+- Dev: `electron:dev` runs Next on 3140, starts/reuses a local Manager with token `1`,
   and loads the frontend into a BrowserWindow
 - Prod: static export in `/out` is served through a custom `app://` protocol
 
 ### Backend (external)
 
-- Darox connects to one or more independently running `arox-manager` services.
+- Darox connects to one or more `arox-manager` services; desktop can auto-start a local one.
 - Default Manager URL: `http://127.0.0.1:3145`.
 - Manager owns profile processes; `manager.toml` in Arox's platform configuration
   directory defines profile ports and autostart settings.
@@ -120,13 +125,18 @@ remounting restores the default folding rather than persisting it in storage.
 
 - **Zustand** for component-level state (e.g., attachment handling)
 - **localStorage** for command history, backend configuration, and the global stream-mode preference
-- Manager connections are stored as a named list with stable IDs. Profile identities combine Manager ID and profile name. Both browser and Electron restore the selected Manager/profile; remembered tokens use localStorage and session-only tokens use sessionStorage.
+- Manager connections are stored as a named list with stable IDs. Profile identities combine Manager ID and profile name. Both browser and Electron restore the selected Manager/profile; remembered tokens for user-added connections use localStorage and session-only tokens use sessionStorage; the injected desktop connection uses the encrypted cache.
 
 ### Development services
 
-`npm run electron:dev` starts Next, a local Manager with `AROX_API_TOKEN=1`, and
-the Electron shell. The shell injects that Manager connection into the frontend
-without persisting it in browser storage. For browser-only development, run
+`npm run electron:dev` starts Next and Electron with `AROX_API_TOKEN=1`.
+Electron starts or reuses the local Manager, then injects its connection without
+persisting it in browser storage. `AROX_API_TOKEN` overrides and updates the
+safeStorage-encrypted `manager-token.json` cache; otherwise the cache is restored.
+Saving the injected connection updates this cache. Without a secure keyring
+(including Linux `basic_text`), tokens remain session-only with a warning.
+Occupied ports are never replaced, including authentication failures; startup
+errors leave remote connections usable. Logs go to user-data `manager.log`. For browser-only development, run
 `npm run dev` and `npm run manager` separately. Manager commands require
 `arox-manager` on PATH; the standalone shortcut accepts `-- --config <path>` and
 inherits the project working directory and shell environment. An optional

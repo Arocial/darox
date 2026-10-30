@@ -225,6 +225,21 @@ export const useBackendStore = create<BackendState>((set, get) => {
         get().managers.find((m) => m.id === input.id) !== original
       )
         throw new Error("This Manager connection changed. Please try again.");
+      if (original?.electronManaged) {
+        if (manager.url !== original.url)
+          throw new Error(
+            "The desktop Manager URL is set at startup. Add a separate connection for another URL.",
+          );
+        const result = await window.darox?.saveManagerToken({
+          url: manager.url,
+          token: manager.token,
+        });
+        if (result && !result.cached)
+          window.alert(
+            result.warning ||
+              "The token is available for this session but could not be cached.",
+          );
+      }
       const managers = original
         ? get().managers.map((m) => (m.id === manager.id ? manager : m))
         : [...get().managers, manager];

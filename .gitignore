@@ -13,6 +13,7 @@
 # next.js
 /.next/
 /.next-check/
+/.next-package/
 /out/
 
 # production

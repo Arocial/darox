@@ -26,6 +26,10 @@ interface DaroxApi {
   // Dialogs
   openDialog(opts: OpenDialogOptions): Promise<OpenDialogResult>;
   getBootstrapManager(): Promise<BootstrapManagerConfig | null>;
+  saveManagerToken(input: {
+    url: string;
+    token: string;
+  }): Promise<{ cached: boolean; warning?: string }>;
 }
 
 interface BootstrapManagerConfig {

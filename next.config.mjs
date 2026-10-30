@@ -2,10 +2,14 @@
 const nextConfig = {
   // Static export, embedded by Electron in production.
   // https://nextjs.org/docs/pages/building-your-application/deploying/static-exports
-  output: process.env.NEXT_DIST_DIR ? undefined : "export",
+  output:
+    process.env.NEXT_DIST_DIR && !process.env.DAROX_STATIC_EXPORT
+      ? undefined
+      : "export",
   // Allow overriding the build directory via env var so a verification build
   // (e.g. `npm run build:check`) does not clobber the running dev server's `.next`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  experimental: { cpus: 2 },
   images: {
     unoptimized: true,
   },
