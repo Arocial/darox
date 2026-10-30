@@ -15,6 +15,7 @@ npm test              # Regression tests (Node 22.18+)
 npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
 npm run lint          # Biome check with fixes
 npm run electron:dev  # Run Next dev + local Manager + Electron shell together
+npm run electron:dir  # Static export + unpacked binary directory (fast, no compression)
 npm run electron:build # Static export + electron-builder package
 ```
 
