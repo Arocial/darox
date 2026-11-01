@@ -3,10 +3,7 @@
 	auto_https disable_redirects
 }
 
-https://{$DAROX_HTTPS_ADDRESSES} {
-	bind 0.0.0.0
-	tls internal
-
+(darox_routes) {
 	handle /api/* {
 		reverse_proxy {$DAROX_MANAGER_UPSTREAM:127.0.0.1:3145}
 	}
@@ -16,4 +13,15 @@ https://{$DAROX_HTTPS_ADDRESSES} {
 		try_files {path} {path}.html {path}/index.html
 		file_server
 	}
+}
+
+http://:3140 {
+	bind 0.0.0.0
+	import darox_routes
+}
+
+https://{$DAROX_HTTPS_ADDRESSES} {
+	bind 0.0.0.0
+	tls internal
+	import darox_routes
 }

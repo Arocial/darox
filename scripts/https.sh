@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: npm run https -- <host[:port]>... [--manager <upstream>]"
-  echo "At least one host or IP address is required; default port: 3143"
+  echo "At least one host or IP address is required; HTTPS default port: 3143; HTTP port: 3140"
   echo "Manager upstream: --manager (default: DAROX_MANAGER_UPSTREAM or 127.0.0.1:3145)"
   echo "Static files: DAROX_WEB_ROOT (default: project out directory)"
 }
@@ -62,12 +62,14 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 
 normalized_addresses=()
+http_hosts=()
 for address in "${addresses[@]}"; do
   if [[ ! "$address" =~ ^([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:([0-9]+))?$ ]]; then
     echo "Invalid address '$address': expected a hostname or IP address with an optional port, without a scheme or path." >&2
     exit 1
   fi
 
+  host="${BASH_REMATCH[1]}"
   port="${BASH_REMATCH[3]:-3143}"
   port_number=$((10#$port))
   if (( port_number < 1 || port_number > 65535 )); then
@@ -75,7 +77,13 @@ for address in "${addresses[@]}"; do
     exit 1
   fi
 
-  address="${BASH_REMATCH[1]}:$port_number"
+  if (( port_number == 3140 )); then
+    echo "HTTPS port 3140 is reserved for HTTP." >&2
+    exit 1
+  fi
+
+  http_hosts+=("$host")
+  address="$host:$port_number"
   normalized_addresses+=("$address")
 done
 
@@ -94,6 +102,10 @@ export DAROX_WEB_ROOT="$(cd -- "$web_root" && pwd)"
 echo "Darox HTTPS addresses:"
 for address in "${normalized_addresses[@]}"; do
   echo "  https://$address"
+done
+echo "Darox HTTP addresses:"
+for host in "${http_hosts[@]}"; do
+  echo "  http://$host:3140"
 done
 echo "Manager upstream: $DAROX_MANAGER_UPSTREAM"
 echo "Static files: $DAROX_WEB_ROOT"

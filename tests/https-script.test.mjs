@@ -54,6 +54,7 @@ test("HTTPS script configures certificates for multiple addresses and the static
     result.stdout,
     /addresses=darox\.example:3143, 192\.168\.1\.20:8443/,
   );
+  assert.match(result.stdout, /http:\/\/darox\.example:3140/);
   assert.match(result.stdout, /manager=http:\/\/manager\.lan:3145/);
   assert.ok(result.stdout.includes(`web=${webRoot}`));
   assert.match(

@@ -138,7 +138,8 @@ npm run https -- darox.example:8443 192.168.1.20:8443 \
 
 The script requires one or more hostname or IP address arguments; there is no
 default domain. Each address uses port `3143` unless it includes another port.
-The proxy binds the requested ports on `0.0.0.0` and uses `tls internal` to issue
+Caddy also serves HTTP on port `3140` without redirecting to HTTPS. It binds
+the requested ports on `0.0.0.0` and uses `tls internal` to issue
 a certificate covering every supplied hostname and IP address.
 Configure name resolution on each client so every supplied hostname points to this computer's
 LAN IP (for example via a hosts entry or an existing local name-resolution setup);
@@ -165,7 +166,8 @@ Run `caddy environ` as the same user running the script to locate `caddy.AppData
 the public certificate is `<caddy.AppDataDir>/pki/authorities/local/root.crt` after
 the first start. Copy only `root.crt` to client devices, never the private key.
 On iOS, also enable full trust for the installed root in Certificate Trust Settings.
-The proxy does not listen on port 80 or redirect plain HTTP; open HTTPS explicitly.
+The server does not listen on port 80. HTTP traffic, including the Manager token,
+is unencrypted; use HTTPS when that matters.
 
 ## Verification and packaging
 
