@@ -211,10 +211,10 @@ inline bootstrap scripts; it does not allow arbitrary inline scripts or eval.
 
 ```bash
 npm run build
-npm start
+npm run web:static
 ```
 
-`npm start` serves `out/` on `127.0.0.1:3140`; use `PORT` and `HOST` to override.
+`npm run web:static` serves `out/` on `127.0.0.1:3140`; use `PORT` and `HOST` to override.
 It requires a prior static build and never starts Manager. Serve the origin root,
 not a subpath. Run the default build separately from a running Next dev server;
 `build:check` disables static export and does not refresh `out/`.

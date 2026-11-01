@@ -23,7 +23,7 @@ npm run electron:build # Static export + electron-builder package
 **Note:** `npm run web:dev` is often running in the background. Do **not** run `npm run build` to verify changes.
 Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 `build:check` disables static export and does not refresh `out/` or verify desktop packaging.
-`npm start` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets `pacman` and portable `tar.gz`; macOS dmg and Windows NSIS remain.
+`npm run web:static` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets `pacman` and portable `tar.gz`; macOS dmg and Windows NSIS remain.
 
 ## Architecture
 
