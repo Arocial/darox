@@ -18,12 +18,16 @@ import {
 function ManagerForm({
   manager,
   onConnected,
+  useCurrentOrigin = false,
 }: {
   manager?: ManagerConfig;
+  useCurrentOrigin?: boolean;
   onConnected?: () => void;
 }) {
   const saveManager = useBackendStore((state) => state.saveManager);
-  const [name, setName] = useState(manager?.name || "");
+  const [name, setName] = useState(
+    manager?.name || (useCurrentOrigin ? "default" : ""),
+  );
   const [url, setUrl] = useState(manager?.url || "");
   const [token, setToken] = useState(manager?.token || "");
   const [rememberToken, setRememberToken] = useState(
@@ -34,12 +38,16 @@ function ManagerForm({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setName(manager?.name || "");
-    setUrl(manager?.url || "");
+    setName(manager?.name || (useCurrentOrigin ? "default" : ""));
+    const origin = window.location.origin;
+    setUrl(
+      manager?.url ||
+        (useCurrentOrigin && /^https?:\/\//.test(origin) ? origin : ""),
+    );
     setToken(manager?.token || "");
     setRememberToken(manager?.rememberToken || false);
     setError("");
-  }, [manager]);
+  }, [manager, useCurrentOrigin]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -169,7 +177,7 @@ export function ManagerConnectionPrompt() {
         <p className="mb-5 text-muted-foreground text-sm">
           Add a Manager connection to view and manage its profiles.
         </p>
-        <ManagerForm />
+        <ManagerForm useCurrentOrigin />
       </div>
     </div>
   );
