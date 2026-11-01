@@ -15,11 +15,14 @@ const temporaryDirectory = mkdtempSync(join(tmpdir(), "darox-https-test-"));
 const binaryDirectory = join(temporaryDirectory, "bin");
 const fakeCaddy = join(binaryDirectory, "caddy");
 mkdirSync(binaryDirectory);
+const webRoot = join(temporaryDirectory, "out");
+mkdirSync(webRoot);
+writeFileSync(join(webRoot, "index.html"), "test");
 writeFileSync(
   fakeCaddy,
   `#!/usr/bin/env bash
 printf 'addresses=%s\nmanager=%s\nweb=%s\nargs=%s\n' \
-  "$DAROX_HTTPS_ADDRESSES" "$DAROX_MANAGER_UPSTREAM" "$DAROX_WEB_UPSTREAM" "$*"
+  "$DAROX_HTTPS_ADDRESSES" "$DAROX_MANAGER_UPSTREAM" "$DAROX_WEB_ROOT" "$*"
 `,
 );
 chmodSync(fakeCaddy, 0o755);
@@ -32,18 +35,18 @@ const run = (arguments_, environment = {}) =>
     encoding: "utf8",
     env: {
       ...process.env,
+      DAROX_WEB_ROOT: webRoot,
       ...environment,
       PATH: `${binaryDirectory}:${process.env.PATH}`,
     },
   });
 
-test("HTTPS script configures certificates for multiple addresses and both upstreams", () => {
+test("HTTPS script configures certificates for multiple addresses and the static root", () => {
   const result = run([
     "darox.example",
     "192.168.1.20:8443",
     "--manager",
     "http://manager.lan:3145",
-    "--web=web.lan:3140",
   ]);
 
   assert.equal(result.status, 0, result.stderr);
@@ -52,22 +55,20 @@ test("HTTPS script configures certificates for multiple addresses and both upstr
     /addresses=darox\.example:3143, 192\.168\.1\.20:8443/,
   );
   assert.match(result.stdout, /manager=http:\/\/manager\.lan:3145/);
-  assert.match(result.stdout, /web=web\.lan:3140/);
+  assert.ok(result.stdout.includes(`web=${webRoot}`));
   assert.match(
     result.stdout,
     /args=run --config .*\/scripts\/Caddyfile --adapter caddyfile/,
   );
 });
 
-test("HTTPS script keeps environment upstreams as option defaults", () => {
+test("HTTPS script keeps the Manager environment upstream as the default", () => {
   const result = run(["darox.example"], {
     DAROX_MANAGER_UPSTREAM: "manager.env:4145",
-    DAROX_WEB_UPSTREAM: "web.env:4140",
   });
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /manager=manager\.env:4145/);
-  assert.match(result.stdout, /web=web\.env:4140/);
 });
 
 test("HTTPS script rejects missing addresses and invalid ports", () => {

@@ -2,15 +2,16 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: npm run https -- <host[:port]>... [--manager <upstream>] [--web <upstream>]"
+  echo "Usage: npm run https -- <host[:port]>... [--manager <upstream>]"
   echo "At least one host or IP address is required; default port: 3143"
   echo "Manager upstream: --manager (default: DAROX_MANAGER_UPSTREAM or 127.0.0.1:3145)"
-  echo "Web upstream: --web (default: DAROX_WEB_UPSTREAM or 127.0.0.1:3140)"
+  echo "Static files: DAROX_WEB_ROOT (default: project out directory)"
 }
 
 addresses=()
 manager_upstream="${DAROX_MANAGER_UPSTREAM:-127.0.0.1:3145}"
-web_upstream="${DAROX_WEB_UPSTREAM:-127.0.0.1:3140}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+web_root="${DAROX_WEB_ROOT:-$script_dir/../out}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -18,32 +19,24 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    --manager|--web)
+    --manager)
       option="$1"
       if [[ $# -lt 2 || -z "$2" ]]; then
         echo "$option requires an upstream address." >&2
         usage >&2
         exit 1
       fi
-      if [[ "$option" == "--manager" ]]; then
-        manager_upstream="$2"
-      else
-        web_upstream="$2"
-      fi
+      manager_upstream="$2"
       shift 2
       ;;
-    --manager=*|--web=*)
+    --manager=*)
       option="${1%%=*}"
       upstream="${1#*=}"
       if [[ -z "$upstream" ]]; then
         echo "$option requires an upstream address." >&2
         exit 1
       fi
-      if [[ "$option" == "--manager" ]]; then
-        manager_upstream="$upstream"
-      else
-        web_upstream="$upstream"
-      fi
+      manager_upstream="$upstream"
       shift
       ;;
     --*)
@@ -92,15 +85,18 @@ for ((i = 1; i < ${#normalized_addresses[@]}; i++)); do
   DAROX_HTTPS_ADDRESSES+=", ${normalized_addresses[i]}"
 done
 export DAROX_MANAGER_UPSTREAM="$manager_upstream"
-export DAROX_WEB_UPSTREAM="$web_upstream"
+if [[ ! -f "$web_root/index.html" ]]; then
+  echo "Static export not found at $web_root; run npm run build first." >&2
+  exit 1
+fi
+export DAROX_WEB_ROOT="$(cd -- "$web_root" && pwd)"
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 echo "Darox HTTPS addresses:"
 for address in "${normalized_addresses[@]}"; do
   echo "  https://$address"
 done
 echo "Manager upstream: $DAROX_MANAGER_UPSTREAM"
-echo "Web upstream: $DAROX_WEB_UPSTREAM"
+echo "Static files: $DAROX_WEB_ROOT"
 echo "Use any URL above as the Manager URL in Darox; keep Manager token authentication enabled."
 echo "Trust this Caddy instance's root CA on every client device before installing the PWA."
 exec caddy run --config "$script_dir/Caddyfile" --adapter caddyfile

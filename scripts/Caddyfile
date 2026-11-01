@@ -12,6 +12,8 @@ https://{$DAROX_HTTPS_ADDRESSES} {
 	}
 
 	handle {
-		reverse_proxy {$DAROX_WEB_UPSTREAM:127.0.0.1:3140}
+		root * "{$DAROX_WEB_ROOT}"
+		try_files {path} {path}.html {path}/index.html
+		file_server
 	}
 }
