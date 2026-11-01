@@ -30,7 +30,7 @@ chmodSync(fakeCaddy, 0o755);
 after(() => rmSync(temporaryDirectory, { recursive: true, force: true }));
 
 const run = (arguments_, environment = {}) =>
-  spawnSync("bash", ["scripts/https.sh", ...arguments_], {
+  spawnSync("bash", ["scripts/web.sh", ...arguments_], {
     cwd: new URL("..", import.meta.url),
     encoding: "utf8",
     env: {
@@ -41,7 +41,7 @@ const run = (arguments_, environment = {}) =>
     },
   });
 
-test("HTTPS script configures certificates for multiple addresses and the static root", () => {
+test("Web script configures certificates for multiple addresses and the static root", () => {
   const result = run([
     "darox.example",
     "192.168.1.20:8443",
@@ -63,7 +63,7 @@ test("HTTPS script configures certificates for multiple addresses and the static
   );
 });
 
-test("HTTPS script keeps the Manager environment upstream as the default", () => {
+test("Web script keeps the Manager environment upstream as the default", () => {
   const result = run(["darox.example"], {
     DAROX_MANAGER_UPSTREAM: "manager.env:4145",
   });
@@ -72,7 +72,7 @@ test("HTTPS script keeps the Manager environment upstream as the default", () =>
   assert.match(result.stdout, /manager=manager\.env:4145/);
 });
 
-test("HTTPS script rejects missing addresses and invalid ports", () => {
+test("Web script rejects missing addresses and invalid ports", () => {
   const missing = run(["--manager", "manager.lan:3145"]);
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /At least one host or IP address is required/);

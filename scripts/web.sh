@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: npm run https -- <host[:port]>... [--manager <upstream>]"
+  echo "Usage: npm run web -- <host[:port]>... [--manager <upstream>]"
   echo "At least one host or IP address is required; HTTPS default port: 3143; HTTP port: 3140"
   echo "Manager upstream: --manager (default: DAROX_MANAGER_UPSTREAM or 127.0.0.1:3145)"
   echo "Static files: DAROX_WEB_ROOT (default: project out directory)"

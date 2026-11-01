@@ -9,10 +9,10 @@ Darox is a chatbot UI built with Next.js (static export) and Electron for cross-
 ## Commands
 
 ```bash
-npm run dev           # Next dev server on http://localhost:3140
+npm run web:dev           # Next dev server on http://localhost:3140
 npm run manager       # Run an independent arox-manager process (default port 3145)
 npm test              # Regression tests (Node 22.18+)
-npm run build:check   # Verification build into .next-check — safe to run while `npm run dev` is live
+npm run build:check   # Verification build into .next-check — safe to run while `npm run web:dev` is live
 npm run lint          # Biome check with fixes
 npm run electron:dev  # Run Next dev + local Manager + Electron shell together
 npm run electron:dir  # Static export + unpacked binary directory (fast, no compression)
@@ -20,7 +20,7 @@ npm run electron:fast-run # Launch unpacked binary
 npm run electron:build # Static export + electron-builder package
 ```
 
-**Note:** `npm run dev` is often running in the background. Do **not** run `npm run build` to verify changes.
+**Note:** `npm run web:dev` is often running in the background. Do **not** run `npm run build` to verify changes.
 Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolated to `.next-check/`) if a full build is needed.
 `build:check` disables static export and does not refresh `out/` or verify desktop packaging.
 `npm start` serves the existing `out/` on 127.0.0.1:3140 (HOST/PORT overrides). Desktop packaging uses `.next-package/` with static export to `out/`, preserving `.next/`. Linux targets `pacman` and portable `tar.gz`; macOS dmg and Windows NSIS remain.
@@ -139,15 +139,14 @@ identity with `0600` permissions without requiring system keyrings); otherwise
 the cache is restored. Saving the injected connection updates this cache.
 Occupied ports are never replaced, including authentication failures; startup
 errors leave remote connections usable. Logs go to user-data `manager.log`. For browser-only development, run
-`npm run dev` and `npm run manager` separately. Manager commands require
+`npm run web:dev` and `npm run manager` separately. Manager commands require
 `arox-manager` on PATH; the standalone shortcut accepts `-- --config <path>` and
 inherits the project working directory and shell environment. An optional
-`npm run https -- <host[:port]>... [--manager <upstream>] [--web <upstream>]`
-script runs Caddy independently, binding `0.0.0.0:3143` by default with
-`tls internal` for every required host/IP argument. It proxies `/api/*` to the
-configured Manager (default port 3145) and other requests to the configured web
-upstream (default Next on port 3140);
-it never starts upstream services. Clients must resolve the supplied host and
+`npm run web -- <host[:port]>... [--manager <upstream>]`
+script runs Caddy independently, serving HTTP on port 3140 and HTTPS on port
+3143 by default with `tls internal` for every required host/IP argument. It
+proxies `/api/*` to the configured Manager (default port 3145) and serves
+other requests from the static `out/` directory; it never starts Manager. Clients must resolve the supplied host and
 trust Caddy's root CA. Use the same HTTPS origin as both the web and Manager URL.
 See README for overrides and certificate setup.
 

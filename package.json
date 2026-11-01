@@ -10,19 +10,19 @@
   },
   "main": "electron/dist/main.js",
   "scripts": {
-    "dev": "next dev -p 3140",
+    "web:dev": "next dev -p 3140",
     "build": "next build",
     "build:check": "cross-env NEXT_DIST_DIR=.next-check next build",
     "start": "node scripts/serve.mjs",
     "lint": "biome check --write .",
     "format": "biome format --write .",
     "electron:compile": "tsc -p electron",
-    "electron:dev": "cross-env AROX_API_TOKEN=1 DAROX_MANAGER_URL=http://127.0.0.1:3145 concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
+    "electron:dev": "cross-env AROX_API_TOKEN=1 DAROX_MANAGER_URL=http://127.0.0.1:3145 concurrently -k -n next,electron -c blue,magenta \"npm run web:dev\" \"wait-on http://localhost:3140 && npm run electron:compile && cross-env ELECTRON_DEV=1 electron electron/dist/main.js\"",
     "electron:dir": "cross-env NEXT_DIST_DIR=.next-package DAROX_STATIC_EXPORT=1 next build && node scripts/prepare-desktop-export.mjs && npm run electron:compile && electron-builder --dir",
     "electron:fast-run": "node scripts/run-unpacked.mjs",
     "electron:build": "cross-env NEXT_DIST_DIR=.next-package DAROX_STATIC_EXPORT=1 next build && node scripts/prepare-desktop-export.mjs && npm run electron:compile && electron-builder",
     "manager": "arox-manager",
-    "https": "bash scripts/https.sh",
+    "web": "bash scripts/web.sh",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {

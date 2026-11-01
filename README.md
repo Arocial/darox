@@ -9,7 +9,7 @@ reuses a local Manager and leaves it running when Darox exits.
 
 ```bash
 npm install
-npm run dev              # Frontend at http://localhost:3140
+npm run web:dev              # Frontend at http://localhost:3140
 npm run electron:dev     # Frontend, local Manager, and Electron shell
 ```
 
@@ -128,11 +128,11 @@ server (requires Bash and Caddy on PATH):
 ```bash
 npm run build
 AROX_API_TOKEN=your-secret npm run manager   # Another terminal
-npm run https -- darox.example              # Another terminal; port 3143
+npm run web -- darox.example              # Another terminal; port 3143
 # Multiple names/IPs, custom upstreams, and optional ports:
-npm run https -- darox.example 192.168.1.20 \
+npm run web -- darox.example 192.168.1.20 \
   --manager 192.168.1.10:3145
-npm run https -- darox.example:8443 192.168.1.20:8443 \
+npm run web -- darox.example:8443 192.168.1.20:8443 \
   --manager http://192.168.1.10:3145
 ```
 
@@ -176,7 +176,7 @@ npm test                  # Manager client/store tests (Node 22.18+)
 npx tsc --noEmit
 npm run lint
 npm run electron:compile
-npm run build:check       # Isolated .next-check build, safe alongside npm run dev
+npm run build:check       # Isolated .next-check build, safe alongside npm run web:dev
 npm run electron:dir      # Fast unpacked binary build without compression (release/linux-unpacked/darox)
 npm run electron:fast-run # Launch unpacked binary
 npm run electron:build    # Production static export and desktop package
