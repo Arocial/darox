@@ -22,6 +22,7 @@ import { useBackendStore } from "@/components/darox-ui/backend-store";
 import type { SuggestionItem } from "@/types/chat";
 
 const TOUCH_PRIMARY_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
+const UNSELECTED_VALUE = "__none__";
 
 function useCommandHistory(workspace: string, text: string) {
   const [history, setHistory] = useState<string[]>([]);
@@ -158,7 +159,7 @@ export const ComposerWithCommandMenu: FC<{
 
   const [open, setOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const [selectedValue, setSelectedValue] = useState("");
+  const [selectedValue, setSelectedValue] = useState(UNSELECTED_VALUE);
   const justSelected = useRef(false);
 
   // Derive command/search synchronously from text
@@ -185,6 +186,7 @@ export const ComposerWithCommandMenu: FC<{
     } else {
       setOpen(true);
     }
+    setSelectedValue(UNSELECTED_VALUE);
   }, [text]);
 
   const { suggestions, loading } = useSuggestions(
@@ -196,19 +198,12 @@ export const ComposerWithCommandMenu: FC<{
     apiBase,
   );
 
-  useEffect(() => {
-    if (historySuggestions.length > 0) {
-      setSelectedValue(historySuggestions[0].id);
-    } else if (suggestions.length > 0) {
-      setSelectedValue(suggestions[0].id);
-    }
-  }, [suggestions, historySuggestions]);
-
   const handleSelect = (item: SuggestionItem) => {
     justSelected.current = true;
     if (item.source === "history") {
       aui.composer().setText(item.value);
       setOpen(false);
+      setSelectedValue(UNSELECTED_VALUE);
       return;
     }
     const val = item.value;
@@ -220,6 +215,7 @@ export const ComposerWithCommandMenu: FC<{
       aui.composer().setText(`${parts.join(" ")} ${val} `);
     }
     setOpen(false);
+    setSelectedValue(UNSELECTED_VALUE);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -228,6 +224,7 @@ export const ComposerWithCommandMenu: FC<{
 
     if (e.key === "Escape") {
       e.preventDefault();
+      setSelectedValue(UNSELECTED_VALUE);
       setOpen(false);
     } else if (e.key === "Tab" || e.key === "ArrowRight") {
       const isArrowRight = e.key === "ArrowRight";
@@ -244,9 +241,13 @@ export const ComposerWithCommandMenu: FC<{
       }
 
       e.preventDefault();
-      const selectedEl = document.querySelector(
-        '[cmdk-item][aria-selected="true"]',
-      ) as HTMLElement;
+      const selectedEl =
+        (document.querySelector(
+          '[cmdk-item][aria-selected="true"]',
+        ) as HTMLElement) ||
+        (document.querySelector(
+          '[cmdk-item]:not([aria-disabled="true"])',
+        ) as HTMLElement);
       if (selectedEl) {
         selectedEl.click();
       }
@@ -265,6 +266,7 @@ export const ComposerWithCommandMenu: FC<{
     <Command
       className="relative flex w-full flex-col"
       shouldFilter={false}
+      loop
       onKeyDown={handleKeyDown}
       value={selectedValue}
       onValueChange={setSelectedValue}
@@ -335,17 +337,36 @@ export const ComposerWithCommandMenu: FC<{
         onKeyDown={(e) => {
           const isModifier = e.shiftKey || e.ctrlKey || e.altKey || e.metaKey;
 
+          if (showMenu && e.key === "ArrowUp" && !isModifier) {
+            const firstItemId = historySuggestions[0]?.id || suggestions[0]?.id;
+            if (firstItemId && selectedValue === firstItemId) {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelectedValue(UNSELECTED_VALUE);
+              return;
+            }
+          }
+
           if (
             e.key === "Enter" &&
-            isRunning &&
-            !showMenu &&
             !isModifier &&
             !e.nativeEvent.isComposing &&
             !window.matchMedia(TOUCH_PRIMARY_QUERY).matches
           ) {
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-            return;
+            if (showMenu) {
+              if (selectedValue === UNSELECTED_VALUE) {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(false);
+                setSelectedValue(UNSELECTED_VALUE);
+                e.currentTarget.form?.requestSubmit();
+                return;
+              }
+            } else if (isRunning) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+              return;
+            }
           }
 
           if (e.key === "Enter" && e.altKey) {
