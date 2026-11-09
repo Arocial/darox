@@ -20,6 +20,10 @@ import {
 } from "@/components/darox-ui/workspace-context";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 import type { SuggestionItem } from "@/types/chat";
+import {
+  SuggestionEmptyPrefix,
+  suggestionQuery,
+} from "@/components/darox-ui/suggestion-empty-prefix";
 
 const TOUCH_PRIMARY_QUERY = "(pointer: coarse) and (not (any-pointer: fine))";
 const UNSELECTED_VALUE = "__none__";
@@ -71,9 +75,29 @@ function useSuggestions(
 ) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const emptyPrefix = useRef(new SuggestionEmptyPrefix());
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || (!command && !search)) {
+      emptyPrefix.current.reset();
+      setSuggestions([]);
+      setLoading(false);
+      return;
+    }
+
+    const { query, argumentPrefix } = suggestionQuery(command, search);
+    const scope = JSON.stringify([
+      apiBase,
+      agentId,
+      subagentId,
+      command,
+      argumentPrefix,
+    ]);
+    if (emptyPrefix.current.shouldSkip(scope, query)) {
+      setSuggestions([]);
+      setLoading(false);
+      return;
+    }
 
     const controller = new AbortController();
 
@@ -87,36 +111,36 @@ function useSuggestions(
         const url = new URL(base);
         if (command) {
           url.searchParams.set("command", command.slice(1));
-          const words = search.split(" ");
-          const lastWord = words[words.length - 1];
-          if (lastWord) {
-            url.searchParams.set("q", lastWord);
-          }
-        } else {
-          if (search) {
-            url.searchParams.set("q", search);
-          }
+        }
+        if (query) {
+          url.searchParams.set("q", query);
         }
 
         const res = await daroxFetch(url.toString(), {
           signal: controller.signal,
         });
+        if (controller.signal.aborted) return;
         if (res.ok) {
           const data = await res.json();
+          if (controller.signal.aborted) return;
           const items = data.items || [];
           setSuggestions(items);
+          if (Array.isArray(data.items) && items.length === 0) {
+            emptyPrefix.current.recordEmpty(query);
+          }
         } else {
           setSuggestions([]);
         }
       } catch (e: unknown) {
-        if (e instanceof Error && e.name === "AbortError") return;
+        if (controller.signal.aborted) return;
         console.error("Failed to fetch suggestions", e);
         setSuggestions([]);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
+    setLoading(false);
     const debounce = setTimeout(fetchSuggestions, 150);
     return () => {
       clearTimeout(debounce);
