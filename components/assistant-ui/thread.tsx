@@ -64,6 +64,7 @@ import {
 import { Composer } from "@/components/darox-ui/composer";
 import { UserMessageText } from "@/components/darox-ui/user-message-text";
 import { UserActionBar } from "@/components/darox-ui/user-action-bar";
+import { CopyTextButton } from "@/components/darox-ui/copy-text-button";
 import {
   usePendingUserMessages,
   type PendingUserMessage,
@@ -282,6 +283,7 @@ const PendingUserMessageBubble: FC<{
         </div>
       )}
       <div className="text-muted-foreground col-start-2 flex min-h-5 items-center justify-end gap-1 pt-1 text-xs">
+        <CopyTextButton text={text} className="aui-user-action-copy" />
         <LoaderCircleIcon className="size-3 animate-spin" />
         Sending…
       </div>
