@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
+import { sessionApiUrl } from "../lib/session-url.ts";
 import {
   SuggestionEmptyPrefix,
   suggestionQuery,
@@ -36,6 +37,7 @@ function harness() {
     "clearTimeout",
     "SuggestionEmptyPrefix",
     "suggestionQuery",
+    "sessionApiUrl",
     `${hook}; return useSuggestions;`,
   )(
     (initial) => {
@@ -69,6 +71,7 @@ function harness() {
     },
     SuggestionEmptyPrefix,
     suggestionQuery,
+    sessionApiUrl,
   );
   return {
     states,
@@ -86,7 +89,7 @@ function harness() {
       cleanup?.();
       stateIndex = 0;
       refIndex = 0;
-      runHook(command, search, open, agent, node, base);
+      runHook(command, search, open, `${agent}/${node}`, base);
     },
     fire() {
       const callback = timer;

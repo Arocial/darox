@@ -1,5 +1,6 @@
 "use client";
 import { daroxFetch } from "@/lib/api";
+import { sessionApiUrl } from "@/lib/session-url";
 
 import { useEffect, useMemo, useRef, useState, type FC } from "react";
 import { ChevronDownIcon, CheckIcon } from "lucide-react";
@@ -14,10 +15,9 @@ import {
 import type { StreamMode } from "@/components/darox-ui/stream-mode-store";
 import type { SuggestionItem } from "@/types/chat";
 export const ModelPill: FC<{
-  agentId: string;
-  subagentId: string;
+  sessionPath: string;
   streamMode: StreamMode;
-}> = ({ agentId, subagentId, streamMode }) => {
+}> = ({ sessionPath, streamMode }) => {
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const [model, setModel] = useState<string | null>(null);
@@ -29,8 +29,8 @@ export const ModelPill: FC<{
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const wsUrl = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, subagentId, streamMode),
-    [apiBase, agentId, subagentId, streamMode],
+    () => httpBaseToWsUrl(apiBase, sessionPath, streamMode),
+    [apiBase, sessionPath, streamMode],
   );
 
   // Restore the shared model cache on remount, including confirmed changes.
@@ -62,9 +62,7 @@ export const ModelPill: FC<{
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const url = new URL(
-          `${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/suggestions`,
-        );
+        const url = new URL(sessionApiUrl(apiBase, sessionPath, "suggestions"));
         url.searchParams.set("command", "model");
         if (query) url.searchParams.set("q", query);
         const res = await daroxFetch(url.toString());
@@ -86,7 +84,7 @@ export const ModelPill: FC<{
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, query, apiBase, agentId, subagentId]);
+  }, [open, query, apiBase, sessionPath]);
 
   const handleSelect = async (modelRef: string) => {
     if (!modelRef) return;

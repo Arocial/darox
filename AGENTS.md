@@ -60,7 +60,9 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 - The frontend fetches `/api/profiles` on initial load and explicit profile-related
   interactions, then calls profile start/stop/restart APIs as needed.
   HTTP 202 acknowledges an operation; poll for completion and handle HTTP 409.
-- Chat API bases are `<manager-url>/api/profiles/<profile>/proxy`. HTTP Bearer
+- Chat API bases are `<manager-url>/api/profiles/<profile>/proxy`. Node WebSocket and suggestions URLs use `/api/sessions/{session_path}/...`,
+  where `session_path` is the full slash-separated `SessionView.path` (including
+  every ancestor for nested subagents). HTTP Bearer
   authentication and WebSocket token queries use the active Manager's token.
 - Deleting connections and closing Darox never stop remote processes.
 

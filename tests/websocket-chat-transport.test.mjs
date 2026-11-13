@@ -279,3 +279,37 @@ test("model selection survives resubscription without replaying chat history", a
   });
   assert.equal(latest, "latest");
 });
+
+test("session URLs use full node paths through the Manager proxy", async (t) => {
+  const { httpBaseToWsUrl } = await import(
+    "../components/darox-ui/websocket-chat-transport.ts"
+  );
+  const { sessionApiUrl } = await import("../lib/session-url.ts");
+  const { setBackendAuthToken } = await import("../lib/backend-auth.ts");
+  const { sessionToAgentTab } = await import(
+    "../components/darox-ui/agent-store.ts"
+  );
+  setBackendAuthToken("test token");
+  t.after(() => setBackendAuthToken());
+  const base = "https://manager.test/api/profiles/coder/proxy";
+  for (const path of [
+    ["root"],
+    ["root", "child"],
+    ["root", "child", "grandchild"],
+  ]) {
+    const tab = sessionToAgentTab({ id: path.at(-1), path, children: [] });
+    const sessionPath = tab.path.join("/");
+    const ws = new URL(httpBaseToWsUrl(base, sessionPath, "full"));
+    assert.equal(ws.protocol, "wss:");
+    assert.equal(
+      ws.pathname,
+      `/api/profiles/coder/proxy/api/sessions/${sessionPath}/ws`,
+    );
+    assert.equal(ws.searchParams.get("stream_mode"), "full");
+    assert.equal(ws.searchParams.get("token"), "test token");
+    assert.equal(
+      sessionApiUrl(base, sessionPath, "suggestions"),
+      `${base}/api/sessions/${sessionPath}/suggestions`,
+    );
+  }
+});

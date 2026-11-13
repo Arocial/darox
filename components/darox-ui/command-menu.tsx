@@ -1,5 +1,6 @@
 "use client";
 import { daroxFetch } from "@/lib/api";
+import { sessionApiUrl } from "@/lib/session-url";
 import { cn } from "@/lib/utils";
 
 import { Command } from "cmdk";
@@ -12,8 +13,7 @@ import {
   useMemo,
 } from "react";
 import { ComposerPrimitive, useAuiState, useAui } from "@assistant-ui/react";
-import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
-import { SubagentIdContext } from "@/components/darox-ui/subagent-id-context";
+import { SessionPathContext } from "@/components/darox-ui/session-path-context";
 import {
   useWorkspace,
   historyKey,
@@ -69,8 +69,7 @@ function useSuggestions(
   command: string | null,
   search: string,
   open: boolean,
-  agentId: string | null,
-  subagentId: string | null,
+  sessionPath: string | null,
   apiBase: string,
 ) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
@@ -78,7 +77,7 @@ function useSuggestions(
   const emptyPrefix = useRef(new SuggestionEmptyPrefix());
 
   useEffect(() => {
-    if (!open || (!command && !search)) {
+    if (!open || !sessionPath || (!command && !search)) {
       emptyPrefix.current.reset();
       setSuggestions([]);
       setLoading(false);
@@ -88,8 +87,7 @@ function useSuggestions(
     const { query, argumentPrefix } = suggestionQuery(command, search);
     const scope = JSON.stringify([
       apiBase,
-      agentId,
-      subagentId,
+      sessionPath,
       command,
       argumentPrefix,
     ]);
@@ -104,11 +102,7 @@ function useSuggestions(
     const fetchSuggestions = async () => {
       setLoading(true);
       try {
-        const base =
-          agentId && subagentId
-            ? `${apiBase}/api/sessions/${agentId}/nodes/${subagentId}/suggestions`
-            : `${apiBase}/api/suggestions`;
-        const url = new URL(base);
+        const url = new URL(sessionApiUrl(apiBase, sessionPath, "suggestions"));
         if (command) {
           url.searchParams.set("command", command.slice(1));
         }
@@ -146,7 +140,7 @@ function useSuggestions(
       clearTimeout(debounce);
       controller.abort();
     };
-  }, [command, search, open, agentId, subagentId, apiBase]);
+  }, [command, search, open, sessionPath, apiBase]);
 
   return { suggestions, loading };
 }
@@ -173,8 +167,7 @@ export const ComposerWithCommandMenu: FC<{
   disabled?: boolean;
   customHeight?: number | null;
 }> = ({ disabled, customHeight }) => {
-  const agentId = useContext(AgentIdContext);
-  const subagentId = useContext(SubagentIdContext);
+  const sessionPath = useContext(SessionPathContext);
   const workspace = useWorkspace();
   const apiBase = useBackendStore((s) => s.apiBase);
   const text = useAuiState((s) => s.composer.text);
@@ -217,8 +210,7 @@ export const ComposerWithCommandMenu: FC<{
     command,
     search,
     open,
-    agentId,
-    subagentId,
+    sessionPath,
     apiBase,
   );
 

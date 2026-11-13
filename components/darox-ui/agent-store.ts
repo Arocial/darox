@@ -6,6 +6,7 @@ import { useBackendStore } from "@/components/darox-ui/backend-store";
 
 export type AgentTab = {
   id: string;
+  path: string[];
   name: string;
   status: string;
   workspace: string;
@@ -31,6 +32,7 @@ export type SessionInfo = {
 export function sessionToAgentTab(session: SessionInfo): AgentTab {
   return {
     id: session.id,
+    path: session.path,
     name: session.agent_name,
     status: session.active ? "active" : "closed",
     workspace: session.workspace || "",

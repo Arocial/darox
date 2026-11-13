@@ -13,7 +13,7 @@ import {
   type SessionInfo,
 } from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
-import { SubagentIdContext } from "@/components/darox-ui/subagent-id-context";
+import { SessionPathContext } from "@/components/darox-ui/session-path-context";
 import { AgentNameContext } from "@/components/darox-ui/agent-name-context";
 import { AgentStatusContext } from "@/components/darox-ui/agent-status-context";
 import { WorkspaceContext } from "@/components/darox-ui/workspace-context";
@@ -155,7 +155,7 @@ function preserveUserMessageIds(
 
 function AgentChat({
   agentId,
-  subagentId,
+  sessionPath,
   agentName,
   status,
   workspace,
@@ -164,7 +164,7 @@ function AgentChat({
   visible,
 }: {
   agentId: string;
-  subagentId: string;
+  sessionPath: string;
   agentName: string;
   status: string;
   workspace: string;
@@ -175,8 +175,8 @@ function AgentChat({
   const apiBase = useBackendStore((s) => s.apiBase);
 
   const url = useMemo(
-    () => httpBaseToWsUrl(apiBase, agentId, subagentId, streamMode),
-    [apiBase, agentId, subagentId, streamMode],
+    () => httpBaseToWsUrl(apiBase, sessionPath, streamMode),
+    [apiBase, sessionPath, streamMode],
   );
   const transport = useMemo(() => acquireTransport(url), [url]);
 
@@ -573,7 +573,7 @@ function AgentChat({
   return (
     <WorkspaceContext.Provider value={workspace}>
       <AgentIdContext.Provider value={agentId}>
-        <SubagentIdContext.Provider value={subagentId}>
+        <SessionPathContext.Provider value={sessionPath}>
           <AgentNameContext.Provider value={agentName}>
             <AgentStatusContext.Provider value={status}>
               <ChatSubmitContext.Provider value={submitUserMessage}>
@@ -608,7 +608,7 @@ function AgentChat({
               </ChatSubmitContext.Provider>
             </AgentStatusContext.Provider>
           </AgentNameContext.Provider>
-        </SubagentIdContext.Provider>
+        </SessionPathContext.Provider>
       </AgentIdContext.Provider>
     </WorkspaceContext.Provider>
   );
@@ -616,7 +616,7 @@ function AgentChat({
 
 function AgentChatLoader({
   agentId,
-  subagentId,
+  sessionPath,
   agentName,
   status,
   workspace,
@@ -624,7 +624,7 @@ function AgentChatLoader({
   desiredStreamMode,
 }: {
   agentId: string;
-  subagentId: string;
+  sessionPath: string;
   agentName: string;
   status: string;
   workspace: string;
@@ -651,7 +651,7 @@ function AgentChatLoader({
     setInitialMessages(null);
     if (!connectionMode) return;
 
-    const url = httpBaseToWsUrl(apiBase, agentId, subagentId, connectionMode);
+    const url = httpBaseToWsUrl(apiBase, sessionPath, connectionMode);
     const transport = acquireTransport(url);
     let cancelled = false;
     transport
@@ -675,7 +675,7 @@ function AgentChatLoader({
     // here briefly removes the command listener, so a completion-time command
     // can be buffered and replayed on top of a snapshot that already contains
     // the same user message.
-  }, [agentId, apiBase, connectionMode, subagentId]);
+  }, [apiBase, connectionMode, sessionPath]);
 
   if (initialMessages === null || connectionMode === null) {
     return (
@@ -688,7 +688,7 @@ function AgentChatLoader({
   return (
     <AgentChat
       agentId={agentId}
-      subagentId={subagentId}
+      sessionPath={sessionPath}
       agentName={agentName}
       status={status}
       workspace={workspace}
@@ -719,6 +719,8 @@ export function AgentTabPanel({
   const [mounted, setMounted] = useState<Set<string>>(
     () => new Set([agentTab.id]),
   );
+  const activeAgent =
+    agents.find((agent) => agent.id === activeSubagentId) ?? agentTab;
   const isRootActive = useAgentTabs((state) => state.activeId === agentId);
   const desiredStreamMode = useStreamModeStore((state) => state.resolvedMode);
 
@@ -748,7 +750,7 @@ export function AgentTabPanel({
             >
               <AgentChatLoader
                 agentId={agentId}
-                subagentId={agent.id}
+                sessionPath={agent.path.join("/")}
                 agentName={agent.name}
                 status={agent.status}
                 workspace={workspace}
@@ -761,8 +763,7 @@ export function AgentTabPanel({
         {isRootActive && (
           <div className="absolute top-3 left-3 z-20">
             <ModelPill
-              agentId={agentId}
-              subagentId={activeSubagentId}
+              sessionPath={activeAgent.path.join("/")}
               streamMode={desiredStreamMode}
             />
           </div>

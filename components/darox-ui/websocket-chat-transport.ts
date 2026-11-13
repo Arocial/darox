@@ -596,18 +596,16 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 }
 
 import { appendWsToken } from "@/lib/api";
+import { sessionApiUrl } from "@/lib/session-url";
 import type { StreamMode } from "@/components/darox-ui/stream-mode-store";
 
 export function httpBaseToWsUrl(
   apiBase: string,
-  rootSessionId: string,
-  targetSessionId: string,
+  sessionPath: string,
   streamMode: StreamMode,
 ): string {
   const wsBase = apiBase.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  const url = new URL(
-    `${wsBase}/api/sessions/${rootSessionId}/nodes/${targetSessionId}/ws`,
-  );
+  const url = new URL(sessionApiUrl(wsBase, sessionPath, "ws"));
   url.searchParams.set("stream_mode", streamMode);
   return appendWsToken(url.toString());
 }
