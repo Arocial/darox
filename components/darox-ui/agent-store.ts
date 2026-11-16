@@ -34,7 +34,7 @@ export function sessionToAgentTab(session: SessionInfo): AgentTab {
     id: session.id,
     path: session.path,
     name: session.agent_name,
-    status: session.active ? "active" : "closed",
+    status: session.active ? "active" : "idle",
     workspace: session.workspace || "",
     subagents: session.children.map(sessionToAgentTab),
   };

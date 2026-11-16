@@ -98,6 +98,10 @@ The channel carries two types of data:
    - `cmd-command-completed`: Completes an accepted command with its status and optional output or error.
    - `cmd-session-tree`: Broadcasts the recursive session tree, dynamically updating the agent tabs.
 
+`SessionView.active` indicates an allocated runtime, not whether a session is
+closed. Map inactive nodes to `idle`: newly published task agents appear in the
+tree before activation, and their WebSockets and composers must remain usable.
+
 The selected model is cached per session-node transport. Successful model-change
 commands update that cache and notify model subscribers without replaying chat
 history; remounted selectors restore the cached model until a newer server snapshot.

@@ -394,3 +394,31 @@ test("a user boundary closes the attached segment without consuming the next seg
   assert.notEqual(next, null);
   await next.cancel();
 });
+
+test("sessions without a runtime remain connectable and writable, including new task agents", async () => {
+  const { sessionToAgentTab } = await import(
+    "../components/darox-ui/agent-store.ts"
+  );
+  const session = (id, path, active, children = []) => ({
+    id,
+    path,
+    agent_name: id,
+    active,
+    workspace: "/workspace",
+    children,
+  });
+  const tree = sessionToAgentTab(
+    session("root", ["root"], true, [
+      session("worker", ["root", "worker"], false, [
+        session("nested", ["root", "worker", "nested"], false),
+      ]),
+    ]),
+  );
+  assert.equal(tree.status, "active");
+  assert.equal(tree.subagents[0].status, "idle");
+  assert.equal(tree.subagents[0].subagents[0].status, "idle");
+  assert.equal(
+    sessionToAgentTab(session("root", ["root"], false)).status,
+    "idle",
+  );
+});
