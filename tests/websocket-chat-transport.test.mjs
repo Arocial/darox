@@ -313,3 +313,84 @@ test("session URLs use full node paths through the Manager proxy", async (t) => 
     );
   }
 });
+
+test("a replayed user boundary invalidates a recovery before its sink attaches", async (t) => {
+  const sockets = [];
+  class MockWebSocket {
+    static OPEN = 1;
+    static CLOSED = 3;
+    readyState = 1;
+    constructor() {
+      sockets.push(this);
+      queueMicrotask(() => {
+        this.onopen?.();
+        this.receive({ type: "state", history: [], busy: true });
+      });
+    }
+    receive(frame) {
+      this.onmessage?.({ data: JSON.stringify(frame) });
+    }
+    close() {
+      this.readyState = 3;
+      this.onclose?.({ code: 1000 });
+    }
+  }
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = MockWebSocket;
+  const transport = new WebSocketChatTransport({ url: "ws://task-replay" });
+  t.after(() => {
+    transport.close();
+    globalThis.WebSocket = originalWebSocket;
+  });
+  await transport.waitForState();
+
+  const recovering = transport.reconnectToStream({ chatId: "worker" });
+  transport.splitAtUserMessage();
+  const chunk = { type: "text-start", id: "task-output" };
+  sockets[0].receive(chunk);
+  assert.equal(await recovering, null);
+
+  const stream = await transport.reconnectToStream({ chatId: "worker" });
+  const reader = stream.getReader();
+  assert.deepEqual(await reader.read(), { value: chunk, done: false });
+  transport.endBusyEpoch();
+  assert.equal((await reader.read()).done, true);
+});
+
+test("a user boundary closes the attached segment without consuming the next segment", async (t) => {
+  class MockWebSocket {
+    static OPEN = 1;
+    static CLOSED = 3;
+    readyState = 1;
+    constructor() {
+      queueMicrotask(() => {
+        this.onopen?.();
+        this.onmessage?.({
+          data: JSON.stringify({ type: "state", history: [], busy: true }),
+        });
+      });
+    }
+    close() {
+      this.readyState = 3;
+      this.onclose?.({ code: 1000 });
+    }
+  }
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = MockWebSocket;
+  const transport = new WebSocketChatTransport({ url: "ws://task-boundary" });
+  t.after(() => {
+    transport.close();
+    globalThis.WebSocket = originalWebSocket;
+  });
+  await transport.waitForState();
+  const preceding = await transport.reconnectToStream({ chatId: "worker" });
+  const precedingReader = preceding.getReader();
+  const waitingRecovery = transport.reconnectToStream({ chatId: "worker" });
+  await new Promise((resolve) => setImmediate(resolve));
+  transport.splitAtUserMessage();
+  assert.equal((await precedingReader.read()).done, true);
+  assert.equal(await waitingRecovery, null);
+  const next = await transport.reconnectToStream({ chatId: "worker" });
+  assert.notEqual(next, null);
+  await next.cancel();
+});

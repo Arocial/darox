@@ -75,6 +75,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
   private controller: ReadableStreamDefaultController<UIMessageChunk> | null =
     null;
   private controllerClosed = true;
+  private userBoundaryVersion = 0;
   private pendingChunks: UIMessageChunk[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private commandCompletions = new Map<
@@ -288,6 +289,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
    * later chunks stay buffered until the next AI SDK recovery sink attaches.
    */
   public splitAtUserMessage() {
+    this.userBoundaryVersion += 1;
     this.closeController();
   }
 
@@ -515,6 +517,7 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
 
   reconnectToStream: ChatTransport<UI_MESSAGE>["reconnectToStream"] =
     async () => {
+      const userBoundaryVersion = this.userBoundaryVersion;
       // If a previous close() is still tearing the socket down, wait for its
       // onclose to fire before opening a new one. Avoids Strict-Mode churn
       // where mount → unmount → mount races a CONNECTING socket against a new
@@ -524,7 +527,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         await this.closingPromise;
       }
       await this.ensureOpen();
-      if (this.latestState?.busy !== true) return null;
+      // A replayed input can split the timeline while recovery is awaiting the
+      // socket. Its drain waits for this recovery, so it must not attach a sink
+      // that consumes the next segment and stays open until the turn ends.
+      if (
+        this.latestState?.busy !== true ||
+        userBoundaryVersion !== this.userBoundaryVersion
+      )
+        return null;
 
       // Avoid close the previous controller on remount of strict-mode.
       // We didn't close the controller on unmount, So we wait for previous controller
@@ -533,10 +543,14 @@ export class WebSocketChatTransport<UI_MESSAGE extends UIMessage>
         if (!this.controller || this.controllerClosed) break;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      if (
+        this.latestState?.busy !== true ||
+        userBoundaryVersion !== this.userBoundaryVersion
+      )
+        return null;
       if (this.controller && !this.controllerClosed) {
         this.closeController();
       }
-      if (this.latestState?.busy !== true) return null;
 
       const stream = new ReadableStream<UIMessageChunk>({
         start: (controller) => {
