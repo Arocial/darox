@@ -132,7 +132,7 @@ export function profileKey(managerId: string, profileId: string): string {
 export const useBackendStore = create<BackendState>((set, get) => {
   const versions = new Map<string, number>();
   let initialized = false;
-  let lastExecution: string | null = null;
+  const executions = new Map<string, string>();
 
   const syncActive = () => {
     const state = get();
@@ -147,11 +147,15 @@ export const useBackendStore = create<BackendState>((set, get) => {
       activeBackendId && profile?.status === "running"
         ? `${activeBackendId}:${profile.started_at}`
         : null;
+    const previousExecution = activeBackendId
+      ? executions.get(activeBackendId)
+      : undefined;
     const changedExecution =
       execution !== null &&
-      lastExecution !== null &&
-      execution !== lastExecution;
-    if (execution) lastExecution = execution;
+      previousExecution !== undefined &&
+      execution !== previousExecution;
+    if (activeBackendId && execution)
+      executions.set(activeBackendId, execution);
     setBackendAuthToken(manager?.token);
     set({
       activeBackendId,

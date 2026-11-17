@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import type { WebSocketChatTransport } from "./websocket-chat-transport";
+import { refreshActiveBackend } from "@/lib/manager-monitor";
 import { Button } from "@/components/ui/button";
 
 export function ConnectionRecovery({
@@ -39,8 +40,10 @@ export function ConnectionRecovery({
       reconnecting = true;
       clearTimeout(timer);
       setDisconnected(true);
-      transport.close();
       try {
+        const current = await refreshActiveBackend();
+        if (disposed || transport.replaced || !current) return;
+        transport.close();
         await transport.waitForState();
         if (!disposed) {
           setDisconnected(false);

@@ -6,6 +6,7 @@ import { AgentNavigation } from "@/components/darox-ui/agent-navigation";
 import { AgentTabPanel } from "@/components/darox-ui/agent-tab-panel";
 import { useBackendStore } from "@/components/darox-ui/backend-store";
 import { ManagerConnectionPrompt } from "@/components/darox-ui/manager-connections";
+import { monitorManager } from "@/lib/manager-monitor";
 import { WindowTitleUpdater } from "@/components/darox-ui/window-title-updater";
 
 export default function Chat() {
@@ -48,6 +49,10 @@ export default function Chat() {
   }, [activeId]);
 
   useEffect(() => useBackendStore.getState().initialize(), []);
+
+  useEffect(() => {
+    if (activeManagerId) return monitorManager(activeManagerId);
+  }, [activeManagerId]);
 
   if (!mounted || !backendHydrated) {
     return null;

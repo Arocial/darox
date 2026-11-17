@@ -58,8 +58,12 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 - `AROX_API_TOKEN` configures Manager authentication; users enter the same token
   when adding the connection in Darox.
 - The frontend fetches `/api/profiles` on initial load and explicit profile-related
-  interactions, then calls profile start/stop/restart APIs as needed.
-  HTTP 202 acknowledges an operation; poll for completion and handle HTTP 409.
+  interactions, and checks the selected Manager every 3 seconds while visible and
+  online (also on foreground/online events and before WebSocket recovery).
+  A changed `started_at` invalidates old session tabs before loading active sessions;
+  unchanged executions preserve tabs across network interruptions. The page-level
+  monitor keeps retrying even without mounted chats. Profile start/stop/restart
+  APIs return HTTP 202 to acknowledge an operation; poll for completion and handle HTTP 409.
 - Chat API bases are `<manager-url>/api/profiles/<profile>/proxy`. Node WebSocket and suggestions URLs use `/api/sessions/{session_path}/...`,
   where `session_path` is the full slash-separated `SessionView.path` (including
   every ancestor for nested subagents). HTTP Bearer

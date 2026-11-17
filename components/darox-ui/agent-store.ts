@@ -291,7 +291,25 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 }));
 
 useBackendStore.subscribe((state, prevState) => {
-  if (state.activeBackendId === prevState.activeBackendId) return;
+  if (state.activeBackendId === prevState.activeBackendId) {
+    if (state.connectionRevision !== prevState.connectionRevision) {
+      useAgentTabs.setState((agentState) => {
+        const backendWorkspaces = { ...agentState.backendWorkspaces };
+        if (state.activeBackendId)
+          delete backendWorkspaces[state.activeBackendId];
+        return {
+          backendWorkspaces,
+          tabs: [],
+          activeId: null,
+          sessions: [],
+          completionUnread: {},
+          isBusy: {},
+          loading: false,
+        };
+      });
+    }
+    return;
+  }
 
   useAgentTabs.setState((agentState) => {
     const backendWorkspaces = { ...agentState.backendWorkspaces };
@@ -304,6 +322,11 @@ useBackendStore.subscribe((state, prevState) => {
         isBusy: agentState.isBusy,
       };
     }
+    if (
+      state.activeBackendId &&
+      state.connectionRevision !== prevState.connectionRevision
+    )
+      delete backendWorkspaces[state.activeBackendId];
     const next = state.activeBackendId
       ? backendWorkspaces[state.activeBackendId]
       : undefined;
