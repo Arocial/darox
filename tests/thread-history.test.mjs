@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
+import { registerHooks } from "node:module";
+import { getMessageOrigin } from "../components/darox-ui/message-origin.ts";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(
+      specifier === "./message-origin" ? "./message-origin.ts" : specifier,
+      context,
+    );
+  },
+});
+const {
+  buildDirectoryInputIndex,
   buildHistorySections,
   buildInputIndex,
   initialHistoryCount,
-} from "../components/darox-ui/thread-history-model.ts";
+} = await import("../components/darox-ui/thread-history-model.ts");
 
 const conversation = (count) =>
   Array.from({ length: count }, (_, i) => [
@@ -139,4 +151,47 @@ test("short or replaced snapshots cannot produce an out-of-bounds section", () =
     { id: "input-0", start: 0, end: 20, firstInput: 1, lastInput: 10 },
   ]);
   assert.deepEqual(buildHistorySections(longer, 9), []);
+});
+
+test("recognized origins filter only the directory, not history boundaries", () => {
+  const messages = conversation(33);
+  messages[2].metadata = { custom: { origin: "shell" } };
+  messages[22].metadata = { custom: { origin: "collaboration" } };
+  messages[4].metadata = { custom: { origin: "future-origin" } };
+  messages[6].metadata = { custom: { origin: "user" } };
+  const history = buildInputIndex(messages);
+  assert.deepEqual(
+    buildHistorySections(history, initialHistoryCount(history.length)),
+    buildHistorySections(buildInputIndex(conversation(33)), 20),
+  );
+  const directory = buildDirectoryInputIndex(messages);
+  assert.equal(directory.length, 31);
+  assert.equal(
+    directory.some((input) => input.id === "input-1"),
+    false,
+  );
+  assert.equal(
+    directory.some((input) => input.id === "input-11"),
+    false,
+  );
+  assert.deepEqual(directory[1], {
+    id: "input-2",
+    messageIndex: 4,
+    ordinal: 2,
+    text: "Question 3",
+  });
+  for (const metadata of [
+    undefined,
+    null,
+    {},
+    { custom: null },
+    { custom: { origin: "future-origin" } },
+  ]) {
+    assert.equal(getMessageOrigin(metadata), "user");
+  }
+  assert.equal(getMessageOrigin({ custom: { origin: "shell" } }), "shell");
+  assert.equal(
+    getMessageOrigin({ custom: { origin: "collaboration" } }),
+    "collaboration",
+  );
 });

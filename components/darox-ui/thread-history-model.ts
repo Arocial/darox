@@ -1,3 +1,5 @@
+import { getMessageOrigin } from "./message-origin";
+
 export const HISTORY_THRESHOLD = 20;
 export const HISTORY_RECENT_INPUTS = 10;
 export const HISTORY_SECTION_SIZE = 10;
@@ -9,6 +11,7 @@ type HistoryMessage = {
     readonly type: string;
     readonly text?: string;
   }[];
+  readonly metadata?: unknown;
   readonly attachments?: readonly { readonly name: string }[];
 };
 
@@ -52,6 +55,19 @@ export function buildInputIndex(
         },
       ];
     })
+    .map((input, index) => ({ ...input, ordinal: index + 1 }));
+}
+
+// The directory excludes notifications; folding deliberately keeps all user-role
+// boundaries so introducing origins does not change existing history sections.
+export function buildDirectoryInputIndex(
+  messages: readonly HistoryMessage[],
+): ThreadInput[] {
+  return buildInputIndex(messages)
+    .filter(
+      (input) =>
+        getMessageOrigin(messages[input.messageIndex].metadata) === "user",
+    )
     .map((input, index) => ({ ...input, ordinal: index + 1 }));
 }
 

@@ -104,6 +104,19 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
   boundaries retain stable identity across snapshots.
 - `finish`, `stream-close`, and `step-done` are not needed by this frontend.
 
+## Input origins
+
+User-role messages may carry `UIMessage.metadata.custom.origin`: `user`,
+`shell`, or `collaboration`. Missing or unrecognized values use the ordinary
+user bubble. Shell and Collaboration render as left-aligned, fully expanded
+notification cards with plain text/newlines and copy only (no edit/resend).
+Collaboration uses a subtle blue heading and divider. Both started input echoes
+and snapshot history preserve this metadata without changing the message role.
+
+The right-side input directory excludes recognized Shell/Collaboration notices.
+History folding still counts every user-role boundary as before; directory
+filtering does not change section boundaries or hide notices from the timeline.
+
 ## Limitations
 
 - The backend must send started message payloads in timeline order: all chunks for the

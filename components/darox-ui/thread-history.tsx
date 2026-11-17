@@ -18,6 +18,7 @@ import {
 import { CommandInputList } from "./command-input-list";
 import { CompactionMarkerList } from "./compaction-marker-list";
 import {
+  buildDirectoryInputIndex,
   buildHistorySections,
   buildInputIndex,
   initialHistoryCount,
@@ -49,6 +50,13 @@ export function ThreadHistory({
   // Only input/layout changes invalidate history UI, not streamed assistant parts.
   const serializedInputs = useAuiState((s) =>
     JSON.stringify(buildInputIndex(s.thread.messages)),
+  );
+  const serializedDirectoryInputs = useAuiState((s) =>
+    JSON.stringify(buildDirectoryInputIndex(s.thread.messages)),
+  );
+  const directoryInputs = useMemo(
+    () => JSON.parse(serializedDirectoryInputs) as ThreadInput[],
+    [serializedDirectoryInputs],
   );
   const serializedIds = useAuiState((s) =>
     JSON.stringify(s.thread.messages.map((message) => message.id)),
@@ -220,7 +228,14 @@ export function ThreadHistory({
 
   return (
     <HistoryContext.Provider
-      value={{ inputs, messageIds, sections, expanded, toggle, viewport }}
+      value={{
+        inputs: directoryInputs,
+        messageIds,
+        sections,
+        expanded,
+        toggle,
+        viewport,
+      }}
     >
       {children({
         viewport,
@@ -228,7 +243,7 @@ export function ThreadHistory({
         onScroll,
         navigator: (
           <ThreadInputNavigator
-            inputs={inputs}
+            inputs={directoryInputs}
             activeId={activeId}
             onNavigate={navigate}
           />

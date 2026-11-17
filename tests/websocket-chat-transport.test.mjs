@@ -422,3 +422,60 @@ test("sessions without a runtime remain connectable and writable, including new 
     "idle",
   );
 });
+
+test("snapshot and started input echoes preserve origin and unrelated metadata", async (t) => {
+  let socket;
+  class MockWebSocket {
+    static OPEN = 1;
+    readyState = 1;
+    constructor() {
+      socket = this;
+      queueMicrotask(() => this.onopen());
+    }
+    receive(frame) {
+      this.onmessage({ data: JSON.stringify(frame) });
+    }
+    close() {
+      this.readyState = 3;
+      this.onclose?.({ code: 1000 });
+    }
+  }
+  const original = globalThis.WebSocket;
+  globalThis.WebSocket = MockWebSocket;
+  t.after(() => {
+    globalThis.WebSocket = original;
+  });
+  const transport = new WebSocketChatTransport({ url: "ws://test" });
+  t.after(() => transport.close());
+  const commands = [];
+  transport.onCommand((command) => commands.push(command));
+  const stream = await transport.reconnectToStream({ chatId: "test" });
+  t.after(() => stream?.cancel());
+  const messages = ["shell", "collaboration"].map((origin) => ({
+    id: origin,
+    role: "user",
+    parts: [{ type: "text", text: "line one\nline two" }],
+    metadata: { custom: { origin, user_input_id: origin, extra: "keep" } },
+  }));
+  let snapshot;
+  transport.onState((state) => {
+    snapshot = state;
+  });
+  socket.receive({
+    type: "state",
+    history: messages.map((message) => ({ type: "message", message })),
+    busy: false,
+  });
+  assert.deepEqual(snapshot.history, messages);
+  for (const message of messages) {
+    socket.receive({
+      type: "cmd-client-input",
+      input_id: message.id,
+      payload: { type: "message", status: "started", message },
+    });
+  }
+  assert.deepEqual(
+    commands.map((command) => command.payload.message),
+    messages,
+  );
+});
