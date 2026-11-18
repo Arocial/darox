@@ -11,9 +11,10 @@ export type AgentTab = {
   status: string;
   workspace: string;
   subagents: AgentTab[];
+  treeLoaded: boolean;
 };
 
-export type SessionInfo = {
+export type SessionSummary = {
   id: string;
   path: string[];
   agent_name: string;
@@ -24,19 +25,27 @@ export type SessionInfo = {
   active: boolean;
   task_name: string | null;
   target: string | null;
-  result: unknown;
-  error: unknown;
-  children: SessionInfo[];
 };
 
-export function sessionToAgentTab(session: SessionInfo): AgentTab {
+export type SessionView = SessionSummary & { children: SessionView[] };
+
+export function summaryToAgentTab(session: SessionSummary): AgentTab {
   return {
     id: session.id,
     path: session.path,
     name: session.agent_name,
     status: session.active ? "active" : "idle",
     workspace: session.workspace || "",
+    subagents: [],
+    treeLoaded: false,
+  };
+}
+
+export function sessionToAgentTab(session: SessionView): AgentTab {
+  return {
+    ...summaryToAgentTab(session),
     subagents: session.children.map(sessionToAgentTab),
+    treeLoaded: true,
   };
 }
 
@@ -50,7 +59,7 @@ export function containsSession(tab: AgentTab, sessionPath: string): boolean {
 type AgentWorkspace = {
   tabs: AgentTab[];
   activeId: string | null;
-  sessions: SessionInfo[];
+  sessions: SessionSummary[];
   closingSessionIds: ReadonlyMap<string, symbol>;
   completionUnread: Record<string, Record<string, boolean>>;
   isBusy: Record<string, Record<string, boolean>>;
@@ -62,7 +71,11 @@ type AgentTabsState = AgentWorkspace & {
   notificationSelection: { rootId: string; sessionPath: string } | null;
 
   setActiveId: (id: string) => void;
-  focusSession: (tab: AgentTab, sessionPath: string) => void;
+  focusSession: (
+    tab: AgentTab,
+    sessionPath: string,
+    previousTab: AgentTab | undefined,
+  ) => void;
   consumeNotificationSelection: (
     selection: NonNullable<AgentTabsState["notificationSelection"]>,
   ) => void;
@@ -80,6 +93,7 @@ type AgentTabsState = AgentWorkspace & {
   loadSessions: () => Promise<void>;
   loadAgents: () => Promise<void>;
   openSession: (sessionId: string) => Promise<AgentTab | null>;
+  hydrateTree: (rootId: string) => Promise<void>;
   updateAgent: (agent: AgentTab) => void;
   clearAgents: () => void;
 };
@@ -103,6 +117,7 @@ function activeBackendRequestContext() {
 
 // A list requested before a successful stop may still report the session active.
 const sessionListVersions = new Map<string | null, number>();
+const treeRequests = new WeakMap<AgentTab, Promise<void>>();
 
 function sessionListRequestContext() {
   const { apiBase, activeBackendId, isCurrent } = activeBackendRequestContext();
@@ -154,27 +169,40 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   setActiveId: (id) =>
     set((state) => {
       if (state.closingSessionIds.has(id)) return state;
+      let tabs = state.tabs;
+      if (!tabs.some((tab) => tab.id === id)) {
+        const summary = state.sessions.find((item) => item.id === id);
+        if (!summary?.active) return state;
+        tabs = [...tabs, summaryToAgentTab(summary)];
+      }
       const nextCompletionUnread = { ...state.completionUnread };
       delete nextCompletionUnread[id];
       return {
+        tabs,
         activeId: id,
         completionUnread: nextCompletionUnread,
         notificationSelection: null,
       };
     }),
 
-  focusSession: (tab, sessionPath) =>
+  focusSession: (tab, sessionPath, previousTab) =>
     set((state) => {
       if (state.closingSessionIds.has(tab.id)) return state;
       const existing = state.tabs.find((item) => item.id === tab.id);
+      // A newer tree (or a closed tab) must not be replaced by the HTTP lookup.
+      const canApplyLookup =
+        existing === previousTab || (!previousTab && !existing?.treeLoaded);
+      const existingHasTarget =
+        existing?.treeLoaded && containsSession(existing, sessionPath);
+      if (!canApplyLookup && !existingHasTarget) return state;
       const completionUnread = { ...state.completionUnread };
       delete completionUnread[tab.id];
       return {
         tabs: !existing
           ? [...state.tabs, tab]
-          : containsSession(existing, sessionPath)
+          : existingHasTarget
             ? state.tabs
-            : state.tabs.map((item) => (item.id === tab.id ? tab : item)),
+            : state.tabs.map((item) => (item === existing ? tab : item)),
         activeId: tab.id,
         completionUnread,
         notificationSelection: { rootId: tab.id, sessionPath },
@@ -328,9 +356,11 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   loadSessions: async () => {
     try {
       const { apiBase, isCurrent } = sessionListRequestContext();
-      const res = await daroxFetch(`${apiBase}/api/sessions`);
+      const res = await daroxFetch(`${apiBase}/api/sessions`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Failed to load sessions");
-      const sessions: SessionInfo[] = await res.json();
+      const sessions: SessionSummary[] = await res.json();
       if (!isCurrent()) return;
       set({ sessions });
     } catch (e) {
@@ -341,17 +371,23 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   loadAgents: async () => {
     try {
       const { apiBase, isCurrent } = sessionListRequestContext();
-      const res = await daroxFetch(`${apiBase}/api/sessions`);
+      const res = await daroxFetch(`${apiBase}/api/sessions`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Failed to load active sessions");
-      const sessions: SessionInfo[] = await res.json();
+      const sessions: SessionSummary[] = await res.json();
       if (!isCurrent()) return;
-      const agents = sessions
-        .filter((session) => session.active)
-        .map(sessionToAgentTab);
       set((state) => {
-        const visible = agents.filter(
-          (tab) => !state.closingSessionIds.has(tab.id),
-        );
+        const existingTabs = new Map(state.tabs.map((tab) => [tab.id, tab]));
+        const visible = sessions
+          .filter(
+            (session) =>
+              session.active && !state.closingSessionIds.has(session.id),
+          )
+          .map(
+            (session) =>
+              existingTabs.get(session.id) ?? summaryToAgentTab(session),
+          );
         const pending = state.tabs.filter((tab) =>
           state.closingSessionIds.has(tab.id),
         );
@@ -379,15 +415,57 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       if (!res.ok) throw new Error("Failed to open session");
       const tab = sessionToAgentTab(await res.json());
       if (!isCurrent() || get().closingSessionIds.has(sessionId)) return null;
-      set((state) => ({
-        tabs: [...state.tabs, tab],
-        activeId: tab.id,
-      }));
+      set((state) => {
+        const existing = state.tabs.find((item) => item.id === tab.id);
+        return {
+          tabs: existing
+            ? state.tabs.map((item) =>
+                item === existing && !item.treeLoaded ? tab : item,
+              )
+            : [...state.tabs, tab],
+          activeId: tab.id,
+        };
+      });
       return tab;
     } catch (e) {
       console.error("Failed to open session", e);
       return null;
     }
+  },
+
+  hydrateTree: (rootId) => {
+    const tab = get().tabs.find((item) => item.id === rootId);
+    if (!tab || get().closingSessionIds.has(rootId)) return Promise.resolve();
+    const pending = treeRequests.get(tab);
+    if (pending) return pending;
+    const { apiBase, isCurrent } = activeBackendRequestContext();
+    const request = (async () => {
+      try {
+        const res = await daroxFetch(
+          `${apiBase}/api/sessions/${encodeURIComponent(tab.id)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) throw new Error("Failed to load session tree");
+        const session: SessionView = await res.json();
+        if (
+          !isCurrent() ||
+          session.id !== tab.id ||
+          session.path.length !== 1 ||
+          session.path[0] !== tab.id
+        )
+          return;
+        // Only replace the tab version observed before the read began.
+        set((state) => ({
+          tabs: state.tabs.map((item) =>
+            item === tab ? sessionToAgentTab(session) : item,
+          ),
+        }));
+      } catch (e) {
+        if (isCurrent()) console.error("Failed to load session tree", e);
+      }
+    })().finally(() => treeRequests.delete(tab));
+    treeRequests.set(tab, request);
+    return request;
   },
 
   updateAgent: (agent) =>

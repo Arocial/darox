@@ -10,7 +10,7 @@ import {
   useAgentTabs,
   sessionToAgentTab,
   type AgentTab,
-  type SessionInfo,
+  type SessionView,
 } from "@/components/darox-ui/agent-store";
 import { AgentIdContext } from "@/components/darox-ui/agent-id-context";
 import { SessionPathContext } from "@/components/darox-ui/session-path-context";
@@ -534,7 +534,7 @@ function AgentChat({
         ];
       });
     } else if (cmd.type === "cmd-session-tree") {
-      updateAgent(sessionToAgentTab(cmd as unknown as SessionInfo));
+      updateAgent(sessionToAgentTab(cmd as unknown as SessionView));
     }
   });
 
@@ -712,6 +712,10 @@ export function AgentTabPanel({
   workspace: string;
   agentTab: AgentTab;
 }) {
+  useEffect(() => {
+    void useAgentTabs.getState().hydrateTree(agentId);
+  }, [agentId]);
+
   const agents = useMemo(() => {
     const flatten = (agent: AgentTab): AgentTab[] => [
       agent,
@@ -758,7 +762,7 @@ export function AgentTabPanel({
               key={id}
               className={`absolute inset-x-0 bottom-0 ${
                 agents.length > 1 ? "top-12 md:top-0" : "top-0"
-              } ${activeSubagentId === id ? "visible z-10" : "invisible z-0"}`}
+              } ${activeAgent.id === id ? "visible z-10" : "invisible z-0"}`}
             >
               <AgentChatLoader
                 agentId={agentId}
@@ -766,7 +770,7 @@ export function AgentTabPanel({
                 agentName={agent.name}
                 status={agent.status}
                 workspace={workspace}
-                isActive={isRootActive && activeSubagentId === agent.id}
+                isActive={isRootActive && activeAgent.id === agent.id}
                 desiredStreamMode={desiredStreamMode}
               />
             </div>
@@ -783,7 +787,7 @@ export function AgentTabPanel({
         {agents.length > 1 && (
           <select
             aria-label="Active agent"
-            value={activeSubagentId}
+            value={activeAgent.id}
             onChange={(event) => handleSelect(event.target.value)}
             className="absolute top-2 right-3 z-20 h-9 max-w-[45%] rounded-md border bg-background px-2 md:hidden"
           >
@@ -809,7 +813,7 @@ export function AgentTabPanel({
               key={agent.id}
               onClick={() => handleSelect(agent.id)}
               className={`mx-1 flex items-center gap-2 rounded-sm px-3 py-1.5 text-left text-sm transition-colors ${
-                activeSubagentId === agent.id
+                activeAgent.id === agent.id
                   ? "bg-accent font-semibold text-foreground"
                   : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
               }`}

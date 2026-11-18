@@ -14,11 +14,14 @@ import {
 import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  sessionToAgentTab,
+  summaryToAgentTab,
   useAgentTabs,
 } from "@/components/darox-ui/agent-store";
 import { SidebarSettings } from "@/components/darox-ui/sidebar-settings";
-import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
+import type {
+  AgentTab,
+  SessionSummary,
+} from "@/components/darox-ui/agent-store";
 
 function formatRelativeTime(dateString?: string) {
   if (!dateString) return "";
@@ -108,7 +111,7 @@ async function pickDirectory(): Promise<string | null> {
   return dir || null;
 }
 
-function lastUserMessages(session?: SessionInfo): string[] {
+function lastUserMessages(session?: SessionSummary): string[] {
   const messages = session?.metadata?.last_user_messages;
   return Array.isArray(messages)
     ? messages.filter(
@@ -127,7 +130,7 @@ const ActiveTabItem = ({
   onClose,
 }: {
   tab: AgentTab;
-  session?: SessionInfo;
+  session?: SessionSummary;
   activeId: string | null;
   completionUnread: Record<string, boolean>;
   onSelect: (id: string) => void;
@@ -237,8 +240,8 @@ const SessionItem = ({
   onSelect,
   onDelete,
 }: {
-  session: SessionInfo;
-  onSelect: (session: SessionInfo) => void;
+  session: SessionSummary;
+  onSelect: (session: SessionSummary) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) => {
   const workspace = session.workspace;
@@ -353,7 +356,7 @@ export const AgentTabBar = () => {
   );
 
   const handleOpenSession = useCallback(
-    async (session: SessionInfo) => {
+    async (session: SessionSummary) => {
       await openSession(session.id);
     },
     [openSession],
@@ -376,7 +379,7 @@ export const AgentTabBar = () => {
             !openSessionIds.has(session.id) &&
             !closingSessionIds.has(session.id),
         )
-        .map(sessionToAgentTab),
+        .map(summaryToAgentTab),
     ],
     [tabs, sessions, openSessionIds, closingSessionIds],
   );
@@ -390,14 +393,6 @@ export const AgentTabBar = () => {
       ),
     [sessions, openSessionIds, closingSessionIds],
   );
-  const handleSelectActive = useCallback(
-    (id: string) => {
-      if (openSessionIds.has(id)) setActiveId(id);
-      else void openSession(id);
-    },
-    [openSessionIds, setActiveId, openSession],
-  );
-
   // Extract unique workspaces from sessions
   const recentWorkspaces = useMemo(() => {
     const seen = new Set<string>();
@@ -427,7 +422,7 @@ export const AgentTabBar = () => {
                 session={sessionsById.get(tab.id)}
                 activeId={activeId}
                 completionUnread={completionUnread[tab.id]}
-                onSelect={handleSelectActive}
+                onSelect={setActiveId}
                 onReset={handleReset}
                 onClose={handleClose}
               />

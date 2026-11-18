@@ -17,7 +17,7 @@ registerHooks({
 const { useBackendStore: backend } = await import(
   "../components/darox-ui/backend-store.ts"
 );
-const { useAgentTabs: agents } = await import(
+const { useAgentTabs: agents, sessionToAgentTab } = await import(
   "../components/darox-ui/agent-store.ts"
 );
 
@@ -32,9 +32,6 @@ const session = (id, active = true) => ({
   active,
   task_name: null,
   target: null,
-  result: null,
-  error: null,
-  children: [],
 });
 const sessionsUrl = (profile = "coder") =>
   `http://manager:3145/api/profiles/${profile}/proxy/api/sessions`;
@@ -220,4 +217,88 @@ test("a stop completing after a profile switch updates only its source workspace
     session(root.id, false),
     fallback,
   ]);
+});
+
+test("root summaries only hydrate mounted tabs and refresh preserves the tree", async (t) => {
+  const root = session("root");
+  const other = session("other");
+  const { requests, takeRequest } = await setup(t, [root, other]);
+  assert.equal(requests.length, 0);
+  const [placeholder, untouched] = agents.getState().tabs;
+  assert.equal(placeholder.treeLoaded, false);
+
+  const hydration = agents.getState().hydrateTree(root.id);
+  assert.equal(agents.getState().hydrateTree(root.id), hydration);
+  const child = {
+    ...session("child", false),
+    path: [root.id, "child"],
+    children: [],
+  };
+  takeRequest("GET", `${sessionsUrl()}/${root.id}`).resolve(
+    Response.json({ ...root, children: [child] }),
+  );
+  await hydration;
+  const [hydrated] = agents.getState().tabs;
+  assert.equal(hydrated.treeLoaded, true);
+  assert.deepEqual(
+    hydrated.subagents.map(({ path, status }) => [path, status]),
+    [[child.path, "idle"]],
+  );
+
+  const refresh = agents.getState().loadAgents();
+  takeRequest("GET", sessionsUrl()).resolve(Response.json([root, other]));
+  await refresh;
+  assert.equal(agents.getState().tabs[0], hydrated);
+  assert.equal(agents.getState().tabs[1], untouched);
+  assert.equal(untouched.treeLoaded, false);
+  assert.equal(requests.length, 0);
+
+  const remount = agents.getState().hydrateTree(root.id);
+  assert.equal(agents.getState().tabs[0], hydrated);
+  takeRequest("GET", `${sessionsUrl()}/${root.id}`).resolve(
+    Response.json({ ...root, children: [] }),
+  );
+  await remount;
+  assert.deepEqual(agents.getState().tabs[0].subagents, []);
+});
+
+test("a mounted root's HTTP tree cannot overwrite a WebSocket update", async (t) => {
+  const root = session("root");
+  const { takeRequest } = await setup(t, [root]);
+  const hydration = agents.getState().hydrateTree(root.id);
+  const request = takeRequest("GET", `${sessionsUrl()}/${root.id}`);
+  const liveTree = sessionToAgentTab({
+    ...root,
+    children: [{ ...session("live"), path: [root.id, "live"], children: [] }],
+  });
+  agents.getState().updateAgent(liveTree);
+  request.resolve(Response.json({ ...root, children: [] }));
+  await hydration;
+  assert.equal(agents.getState().tabs[0], liveTree);
+});
+
+test("selecting a newly discovered active root uses GET; resuming an inactive root uses POST", async (t) => {
+  const root = session("root");
+  const recent = session("recent", false);
+  const { requests, takeRequest } = await setup(t, []);
+  const refresh = agents.getState().loadSessions();
+  takeRequest("GET", sessionsUrl()).resolve(Response.json([root, recent]));
+  await refresh;
+
+  agents.getState().setActiveId(root.id);
+  assert.equal(agents.getState().activeId, root.id);
+  const hydration = agents.getState().hydrateTree(root.id);
+  takeRequest("GET", `${sessionsUrl()}/${root.id}`).resolve(
+    Response.json({ ...root, children: [] }),
+  );
+  await hydration;
+
+  const opened = agents.getState().openSession(recent.id);
+  takeRequest("POST", `${sessionsUrl()}/${recent.id}/start`).resolve(
+    Response.json({ ...recent, active: true, children: [] }),
+  );
+  const tab = await opened;
+  assert.equal(agents.getState().activeId, recent.id);
+  assert.equal(tab.treeLoaded, true);
+  assert.equal(requests.length, 0);
 });

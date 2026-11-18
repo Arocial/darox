@@ -41,7 +41,8 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
   - `preload.ts` — exposes dialogs, local Manager bootstrap, and notification IPC via `window.darox`.
   - Turn-completion notifications restore and focus the Electron window on click.
     The frontend only selects the source profile and session path if they are still
-    available in the same worker execution; notification clicks never start workers.
+    available in the same worker execution. A click reads the target root directly
+    and requires an active root and exact nested path; it never starts workers.
   - Backend connections and profile lifecycle operations live in the shared frontend.
   - On Linux/macOS Electron reuses the local Manager or spawns detached `arox-manager`
     from the user home directory; exiting never stops it. Windows uses remote Managers.
@@ -71,6 +72,12 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
   where `session_path` is the full slash-separated `SessionView.path` (including
   every ancestor for nested subagents). HTTP Bearer
   authentication and WebSocket token queries use the active Manager's token.
+- `GET /api/sessions` lists root-only summaries for navigation and recent
+  sessions. Mounting a root tab reads its full tree with
+  `GET /api/sessions/{rootId}` without starting a runtime, keeping any cached
+  tree visible during the read. Create and resume still return full trees.
+  List refreshes preserve these trees, and live
+  `cmd-session-tree` updates take precedence over in-flight tree reads.
 - Closing an active session hides it and switches tabs immediately. Its stop
   request and subsequent session-list refresh run in the background; a failed
   stop restores the session entry without overriding a newer selection.

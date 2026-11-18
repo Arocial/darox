@@ -1,10 +1,13 @@
 import {
   containsSession,
-  type SessionInfo,
+  type SessionView,
   sessionToAgentTab,
   useAgentTabs,
 } from "@/components/darox-ui/agent-store";
-import { useBackendStore } from "@/components/darox-ui/backend-store";
+import {
+  profileKey,
+  useBackendStore,
+} from "@/components/darox-ui/backend-store";
 import type {
   TurnNotificationInput,
   TurnNotificationTarget,
@@ -19,6 +22,8 @@ export async function focusNotificationSession(
 ): Promise<void> {
   const activation = ++latestActivation;
   const { managerId, profileId, startedAt, sessionPath } = target;
+  const rootId = sessionPath.split("/", 1)[0];
+  if (!rootId || rootId === "." || rootId === "..") return;
   const manager = useBackendStore
     .getState()
     .managers.find((m) => m.id === managerId);
@@ -38,27 +43,48 @@ export async function focusNotificationSession(
     )
       return;
 
+    const sourceId = profileKey(managerId, profileId);
+    const agentState = useAgentTabs.getState();
+    const source =
+      backend.activeBackendId === sourceId
+        ? agentState
+        : agentState.backendWorkspaces[sourceId];
+    const previousTab = source?.tabs.find((tab) => tab.id === rootId);
     // Check that the target still exists before changing the visible profile.
-    const sessions = await managerRequest<SessionInfo[]>(
+    const session = await managerRequest<SessionView>(
       manager,
-      `/${encodeURIComponent(profileId)}/proxy/api/sessions`,
+      `/${encodeURIComponent(profileId)}/proxy/api/sessions/${encodeURIComponent(rootId)}`,
     );
-    const tab = sessions
-      .filter((session) => session.active)
-      .map(sessionToAgentTab)
-      .find((tab) => containsSession(tab, sessionPath));
+    if (
+      !session.active ||
+      session.id !== rootId ||
+      session.path.length !== 1 ||
+      session.path[0] !== rootId
+    )
+      return;
+    const tab = sessionToAgentTab(session);
+    if (!containsSession(tab, sessionPath)) return;
     const current = useBackendStore.getState();
     if (
-      !tab ||
       activation !== latestActivation ||
       !current.managers.includes(manager) ||
       current.activeManagerId !== backend.activeManagerId ||
       current.activeProfile !== backend.activeProfile ||
+      current.connectionRevision !== backend.connectionRevision ||
       !current.selectRunningProfile(managerId, profileId, startedAt)
     )
       return;
 
-    useAgentTabs.getState().focusSession(tab, sessionPath);
+    const revisionChanged =
+      useBackendStore.getState().connectionRevision !==
+      current.connectionRevision;
+    useAgentTabs
+      .getState()
+      .focusSession(
+        tab,
+        sessionPath,
+        revisionChanged ? undefined : previousTab,
+      );
   } catch {
     // The window is already visible; an unavailable session is not actionable.
   }

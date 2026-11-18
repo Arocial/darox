@@ -16,7 +16,7 @@ registerHooks({
 const { useBackendStore: backend } = await import(
   "../components/darox-ui/backend-store.ts"
 );
-const { useAgentTabs: agents } = await import(
+const { useAgentTabs: agents, sessionToAgentTab } = await import(
   "../components/darox-ui/agent-store.ts"
 );
 const {
@@ -56,7 +56,9 @@ const root = session(
   true,
 );
 
-function setup(t, { profiles = [profile], sessions = [root] } = {}) {
+const rootUrl = "http://source:3145/api/profiles/coder/proxy/api/sessions/root";
+
+function setup(t, { profiles = [profile], tree = root, getTree } = {}) {
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,
     value: { setItem() {} },
@@ -66,8 +68,7 @@ function setup(t, { profiles = [profile], sessions = [root] } = {}) {
     calls.push([url, options.method, options.headers.get("Authorization")]);
     if (url === "http://source:3145/api/profiles")
       return Response.json(profiles);
-    if (url === "http://source:3145/api/profiles/coder/proxy/api/sessions")
-      return Response.json(sessions);
+    if (url === rootUrl) return getTree ? getTree() : Response.json(tree);
     throw new Error(`Unexpected request: ${url}`);
   });
   backend.setState({
@@ -92,13 +93,10 @@ test("notification switches to its source Manager and selects a full nested sess
     rootId: "root",
     sessionPath: "root/parent/child",
   });
-  assert.deepEqual(
-    calls.map(([, method, auth]) => [method, auth]),
-    [
-      ["GET", "Bearer source-key"],
-      ["GET", "Bearer source-key"],
-    ],
-  );
+  assert.deepEqual(calls, [
+    ["http://source:3145/api/profiles", "GET", "Bearer source-key"],
+    [rootUrl, "GET", "Bearer source-key"],
+  ]);
   await focusNotificationSession({ ...target, sessionPath: "root" });
   assert.equal(agents.getState().notificationSelection.sessionPath, "root");
   assert.equal(agents.getState().tabs.length, 1);
@@ -108,7 +106,8 @@ test("stale or unavailable targets do not change profile or start workers", asyn
   for (const [options, expectedRequests] of [
     [{ profiles: [{ ...profile, status: "stopped" }] }, 1],
     [{ profiles: [{ ...profile, started_at: "different execution" }] }, 1],
-    [{ sessions: [session(["root"], [session(["root", "child"])], true)] }, 2],
+    [{ tree: { ...root, active: false } }, 2],
+    [{ tree: session(["root"], [session(["root", "child"])], true) }, 2],
   ]) {
     await t.test(JSON.stringify(options), async (subtest) => {
       const calls = setup(subtest, options);
@@ -215,4 +214,27 @@ test("when the native toast is unavailable, a browser notification click focuses
     agents.getState().notificationSelection.sessionPath,
     target.sessionPath,
   );
+});
+
+test("a notification lookup cannot restore a target removed by a newer WebSocket tree", async (t) => {
+  let getTree = () => Response.json(root);
+  setup(t, { getTree: () => getTree() });
+  await focusNotificationSession({ ...target, sessionPath: "root" });
+  agents.getState().setActiveId("root");
+
+  const lookup = Promise.withResolvers();
+  const requested = Promise.withResolvers();
+  getTree = () => {
+    requested.resolve();
+    return lookup.promise;
+  };
+  const focus = focusNotificationSession(target);
+  await requested.promise;
+  const liveTree = sessionToAgentTab({ ...root, children: [] });
+  agents.getState().updateAgent(liveTree);
+  lookup.resolve(Response.json(root));
+  await focus;
+
+  assert.equal(agents.getState().tabs[0], liveTree);
+  assert.equal(agents.getState().notificationSelection, null);
 });
