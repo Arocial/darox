@@ -297,6 +297,7 @@ export const AgentTabBar = () => {
     createAgent,
     deleteAgent,
     completionUnread,
+    closingSessionIds,
     sessions,
     loadSessions,
     deleteSession,
@@ -315,7 +316,7 @@ export const AgentTabBar = () => {
   const handleClose = useCallback(
     async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
-      await deleteAgent(id);
+      if (!(await deleteAgent(id))) toast.error("Failed to stop session");
     },
     [deleteAgent],
   );
@@ -337,8 +338,8 @@ export const AgentTabBar = () => {
     async (e: React.MouseEvent, id: string, workspace: string) => {
       e.stopPropagation();
       const newTab = await createAgent(workspace);
-      if (newTab) {
-        await deleteAgent(id);
+      if (newTab && !(await deleteAgent(id))) {
+        toast.error("Failed to stop session");
       }
     },
     [createAgent, deleteAgent],
@@ -367,19 +368,27 @@ export const AgentTabBar = () => {
   // when another client starts it). Give it the same actions as an opened tab.
   const activeTabs = useMemo(
     () => [
-      ...tabs,
+      ...tabs.filter((tab) => !closingSessionIds.has(tab.id)),
       ...sessions
-        .filter((session) => session.active && !openSessionIds.has(session.id))
+        .filter(
+          (session) =>
+            session.active &&
+            !openSessionIds.has(session.id) &&
+            !closingSessionIds.has(session.id),
+        )
         .map(sessionToAgentTab),
     ],
-    [tabs, sessions, openSessionIds],
+    [tabs, sessions, openSessionIds, closingSessionIds],
   );
   const availableSessions = useMemo(
     () =>
       sessions.filter(
-        (session) => !session.active && !openSessionIds.has(session.id),
+        (session) =>
+          !session.active &&
+          !openSessionIds.has(session.id) &&
+          !closingSessionIds.has(session.id),
       ),
-    [sessions, openSessionIds],
+    [sessions, openSessionIds, closingSessionIds],
   );
   const handleSelectActive = useCallback(
     (id: string) => {

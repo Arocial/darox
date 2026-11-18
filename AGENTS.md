@@ -71,6 +71,9 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
   where `session_path` is the full slash-separated `SessionView.path` (including
   every ancestor for nested subagents). HTTP Bearer
   authentication and WebSocket token queries use the active Manager's token.
+- Closing an active session hides it and switches tabs immediately. Its stop
+  request and subsequent session-list refresh run in the background; a failed
+  stop restores the session entry without overriding a newer selection.
 - Deleting connections and closing Darox never stop remote processes.
 
 ### Component Layers

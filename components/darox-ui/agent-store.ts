@@ -51,17 +51,13 @@ type AgentWorkspace = {
   tabs: AgentTab[];
   activeId: string | null;
   sessions: SessionInfo[];
+  closingSessionIds: ReadonlyMap<string, symbol>;
   completionUnread: Record<string, Record<string, boolean>>;
   isBusy: Record<string, Record<string, boolean>>;
 };
 
-type AgentTabsState = {
-  tabs: AgentTab[];
-  activeId: string | null;
+type AgentTabsState = AgentWorkspace & {
   loading: boolean;
-  sessions: SessionInfo[];
-  completionUnread: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
-  isBusy: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
   backendWorkspaces: Record<string, AgentWorkspace>;
   notificationSelection: { rootId: string; sessionPath: string } | null;
 
@@ -79,7 +75,7 @@ type AgentTabsState = {
   setBusy: (sessionId: string, agentName: string, busy: boolean) => void;
 
   createAgent: (workspace: string) => Promise<AgentTab | null>;
-  deleteAgent: (id: string) => Promise<void>;
+  deleteAgent: (id: string) => Promise<boolean>;
   deleteSession: (id: string) => Promise<boolean>;
   loadSessions: () => Promise<void>;
   loadAgents: () => Promise<void>;
@@ -93,6 +89,7 @@ function activeBackendRequestContext() {
     useBackendStore.getState();
   return {
     apiBase,
+    activeBackendId,
     isCurrent: () => {
       const current = useBackendStore.getState();
       return (
@@ -104,11 +101,51 @@ function activeBackendRequestContext() {
   };
 }
 
+// A list requested before a successful stop may still report the session active.
+const sessionListVersions = new Map<string | null, number>();
+
+function sessionListRequestContext() {
+  const { apiBase, activeBackendId, isCurrent } = activeBackendRequestContext();
+  const version = sessionListVersions.get(activeBackendId);
+  return {
+    apiBase,
+    isCurrent: () =>
+      isCurrent() && sessionListVersions.get(activeBackendId) === version,
+  };
+}
+
+function settleClose(workspace: AgentWorkspace, id: string, stopped: boolean) {
+  const closingSessionIds = new Map(workspace.closingSessionIds);
+  closingSessionIds.delete(id);
+  if (!stopped) {
+    return {
+      closingSessionIds,
+      activeId:
+        workspace.activeId ??
+        (workspace.tabs.some((tab) => tab.id === id) ? id : null),
+    };
+  }
+  const completionUnread = { ...workspace.completionUnread };
+  const isBusy = { ...workspace.isBusy };
+  delete completionUnread[id];
+  delete isBusy[id];
+  return {
+    closingSessionIds,
+    tabs: workspace.tabs.filter((tab) => tab.id !== id),
+    sessions: workspace.sessions.map((session) =>
+      session.id === id ? { ...session, active: false } : session,
+    ),
+    completionUnread,
+    isBusy,
+  };
+}
+
 export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   tabs: [],
   activeId: null,
   loading: false,
   sessions: [],
+  closingSessionIds: new Map(),
   completionUnread: {},
   isBusy: {},
   backendWorkspaces: {},
@@ -116,6 +153,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   setActiveId: (id) =>
     set((state) => {
+      if (state.closingSessionIds.has(id)) return state;
       const nextCompletionUnread = { ...state.completionUnread };
       delete nextCompletionUnread[id];
       return {
@@ -127,6 +165,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   focusSession: (tab, sessionPath) =>
     set((state) => {
+      if (state.closingSessionIds.has(tab.id)) return state;
       const existing = state.tabs.find((item) => item.id === tab.id);
       const completionUnread = { ...state.completionUnread };
       delete completionUnread[tab.id];
@@ -210,37 +249,64 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   },
 
   deleteAgent: async (id: string) => {
-    const { apiBase, isCurrent } = activeBackendRequestContext();
+    const { apiBase, activeBackendId } = activeBackendRequestContext();
+    if (get().closingSessionIds.has(id)) return true;
+    const request = Symbol();
+    // Keep the chat mounted until the stop succeeds so a failure can restore it.
+    set((state) => ({
+      closingSessionIds: new Map(state.closingSessionIds).set(id, request),
+      activeId:
+        state.activeId === id
+          ? (state.tabs.find(
+              (tab) => tab.id !== id && !state.closingSessionIds.has(tab.id),
+            )?.id ?? null)
+          : state.activeId,
+      notificationSelection:
+        state.notificationSelection?.rootId === id
+          ? null
+          : state.notificationSelection,
+    }));
+
+    let stopped = false;
     try {
       const res = await daroxFetch(`${apiBase}/api/sessions/${id}/stop`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to stop session");
-    } catch (e) {
-      console.error("Failed to delete agent", e);
+      stopped = true;
+    } catch (error) {
+      console.error("Failed to stop session", error);
     }
-    if (!isCurrent()) return;
-    set((state) => {
-      const tabs = state.tabs.filter((t) => t.id !== id);
-      const nextCompletionUnread = { ...state.completionUnread };
-      delete nextCompletionUnread[id];
-      const nextIsBusy = { ...state.isBusy };
-      delete nextIsBusy[id];
 
-      let activeId = state.activeId;
-      if (activeId === id) {
-        activeId = tabs.length > 0 ? tabs[0].id : null;
-      }
-      return {
-        tabs,
-        activeId,
-        completionUnread: nextCompletionUnread,
-        isBusy: nextIsBusy,
-      };
-    });
-
-    // Refresh session list after a session is closed or refreshed
-    get().loadSessions();
+    const state = get();
+    const backend = useBackendStore.getState();
+    const current =
+      backend.activeBackendId === activeBackendId &&
+      backend.apiBase === apiBase;
+    const workspace = current
+      ? state
+      : activeBackendId
+        ? state.backendWorkspaces[activeBackendId]
+        : undefined;
+    // A worker restart discards its workspace and with it this request token.
+    if (workspace?.closingSessionIds.get(id) !== request) return true;
+    if (stopped) {
+      const version = sessionListVersions.get(activeBackendId) ?? 0;
+      sessionListVersions.set(activeBackendId, version + 1);
+    }
+    const update = settleClose(workspace, id, stopped);
+    if (current) {
+      set(update);
+      if (stopped) void get().loadSessions();
+    } else if (activeBackendId) {
+      set({
+        backendWorkspaces: {
+          ...state.backendWorkspaces,
+          [activeBackendId]: { ...workspace, ...update },
+        },
+      });
+    }
+    return stopped;
   },
 
   deleteSession: async (id: string) => {
@@ -261,7 +327,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   loadSessions: async () => {
     try {
-      const { apiBase, isCurrent } = activeBackendRequestContext();
+      const { apiBase, isCurrent } = sessionListRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error("Failed to load sessions");
       const sessions: SessionInfo[] = await res.json();
@@ -274,7 +340,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
 
   loadAgents: async () => {
     try {
-      const { apiBase, isCurrent } = activeBackendRequestContext();
+      const { apiBase, isCurrent } = sessionListRequestContext();
       const res = await daroxFetch(`${apiBase}/api/sessions`);
       if (!res.ok) throw new Error("Failed to load active sessions");
       const sessions: SessionInfo[] = await res.json();
@@ -283,16 +349,17 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
         .filter((session) => session.active)
         .map(sessionToAgentTab);
       set((state) => {
-        // preserve activeId if it's still in the list, otherwise select first
-        let newActiveId = state.activeId;
-        if (agents.length > 0) {
-          if (!newActiveId || !agents.some((a) => a.id === newActiveId)) {
-            newActiveId = agents[0].id;
-          }
-        } else {
-          newActiveId = null;
-        }
-        return { sessions, tabs: agents, activeId: newActiveId };
+        const visible = agents.filter(
+          (tab) => !state.closingSessionIds.has(tab.id),
+        );
+        const pending = state.tabs.filter((tab) =>
+          state.closingSessionIds.has(tab.id),
+        );
+        // Preserve the selected tab if it's still visible, otherwise select first.
+        const activeId = visible.some((tab) => tab.id === state.activeId)
+          ? state.activeId
+          : (visible[0]?.id ?? null);
+        return { sessions, tabs: [...visible, ...pending], activeId };
       });
     } catch (e) {
       console.error("Failed to load agents", e);
@@ -300,6 +367,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   },
 
   openSession: async (sessionId: string) => {
+    if (get().closingSessionIds.has(sessionId)) return null;
     try {
       const { apiBase, isCurrent } = activeBackendRequestContext();
       const res = await daroxFetch(
@@ -310,7 +378,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
       );
       if (!res.ok) throw new Error("Failed to open session");
       const tab = sessionToAgentTab(await res.json());
-      if (!isCurrent()) return null;
+      if (!isCurrent() || get().closingSessionIds.has(sessionId)) return null;
       set((state) => ({
         tabs: [...state.tabs, tab],
         activeId: tab.id,
@@ -330,6 +398,7 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   clearAgents: () =>
     set({
       tabs: [],
+      closingSessionIds: new Map(),
       activeId: null,
       completionUnread: {},
       isBusy: {},
@@ -349,6 +418,7 @@ useBackendStore.subscribe((state, prevState) => {
           tabs: [],
           activeId: null,
           sessions: [],
+          closingSessionIds: new Map(),
           completionUnread: {},
           isBusy: {},
           loading: false,
@@ -366,6 +436,7 @@ useBackendStore.subscribe((state, prevState) => {
         tabs: agentState.tabs,
         activeId: agentState.activeId,
         sessions: agentState.sessions,
+        closingSessionIds: agentState.closingSessionIds,
         completionUnread: agentState.completionUnread,
         isBusy: agentState.isBusy,
       };
@@ -383,6 +454,7 @@ useBackendStore.subscribe((state, prevState) => {
       tabs: next?.tabs || [],
       activeId: next?.activeId || null,
       sessions: next?.sessions || [],
+      closingSessionIds: next?.closingSessionIds ?? new Map(),
       completionUnread: next?.completionUnread || {},
       isBusy: next?.isBusy || {},
       loading: false,
