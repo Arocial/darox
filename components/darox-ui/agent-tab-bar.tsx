@@ -49,10 +49,13 @@ function measureWorkspacePath(row: HTMLButtonElement) {
   const overflow = text.getBoundingClientRect().width - path.clientWidth;
   path.toggleAttribute("data-overflow", overflow > 1);
   if (overflow <= 1) return;
+  const travelSeconds = overflow / 35;
+  const cycleSeconds = travelSeconds + 2;
   path.style.setProperty("--workspace-path-offset", `${-overflow}px`);
+  path.style.setProperty("--workspace-path-duration", `${cycleSeconds}s`);
   path.style.setProperty(
-    "--workspace-path-duration",
-    `${Math.max(1, overflow / 22)}s`,
+    "--workspace-path-arrival",
+    `${(travelSeconds / cycleSeconds) * 100}%`,
   );
 }
 
@@ -219,10 +222,10 @@ const WorkspaceItem = ({
       className="workspace-path-row flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
     >
       <FolderIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
-        <span className="max-w-1/2 shrink-0 truncate" title={workspace}>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm" title={workspace}>
           {dirName}
-        </span>
+        </div>
         <WorkspacePath path={workspace} />
       </div>
     </button>

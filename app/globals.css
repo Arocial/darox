@@ -13,6 +13,7 @@
 }
 
 .workspace-path {
+  display: block;
   overflow-x: auto;
   scrollbar-width: none;
   white-space: nowrap;
@@ -31,7 +32,8 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .workspace-path-row:is(:focus-visible, [data-path-hover]) .workspace-path[data-overflow] > span {
-    animation: workspace-path-pan var(--workspace-path-duration) linear infinite alternate;
+    animation: workspace-path-pan var(--workspace-path-duration) infinite;
+    animation-timing-function: linear(0, 1 var(--workspace-path-arrival), 1);
   }
 }
 
