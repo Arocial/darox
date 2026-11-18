@@ -11,7 +11,7 @@ import {
   ChevronDownIcon,
   TrashIcon,
 } from "lucide-react";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   sessionToAgentTab,
@@ -99,6 +99,21 @@ const ActiveTabItem = ({
     (v) => v,
   );
   const isActive = activeId === tab.id;
+  const pathRef = useRef<HTMLSpanElement>(null);
+
+  const scrollPath = (toEnd: boolean) => {
+    const path = pathRef.current;
+    if (!path) return;
+    const end = path.scrollWidth - path.clientWidth;
+    if (end <= 0) return;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    path.scrollTo({
+      left: toEnd ? end : 0,
+      behavior: toEnd && !reduceMotion ? "smooth" : "instant",
+    });
+  };
 
   return (
     <div
@@ -110,6 +125,23 @@ const ActiveTabItem = ({
     >
       <button
         onClick={() => onSelect(tab.id)}
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse") scrollPath(true);
+        }}
+        onPointerLeave={(event) => {
+          if (
+            event.pointerType === "mouse" &&
+            !event.currentTarget.matches(":focus-visible")
+          ) {
+            scrollPath(false);
+          }
+        }}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(":focus-visible")) scrollPath(true);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.matches(":hover")) scrollPath(false);
+        }}
         className="flex min-w-0 flex-1 items-start gap-2 text-left"
         title={messages.length > 0 ? messages.join("\n") : tab.workspace}
       >
@@ -128,7 +160,11 @@ const ActiveTabItem = ({
                 title="Task completed"
               />
             )}
-            <span className="min-w-0 truncate font-normal text-muted-foreground text-xs">
+            <span
+              ref={pathRef}
+              dir="ltr"
+              className="min-w-0 overflow-x-auto whitespace-nowrap font-normal text-muted-foreground text-xs [scrollbar-width:none]"
+            >
               {tab.workspace}
             </span>
           </div>
