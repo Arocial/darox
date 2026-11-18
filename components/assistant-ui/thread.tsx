@@ -1,5 +1,5 @@
-import { OriginNotification } from "@/components/darox-ui/origin-notification";
-import { getMessageOrigin } from "@/components/darox-ui/message-origin";
+import { InputKindNotification } from "@/components/darox-ui/input-kind-notification";
+import { getMessageInputKind } from "@/components/darox-ui/message-input-kind";
 import {
   ComposerAddAttachment,
   ComposerAttachments,
@@ -298,10 +298,10 @@ const ThreadMessage: FC = () => {
     useContext(ThreadComponentsContext);
   const role = useAuiState((s) => s.message.role);
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
-  const origin = useAuiState((s) => getMessageOrigin(s.message.metadata));
+  const inputKind = useAuiState((s) => getMessageInputKind(s.message.metadata));
 
-  if (role === "user" && origin !== "user")
-    return <OriginNotification origin={origin} />;
+  if (role === "user" && inputKind !== "user")
+    return <InputKindNotification inputKind={inputKind} />;
   if (isEditing) return <EditComposer />;
   if (role === "user") return <UserMessage />;
   return <AssistantMessageComponent />;

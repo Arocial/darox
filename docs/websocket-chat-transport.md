@@ -104,11 +104,12 @@ by echoed user inputs, but it uses one persistent WebSocket connection.
   boundaries retain stable identity across snapshots.
 - `finish`, `stream-close`, and `step-done` are not needed by this frontend.
 
-## Input origins
+## Input kinds
 
-User-role messages may carry `UIMessage.metadata.custom.origin`: `user`,
-`shell`, or `collaboration`. Missing or unrecognized values use the ordinary
-user bubble. Shell and Collaboration render as left-aligned, fully expanded
+User-role messages may carry an input kind in
+`UIMessage.metadata.custom.input_kind`. Darox recognizes `user`, `shell`, and
+`collaboration`; missing or unrecognized values use the ordinary user bubble.
+Shell and Collaboration render as left-aligned, fully expanded
 notification cards with plain text/newlines and copy only (no edit/resend).
 Collaboration uses a subtle blue heading and divider. Both started input echoes
 and snapshot history preserve this metadata without changing the message role.

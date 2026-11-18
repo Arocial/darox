@@ -423,7 +423,7 @@ test("sessions without a runtime remain connectable and writable, including new 
   );
 });
 
-test("snapshot and started input echoes preserve origin and unrelated metadata", async (t) => {
+test("snapshot and started input echoes preserve input kind and unrelated metadata", async (t) => {
   let socket;
   class MockWebSocket {
     static OPEN = 1;
@@ -451,11 +451,17 @@ test("snapshot and started input echoes preserve origin and unrelated metadata",
   transport.onCommand((command) => commands.push(command));
   const stream = await transport.reconnectToStream({ chatId: "test" });
   t.after(() => stream?.cancel());
-  const messages = ["shell", "collaboration"].map((origin) => ({
-    id: origin,
+  const messages = ["shell", "collaboration"].map((inputKind) => ({
+    id: inputKind,
     role: "user",
     parts: [{ type: "text", text: "line one\nline two" }],
-    metadata: { custom: { origin, user_input_id: origin, extra: "keep" } },
+    metadata: {
+      custom: {
+        input_kind: inputKind,
+        user_input_id: inputKind,
+        extra: "keep",
+      },
+    },
   }));
   let snapshot;
   transport.onState((state) => {

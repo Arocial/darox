@@ -5,13 +5,13 @@ import { TerminalIcon, UsersIcon } from "lucide-react";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import { cn } from "@/lib/utils";
 import { CopyTextButton } from "./copy-text-button";
-import type { MessageOrigin } from "./message-origin";
+import type { MessageInputKind } from "./message-input-kind";
 import { UserMessageText } from "./user-message-text";
 
-export function OriginNotification({
-  origin,
+export function InputKindNotification({
+  inputKind,
 }: {
-  origin: Exclude<MessageOrigin, "user">;
+  inputKind: Exclude<MessageInputKind, "user">;
 }) {
   const text = useAuiState((s) =>
     s.message.content
@@ -19,13 +19,13 @@ export function OriginNotification({
       .map((part) => part.text)
       .join("\n\n"),
   );
-  const collaboration = origin === "collaboration";
+  const collaboration = inputKind === "collaboration";
   const Icon = collaboration ? UsersIcon : TerminalIcon;
 
   return (
     <MessagePrimitive.Root
-      data-slot="darox-origin-notification"
-      data-origin={origin}
+      data-slot="darox-input-kind-notification"
+      data-input-kind={inputKind}
       data-role="user"
       className="w-full min-w-0 self-start px-2"
     >

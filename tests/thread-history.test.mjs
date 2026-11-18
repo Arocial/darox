@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { registerHooks } from "node:module";
-import { getMessageOrigin } from "../components/darox-ui/message-origin.ts";
+import { getMessageInputKind } from "../components/darox-ui/message-input-kind.ts";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     return nextResolve(
-      specifier === "./message-origin" ? "./message-origin.ts" : specifier,
+      specifier === "./message-input-kind"
+        ? "./message-input-kind.ts"
+        : specifier,
       context,
     );
   },
@@ -153,12 +155,12 @@ test("short or replaced snapshots cannot produce an out-of-bounds section", () =
   assert.deepEqual(buildHistorySections(longer, 9), []);
 });
 
-test("recognized origins filter only the directory, not history boundaries", () => {
+test("recognized notification input kinds filter only the directory, not history boundaries", () => {
   const messages = conversation(33);
-  messages[2].metadata = { custom: { origin: "shell" } };
-  messages[22].metadata = { custom: { origin: "collaboration" } };
-  messages[4].metadata = { custom: { origin: "future-origin" } };
-  messages[6].metadata = { custom: { origin: "user" } };
+  messages[2].metadata = { custom: { input_kind: "shell" } };
+  messages[22].metadata = { custom: { input_kind: "collaboration" } };
+  messages[4].metadata = { custom: { input_kind: "future-kind" } };
+  messages[6].metadata = { custom: { input_kind: "user" } };
   const history = buildInputIndex(messages);
   assert.deepEqual(
     buildHistorySections(history, initialHistoryCount(history.length)),
@@ -185,13 +187,17 @@ test("recognized origins filter only the directory, not history boundaries", () 
     null,
     {},
     { custom: null },
-    { custom: { origin: "future-origin" } },
+    { custom: { origin: "shell" } },
+    { custom: { input_kind: "future-kind" } },
   ]) {
-    assert.equal(getMessageOrigin(metadata), "user");
+    assert.equal(getMessageInputKind(metadata), "user");
   }
-  assert.equal(getMessageOrigin({ custom: { origin: "shell" } }), "shell");
   assert.equal(
-    getMessageOrigin({ custom: { origin: "collaboration" } }),
+    getMessageInputKind({ custom: { input_kind: "shell" } }),
+    "shell",
+  );
+  assert.equal(
+    getMessageInputKind({ custom: { input_kind: "collaboration" } }),
     "collaboration",
   );
 });

@@ -1,4 +1,4 @@
-import { getMessageOrigin } from "./message-origin";
+import { getMessageInputKind } from "./message-input-kind";
 
 export const HISTORY_THRESHOLD = 20;
 export const HISTORY_RECENT_INPUTS = 10;
@@ -59,14 +59,14 @@ export function buildInputIndex(
 }
 
 // The directory excludes notifications; folding deliberately keeps all user-role
-// boundaries so introducing origins does not change existing history sections.
+// boundaries regardless of input kind.
 export function buildDirectoryInputIndex(
   messages: readonly HistoryMessage[],
 ): ThreadInput[] {
   return buildInputIndex(messages)
     .filter(
       (input) =>
-        getMessageOrigin(messages[input.messageIndex].metadata) === "user",
+        getMessageInputKind(messages[input.messageIndex].metadata) === "user",
     )
     .map((input, index) => ({ ...input, ordinal: index + 1 }));
 }
