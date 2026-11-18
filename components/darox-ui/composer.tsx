@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FC } from "react";
+import { useState, useRef, useEffect, useContext, type FC } from "react";
 import { ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useAgentStatus } from "@/components/darox-ui/agent-status-context";
@@ -19,6 +19,12 @@ import type { ChatInputEventResult } from "@/types/chat";
 import { useChatSubmit } from "@/components/darox-ui/chat-submit-context";
 import type { UIMessage } from "ai";
 import { toast } from "sonner";
+import { useBackendStore } from "@/components/darox-ui/backend-store";
+import { SessionPathContext } from "@/components/darox-ui/session-path-context";
+import {
+  bindComposerDraft,
+  composerDraftKey,
+} from "@/components/darox-ui/composer-draft";
 
 export const Composer: FC = () => {
   const workspace = useWorkspace();
@@ -35,6 +41,20 @@ export const Composer: FC = () => {
   const dragStartHeight = useRef(0);
 
   const isDisabled = status === "closed";
+  const backendId = useBackendStore((state) => state.activeBackendId);
+  const sessionPath = useContext(SessionPathContext);
+
+  useEffect(() => {
+    if (!backendId || !sessionPath) return;
+    try {
+      return bindComposerDraft(
+        window.localStorage,
+        composerDraftKey(backendId, sessionPath),
+        aui.composer(),
+        (listener) => aui.subscribe(listener),
+      );
+    } catch {}
+  }, [aui, backendId, sessionPath]);
 
   useEffect(() => {
     if (!isDragging) return;

@@ -186,6 +186,17 @@ function AgentChat({
     messages: initialMessages,
     experimental_throttle: 150,
   });
+  const latestUserMessageId = chat.messages.findLast(
+    (message) => message.role === "user",
+  )?.id;
+  useEffect(() => {
+    const store = useAgentTabs.getState();
+    const root = store.tabs.find((tab) => tab.id === agentId);
+    if (latestUserMessageId && root?.path.join("/") === sessionPath) {
+      void store.loadSessions();
+    }
+  }, [agentId, sessionPath, latestUserMessageId]);
+
   const resumePromiseRef = useRef<Promise<void> | null>(null);
   const pendingUserMessagesRef = useRef<UIMessage[]>([]);
   const userBoundaryDrainRef = useRef<Promise<void> | null>(null);

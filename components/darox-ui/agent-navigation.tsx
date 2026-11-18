@@ -16,6 +16,11 @@ export function AgentNavigation() {
   const [mobile, setMobile] = useState(false);
   const [open, setOpen] = useState(false);
   const activeId = useAgentTabs((state) => state.activeId);
+  const workspace = useAgentTabs(
+    (state) => state.tabs.find((tab) => tab.id === state.activeId)?.workspace,
+  );
+  const workspaceName =
+    workspace?.split(/[\\/]/).filter(Boolean).pop() || workspace;
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
     const update = () => setMobile(media.matches);
@@ -49,7 +54,9 @@ export function AgentNavigation() {
           </div>
         </DialogContent>
       </Dialog>
-      <span className="font-medium text-sm">Darox</span>
+      <span className="min-w-0 truncate font-medium text-sm" title={workspace}>
+        {workspaceName || "Darox"}
+      </span>
     </div>
   );
 }

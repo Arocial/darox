@@ -136,7 +136,7 @@ remounting restores the default folding rather than persisting it in storage.
 ### State Management
 
 - **Zustand** for component-level state (e.g., attachment handling)
-- **localStorage** for command history, backend configuration, and the global stream-mode preference
+- **localStorage** for command history, text-only composer drafts, backend configuration, and the global stream-mode preference. Drafts are isolated by Manager/profile identity and full session-node path, restored on reload, and cleared when the composer resets after successful submission; attachments are not persisted.
 - Manager connections are stored as a named list with stable IDs. Profile identities combine Manager ID and profile name. Both browser and Electron restore the selected Manager/profile; remembered tokens for user-added connections use localStorage and session-only tokens use sessionStorage; the injected desktop connection uses the encrypted cache.
 
 ### Development services

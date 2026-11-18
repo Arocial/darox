@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { useAgentTabs } from "@/components/darox-ui/agent-store";
+import {
+  sessionToAgentTab,
+  useAgentTabs,
+} from "@/components/darox-ui/agent-store";
 import { SidebarSettings } from "@/components/darox-ui/sidebar-settings";
 import type { AgentTab, SessionInfo } from "@/components/darox-ui/agent-store";
 
@@ -64,8 +67,18 @@ async function pickDirectory(): Promise<string | null> {
   return dir || null;
 }
 
+function lastUserMessages(session?: SessionInfo): string[] {
+  const messages = session?.metadata?.last_user_messages;
+  return Array.isArray(messages)
+    ? messages.filter(
+        (message): message is string => typeof message === "string",
+      )
+    : [];
+}
+
 const ActiveTabItem = ({
   tab,
+  session,
   activeId,
   completionUnread,
   onSelect,
@@ -73,71 +86,85 @@ const ActiveTabItem = ({
   onClose,
 }: {
   tab: AgentTab;
+  session?: SessionInfo;
   activeId: string | null;
   completionUnread: Record<string, boolean>;
   onSelect: (id: string) => void;
   onReset: (e: React.MouseEvent, id: string, workspace: string) => void;
   onClose: (e: React.MouseEvent, id: string) => void;
 }) => {
-  const { dirName, parentPath } = formatTabLabel(tab.workspace);
+  const { dirName } = formatTabLabel(tab.workspace);
+  const messages = lastUserMessages(session);
   const hasUnreadCompletion = Object.values(completionUnread || {}).some(
     (v) => v,
   );
   const isActive = activeId === tab.id;
 
   return (
-    <button
-      onClick={() => onSelect(tab.id)}
-      className={`group relative flex w-full items-start gap-2 border-r-2 px-3 py-2 text-left transition-colors ${
+    <div
+      className={`group relative flex w-full items-start gap-1 border-r-2 px-3 py-2 transition-colors ${
         isActive
           ? "border-primary bg-accent text-foreground shadow-sm"
           : "border-transparent text-foreground/80 hover:bg-muted/50 hover:text-foreground"
       }`}
     >
-      <MessageSquareIcon
-        className={`mt-0.5 size-4 shrink-0 ${isActive ? "text-primary" : "opacity-70"}`}
-      />
-      <div className="min-w-0 flex-1">
-        <div
-          className={`flex items-center gap-1.5 truncate text-sm ${isActive ? "font-bold" : "font-medium"}`}
-          title={tab.workspace}
-        >
-          <span className="truncate">{dirName}</span>
-          {hasUnreadCompletion && (
-            <span
-              className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-              title="Task completed"
-            />
-          )}
+      <button
+        onClick={() => onSelect(tab.id)}
+        className="flex min-w-0 flex-1 items-start gap-2 text-left"
+        title={messages.length > 0 ? messages.join("\n") : tab.workspace}
+      >
+        <MessageSquareIcon
+          className={`mt-0.5 size-4 shrink-0 ${isActive ? "text-primary" : "opacity-70"}`}
+        />
+        <div className="min-w-0 flex-1">
+          <div
+            className={`flex items-center gap-1.5 text-sm ${isActive ? "font-bold" : "font-medium"}`}
+            title={tab.workspace}
+          >
+            <span className="max-w-1/2 shrink-0 truncate">{dirName}</span>
+            {hasUnreadCompletion && (
+              <span
+                className="size-2 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                title="Task completed"
+              />
+            )}
+            <span className="min-w-0 truncate font-normal text-muted-foreground text-xs">
+              {tab.workspace}
+            </span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
+            <span className="flex-1 truncate">
+              {messages[messages.length - 1] || "Empty session"}
+            </span>
+            <span className="shrink-0 text-[10px] opacity-70">
+              {formatRelativeTime(session?.updated_at)}
+            </span>
+          </div>
         </div>
-        <div
-          className={`truncate text-xs ${isActive ? "text-muted-foreground/80" : "text-muted-foreground"}`}
-          title={`${tab.workspace} ${tab.id}`}
-        >
-          {parentPath}
-        </div>
-      </div>
+      </button>
       <div className="mt-0.5 flex shrink-0 items-center gap-1">
-        <span
+        <button
           onClick={(e) => onReset(e, tab.id, tab.workspace)}
-          className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-foreground/20 hover:text-foreground ${
+          className={`rounded-sm p-0.5 transition-opacity hover:bg-foreground/20 hover:text-foreground focus-visible:opacity-100 max-md:opacity-100 ${
             isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
           title="New chat in workspace"
+          aria-label="New chat in workspace"
         >
           <SquarePenIcon className="size-3.5" />
-        </span>
-        <span
+        </button>
+        <button
           onClick={(e) => onClose(e, tab.id)}
-          className={`cursor-pointer rounded-sm p-0.5 transition-opacity hover:bg-destructive/20 hover:text-destructive ${
+          className={`rounded-sm p-0.5 transition-opacity hover:bg-destructive/20 hover:text-destructive focus-visible:opacity-100 max-md:opacity-100 ${
             isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
           title="Close tab"
+          aria-label="Close tab"
         >
           <XIcon className="size-3.5" />
-        </span>
+        </button>
       </div>
-    </button>
+    </div>
   );
 };
 
@@ -181,9 +208,7 @@ const SessionItem = ({
 }) => {
   const workspace = session.workspace;
   const { dirName } = formatTabLabel(workspace || undefined);
-  const lastMessages = session.metadata?.last_user_messages as
-    | string[]
-    | undefined;
+  const lastMessages = lastUserMessages(session);
   const tooltipText =
     lastMessages && lastMessages.length > 0
       ? lastMessages.join("\n")
@@ -197,8 +222,16 @@ const SessionItem = ({
     >
       <MessageSquareIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">
-          {dirName || session.id.slice(0, 8)}
+        <div
+          className="flex items-center gap-1.5 text-sm"
+          title={workspace || undefined}
+        >
+          <span className="max-w-1/2 shrink-0 truncate">
+            {dirName || session.id.slice(0, 8)}
+          </span>
+          <span className="min-w-0 truncate text-muted-foreground text-xs">
+            {workspace}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
           <span className="flex-1 truncate">
@@ -291,11 +324,35 @@ export const AgentTabBar = () => {
     [openSession],
   );
 
-  // Filter out sessions that are already open as tabs
   const openSessionIds = useMemo(() => new Set(tabs.map((t) => t.id)), [tabs]);
+  const sessionsById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session])),
+    [sessions],
+  );
+  // A running session can be discovered after the initial tab load (for example,
+  // when another client starts it). Give it the same actions as an opened tab.
+  const activeTabs = useMemo(
+    () => [
+      ...tabs,
+      ...sessions
+        .filter((session) => session.active && !openSessionIds.has(session.id))
+        .map(sessionToAgentTab),
+    ],
+    [tabs, sessions, openSessionIds],
+  );
   const availableSessions = useMemo(
-    () => sessions.filter((s) => !openSessionIds.has(s.id)),
+    () =>
+      sessions.filter(
+        (session) => !session.active && !openSessionIds.has(session.id),
+      ),
     [sessions, openSessionIds],
+  );
+  const handleSelectActive = useCallback(
+    (id: string) => {
+      if (openSessionIds.has(id)) setActiveId(id);
+      else void openSession(id);
+    },
+    [openSessionIds, setActiveId, openSession],
   );
 
   // Extract unique workspaces from sessions
@@ -315,18 +372,19 @@ export const AgentTabBar = () => {
   return (
     <div className="flex h-full w-64 shrink-0 flex-col border-r bg-muted/30">
       <div className="min-h-0 flex-1 overflow-y-auto py-2">
-        {tabs.length > 0 && (
+        {activeTabs.length > 0 && (
           <div className="mb-4">
             <div className="px-3 py-1.5 font-bold text-primary text-xs uppercase tracking-wider">
               Active
             </div>
-            {tabs.map((tab) => (
+            {activeTabs.map((tab) => (
               <ActiveTabItem
                 key={tab.id}
                 tab={tab}
+                session={sessionsById.get(tab.id)}
                 activeId={activeId}
                 completionUnread={completionUnread[tab.id]}
-                onSelect={setActiveId}
+                onSelect={handleSelectActive}
                 onReset={handleReset}
                 onClose={handleClose}
               />
