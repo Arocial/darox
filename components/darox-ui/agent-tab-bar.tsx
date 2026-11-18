@@ -11,7 +11,7 @@ import {
   ChevronDownIcon,
   TrashIcon,
 } from "lucide-react";
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
   sessionToAgentTab,
@@ -36,17 +36,55 @@ function formatRelativeTime(dateString?: string) {
   return date.toLocaleDateString();
 }
 
-function formatTabLabel(workspaceStr?: string) {
-  const ws = workspaceStr || "";
-  const separator = ws.includes("\\") ? "\\" : "/";
-  const parts = ws.split(separator).filter(Boolean);
-  if (parts.length === 0) return { dirName: "Untitled", parentPath: "" };
+function workspaceName(workspace?: string | null) {
+  return (
+    workspace?.split(/[\\/]/).filter(Boolean).pop() || workspace || "Untitled"
+  );
+}
 
-  const dirName = parts[parts.length - 1];
-  const parentPath =
-    parts.length > 1 ? parts.slice(0, parts.length - 1).join(separator) : "";
+function measureWorkspacePath(row: HTMLButtonElement) {
+  const path = row.querySelector<HTMLElement>(".workspace-path");
+  const text = path?.firstElementChild;
+  if (!path || !text) return;
+  const overflow = text.getBoundingClientRect().width - path.clientWidth;
+  path.toggleAttribute("data-overflow", overflow > 1);
+  if (overflow <= 1) return;
+  path.style.setProperty("--workspace-path-offset", `${-overflow}px`);
+  path.style.setProperty(
+    "--workspace-path-duration",
+    `${Math.max(1, overflow / 22)}s`,
+  );
+}
 
-  return { dirName, parentPath };
+const workspacePathHandlers = {
+  onPointerEnter: (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === "touch") return;
+    measureWorkspacePath(event.currentTarget);
+    event.currentTarget.setAttribute("data-path-hover", "");
+  },
+  onPointerLeave: (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== "touch") {
+      event.currentTarget.removeAttribute("data-path-hover");
+    }
+  },
+  onFocus: (event: React.FocusEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.matches(":focus-visible")) {
+      measureWorkspacePath(event.currentTarget);
+    }
+  },
+};
+
+function WorkspacePath({ path }: { path?: string | null }) {
+  if (!path) return null;
+  return (
+    <span
+      className="workspace-path min-w-0 font-normal text-muted-foreground text-xs"
+      dir="ltr"
+      title={path}
+    >
+      <span>{path}</span>
+    </span>
+  );
 }
 
 async function pickDirectory(): Promise<string | null> {
@@ -93,28 +131,12 @@ const ActiveTabItem = ({
   onReset: (e: React.MouseEvent, id: string, workspace: string) => void;
   onClose: (e: React.MouseEvent, id: string) => void;
 }) => {
-  const { dirName } = formatTabLabel(tab.workspace);
+  const dirName = workspaceName(tab.workspace);
   const messages = lastUserMessages(session);
   const hasUnreadCompletion = Object.values(completionUnread || {}).some(
     (v) => v,
   );
   const isActive = activeId === tab.id;
-  const pathRef = useRef<HTMLSpanElement>(null);
-
-  const scrollPath = (toEnd: boolean) => {
-    const path = pathRef.current;
-    if (!path) return;
-    const end = path.scrollWidth - path.clientWidth;
-    if (end <= 0) return;
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    path.scrollTo({
-      left: toEnd ? end : 0,
-      behavior: toEnd && !reduceMotion ? "smooth" : "instant",
-    });
-  };
-
   return (
     <div
       className={`group relative flex w-full items-start gap-1 border-r-2 px-3 py-2 transition-colors ${
@@ -125,24 +147,8 @@ const ActiveTabItem = ({
     >
       <button
         onClick={() => onSelect(tab.id)}
-        onPointerEnter={(event) => {
-          if (event.pointerType === "mouse") scrollPath(true);
-        }}
-        onPointerLeave={(event) => {
-          if (
-            event.pointerType === "mouse" &&
-            !event.currentTarget.matches(":focus-visible")
-          ) {
-            scrollPath(false);
-          }
-        }}
-        onFocus={(event) => {
-          if (event.currentTarget.matches(":focus-visible")) scrollPath(true);
-        }}
-        onBlur={(event) => {
-          if (!event.currentTarget.matches(":hover")) scrollPath(false);
-        }}
-        className="flex min-w-0 flex-1 items-start gap-2 text-left"
+        {...workspacePathHandlers}
+        className="workspace-path-row flex min-w-0 flex-1 items-start gap-2 text-left"
         title={messages.length > 0 ? messages.join("\n") : tab.workspace}
       >
         <MessageSquareIcon
@@ -160,13 +166,7 @@ const ActiveTabItem = ({
                 title="Task completed"
               />
             )}
-            <span
-              ref={pathRef}
-              dir="ltr"
-              className="min-w-0 overflow-x-auto whitespace-nowrap font-normal text-muted-foreground text-xs [scrollbar-width:none]"
-            >
-              {tab.workspace}
-            </span>
+            <WorkspacePath path={tab.workspace} />
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
             <span className="flex-1 truncate">
@@ -211,23 +211,19 @@ const WorkspaceItem = ({
   workspace: string;
   onSelect: (ws: string) => void;
 }) => {
-  const { dirName, parentPath } = formatTabLabel(workspace);
+  const dirName = workspaceName(workspace);
   return (
     <button
       onClick={() => onSelect(workspace)}
-      className="flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+      {...workspacePathHandlers}
+      className="workspace-path-row flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
     >
       <FolderIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm" title={workspace}>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+        <span className="max-w-1/2 shrink-0 truncate" title={workspace}>
           {dirName}
-        </div>
-        <div
-          className="truncate text-muted-foreground text-xs"
-          title={parentPath}
-        >
-          {parentPath}
-        </div>
+        </span>
+        <WorkspacePath path={workspace} />
       </div>
     </button>
   );
@@ -243,7 +239,7 @@ const SessionItem = ({
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) => {
   const workspace = session.workspace;
-  const { dirName } = formatTabLabel(workspace || undefined);
+  const dirName = workspaceName(workspace);
   const lastMessages = lastUserMessages(session);
   const tooltipText =
     lastMessages && lastMessages.length > 0
@@ -253,7 +249,8 @@ const SessionItem = ({
   return (
     <button
       onClick={() => onSelect(session)}
-      className="group flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+      {...workspacePathHandlers}
+      className="workspace-path-row group flex w-full items-start gap-2 border-transparent border-r-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
       title={tooltipText}
     >
       <MessageSquareIcon className="mt-0.5 size-4 shrink-0 opacity-70" />
@@ -265,9 +262,7 @@ const SessionItem = ({
           <span className="max-w-1/2 shrink-0 truncate">
             {dirName || session.id.slice(0, 8)}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">
-            {workspace}
-          </span>
+          <WorkspacePath path={workspace} />
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2 text-muted-foreground text-xs">
           <span className="flex-1 truncate">

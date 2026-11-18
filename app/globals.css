@@ -12,6 +12,29 @@
   padding-block: 0.25rem;
 }
 
+.workspace-path {
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.workspace-path > span {
+  display: block;
+  width: max-content;
+}
+
+@keyframes workspace-path-pan {
+  to {
+    transform: translateX(var(--workspace-path-offset));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-path-row:is(:focus-visible, [data-path-hover]) .workspace-path[data-overflow] > span {
+    animation: workspace-path-pan var(--workspace-path-duration) linear infinite alternate;
+  }
+}
+
 .app-frame {
   display: flex;
   flex-direction: column;
