@@ -40,6 +40,13 @@ export function sessionToAgentTab(session: SessionInfo): AgentTab {
   };
 }
 
+export function containsSession(tab: AgentTab, sessionPath: string): boolean {
+  return (
+    tab.path.join("/") === sessionPath ||
+    tab.subagents.some((child) => containsSession(child, sessionPath))
+  );
+}
+
 type AgentWorkspace = {
   tabs: AgentTab[];
   activeId: string | null;
@@ -56,8 +63,13 @@ type AgentTabsState = {
   completionUnread: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
   isBusy: Record<string, Record<string, boolean>>; // sessionId -> agentName -> boolean
   backendWorkspaces: Record<string, AgentWorkspace>;
+  notificationSelection: { rootId: string; sessionPath: string } | null;
 
   setActiveId: (id: string) => void;
+  focusSession: (tab: AgentTab, sessionPath: string) => void;
+  consumeNotificationSelection: (
+    selection: NonNullable<AgentTabsState["notificationSelection"]>,
+  ) => void;
   setCompletionUnread: (
     sessionId: string,
     agentName: string,
@@ -100,13 +112,42 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
   completionUnread: {},
   isBusy: {},
   backendWorkspaces: {},
+  notificationSelection: null,
 
   setActiveId: (id) =>
     set((state) => {
       const nextCompletionUnread = { ...state.completionUnread };
       delete nextCompletionUnread[id];
-      return { activeId: id, completionUnread: nextCompletionUnread };
+      return {
+        activeId: id,
+        completionUnread: nextCompletionUnread,
+        notificationSelection: null,
+      };
     }),
+
+  focusSession: (tab, sessionPath) =>
+    set((state) => {
+      const existing = state.tabs.find((item) => item.id === tab.id);
+      const completionUnread = { ...state.completionUnread };
+      delete completionUnread[tab.id];
+      return {
+        tabs: !existing
+          ? [...state.tabs, tab]
+          : containsSession(existing, sessionPath)
+            ? state.tabs
+            : state.tabs.map((item) => (item.id === tab.id ? tab : item)),
+        activeId: tab.id,
+        completionUnread,
+        notificationSelection: { rootId: tab.id, sessionPath },
+      };
+    }),
+
+  consumeNotificationSelection: (selection) =>
+    set((state) =>
+      state.notificationSelection === selection
+        ? { notificationSelection: null }
+        : state,
+    ),
 
   setCompletionUnread: (sessionId, agentName, unread) =>
     set((state) => {
@@ -287,7 +328,13 @@ export const useAgentTabs = create<AgentTabsState>((set, get) => ({
     })),
 
   clearAgents: () =>
-    set({ tabs: [], activeId: null, completionUnread: {}, isBusy: {} }),
+    set({
+      tabs: [],
+      activeId: null,
+      completionUnread: {},
+      isBusy: {},
+      notificationSelection: null,
+    }),
 }));
 
 useBackendStore.subscribe((state, prevState) => {
@@ -305,6 +352,7 @@ useBackendStore.subscribe((state, prevState) => {
           completionUnread: {},
           isBusy: {},
           loading: false,
+          notificationSelection: null,
         };
       });
     }
@@ -338,6 +386,7 @@ useBackendStore.subscribe((state, prevState) => {
       completionUnread: next?.completionUnread || {},
       isBusy: next?.isBusy || {},
       loading: false,
+      notificationSelection: null,
     };
   });
 });

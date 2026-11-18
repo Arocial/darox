@@ -26,6 +26,7 @@ import {
   type SessionState,
 } from "@/components/darox-ui/websocket-chat-transport";
 import { ModelPill } from "@/components/darox-ui/model-pill";
+import { notifyTurnCompletion } from "@/lib/turn-notifications";
 import { useBackendCommands } from "@/hooks/use-backend-commands";
 import {
   ChatSubmitContext,
@@ -317,23 +318,15 @@ function AgentChat({
       if (!turnEnded || (isActive && document.hasFocus())) return;
 
       setCompletionUnread(agentId, agentName, true);
-      if (!("Notification" in window)) return;
-      const notify = () =>
-        new Notification(`Turn completed: ${agentName}`, {
-          body: `Task completed in ${workspace}`,
-        });
-      if (Notification.permission === "granted") notify();
-      else if (Notification.permission !== "denied") {
-        void Notification.requestPermission().then((permission) => {
-          if (permission === "granted") notify();
-        });
-      }
+      void notifyTurnCompletion(agentName, workspace, sessionPath, apiBase);
     },
     [
       agentId,
       agentName,
+      apiBase,
       isActive,
       resumeChatStream,
+      sessionPath,
       setBusy,
       setCompletionUnread,
       transport,
@@ -735,16 +728,24 @@ export function AgentTabPanel({
   const isRootActive = useAgentTabs((state) => state.activeId === agentId);
   const desiredStreamMode = useStreamModeStore((state) => state.resolvedMode);
 
-  const handleSelect = (id: string) => {
+  const handleSelect = useCallback((id: string) => {
     setActiveSubagentId(id);
-    if (!mounted.has(id)) {
-      setMounted((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-    }
-  };
+    setMounted((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
+
+  const notificationSelection = useAgentTabs((state) =>
+    state.notificationSelection?.rootId === agentId
+      ? state.notificationSelection
+      : null,
+  );
+  useEffect(() => {
+    if (!isRootActive || !notificationSelection) return;
+    const target = agents.find(
+      (agent) => agent.path.join("/") === notificationSelection.sessionPath,
+    );
+    if (target) handleSelect(target.id);
+    useAgentTabs.getState().consumeNotificationSelection(notificationSelection);
+  }, [agents, handleSelect, isRootActive, notificationSelection]);
 
   return (
     <div className="flex h-full min-w-0">

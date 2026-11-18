@@ -1,4 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type {
+  TurnNotificationInput,
+  TurnNotificationTarget,
+} from "./turn-notifications";
 
 interface OpenDialogOptions {
   title?: string;
@@ -39,6 +43,15 @@ const darox = {
     ipcRenderer.invoke("backend:save-manager-token", input),
   getBootstrapManager: (): Promise<BootstrapManagerConfig | null> =>
     ipcRenderer.invoke("backend:get-bootstrap-manager"),
+  showTurnNotification: (input: TurnNotificationInput): Promise<boolean> =>
+    ipcRenderer.invoke("notification:show-turn", input),
+  onTurnNotificationClick: (listener: () => void): (() => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("notification:turn-click", handler);
+    return () => ipcRenderer.removeListener("notification:turn-click", handler);
+  },
+  takeTurnNotificationTarget: (): Promise<TurnNotificationTarget | null> =>
+    ipcRenderer.invoke("notification:take-turn-target"),
 };
 
 contextBridge.exposeInMainWorld("darox", darox);

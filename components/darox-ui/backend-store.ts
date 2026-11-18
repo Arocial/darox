@@ -41,6 +41,11 @@ interface BackendState {
   deleteManager: (id: string) => void;
   refreshManager: (id: string) => Promise<void>;
   selectProfile: (managerId: string, profileId: string) => Promise<void>;
+  selectRunningProfile: (
+    managerId: string,
+    profileId: string,
+    startedAt: string | null,
+  ) => boolean;
   profileAction: (
     managerId: string,
     profileId: string,
@@ -322,6 +327,23 @@ export const useBackendStore = create<BackendState>((set, get) => {
       select(managerId, profileId);
       if (profile.status === "stopped" || profile.status === "failed")
         await get().profileAction(managerId, profileId, "start");
+    },
+
+    selectRunningProfile: (managerId, profileId, startedAt) => {
+      const connection = get().connections[managerId];
+      const profile = connection?.profiles.find((p) => p.id === profileId);
+      if (
+        connection?.status !== "connected" ||
+        profile?.status !== "running" ||
+        (profile.started_at ?? null) !== startedAt
+      )
+        return false;
+      if (
+        get().activeManagerId !== managerId ||
+        get().activeProfile !== profileId
+      )
+        select(managerId, profileId);
+      return true;
     },
 
     profileAction: async (managerId, profileId, action) => {

@@ -7,6 +7,7 @@ import {
   net,
   session,
   Menu,
+  Notification,
   clipboard,
   screen,
   WebContentsView,
@@ -25,14 +26,23 @@ import {
   probeManager,
 } from "./local-manager";
 import { tokenCache } from "./token-cache";
+import { registerTurnNotifications } from "./turn-notifications";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_DEV;
+const appUrl = isDev ? "http://localhost:3140" : "app://darox/index.html";
+if (process.platform === "win32") {
+  // Match the Start Menu shortcut created by the NSIS installer.
+  app.setAppUserModelId(
+    app.isPackaged ? "net.solariar.darox" : process.execPath,
+  );
+}
 if (process.env.DAROX_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.DAROX_USER_DATA_DIR));
 } else if (!isDev) {
   app.setPath("userData", path.join(app.getPath("appData"), "darox"));
 }
 let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 let findView: WebContentsView | null = null;
 let findViewVisible = false;
 let activeFindRequestId: number | null = null;
@@ -277,7 +287,7 @@ async function createWindow() {
     }
   }
 
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     title: "darox",
     icon: path.join(__dirname, "..", "..", "resources", "icon.png"),
     width: state.width,
@@ -295,18 +305,18 @@ async function createWindow() {
     },
   });
 
-  const appUrl = isDev ? "http://localhost:3140" : "app://darox/index.html";
-  configureExternalLinks(mainWindow.webContents, appUrl, (url) =>
+  mainWindow = win;
+  configureExternalLinks(win.webContents, appUrl, (url) =>
     shell.openExternal(url),
   );
 
   if (state.isMaximized) {
-    mainWindow.maximize();
+    win.maximize();
   }
 
-  mainWindow.setMenuBarVisibility(false);
+  win.setMenuBarVisibility(false);
 
-  findView = new WebContentsView({
+  const view = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, "find-preload.js"),
       contextIsolation: true,
@@ -314,15 +324,13 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  findView.setBackgroundColor("#00000000");
-  findView.setVisible(false);
-  mainWindow.contentView.addChildView(findView);
+  findView = view;
+  view.setBackgroundColor("#00000000");
+  view.setVisible(false);
+  win.contentView.addChildView(view);
   positionFindView();
-  await findView.webContents.loadURL(
-    "data:text/html;charset=UTF-8,<html></html>",
-  );
 
-  mainWindow.webContents.on("before-input-event", (event, input) => {
+  win.webContents.on("before-input-event", (event, input) => {
     if (
       input.type === "keyDown" &&
       (input.control || input.meta) &&
@@ -334,53 +342,64 @@ async function createWindow() {
   });
 
   const saveState = () => {
-    if (!mainWindow) return;
     try {
-      saveWindowStateDebounced(captureWindowState(mainWindow));
+      saveWindowStateDebounced(captureWindowState(win));
     } catch (e) {
       console.error("Failed to save window state:", e);
     }
   };
 
-  mainWindow.on("resize", () => {
+  win.on("resize", () => {
     saveState();
     positionFindView();
   });
-  mainWindow.on("move", saveState);
-  mainWindow.on("close", () => {
+  win.on("move", saveState);
+  win.on("close", () => {
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
-    if (!mainWindow) return;
     try {
-      saveWindowState(captureWindowState(mainWindow));
+      saveWindowState(captureWindowState(win));
     } catch (e) {
       console.error("Failed to save window state on close:", e);
     }
   });
 
-  mainWindow.webContents.on("context-menu", (_e, params) => {
-    if (!mainWindow) return;
-    const menu = buildContextMenu(mainWindow, params);
-    menu.popup({ window: mainWindow });
+  win.webContents.on("context-menu", (_e, params) => {
+    const menu = buildContextMenu(win, params);
+    menu.popup({ window: win });
   });
 
-  mainWindow.webContents.on("found-in-page", (_e, result) => {
+  win.webContents.on("found-in-page", (_e, result) => {
     if (!findViewVisible || result.requestId !== activeFindRequestId) return;
-    findView?.webContents.send("find:result", result);
+    view.webContents.send("find:result", result);
     // Chromium may focus the active match in the main page.
-    findView?.webContents.focus();
+    view.webContents.focus();
   });
 
-  await mainWindow.loadURL(appUrl);
-
-  mainWindow.on("closed", () => {
-    findView?.webContents.close();
+  win.on("closed", () => {
+    view.webContents.close();
     findView = null;
     findViewVisible = false;
     activeFindRequestId = null;
     mainWindow = null;
   });
+
+  // Install all lifecycle handlers before the first load. A newly opened
+  // window can be closed immediately, including while its renderer starts.
+  await Promise.all([
+    view.webContents.loadURL("data:text/html;charset=UTF-8,<html></html>"),
+    win.loadURL(appUrl),
+  ]);
+}
+
+function recreateMainWindow() {
+  if (isQuitting) return null;
+  void createWindow().catch((error) => {
+    console.error("Failed to load Darox window:", error);
+  });
+  // createWindow assigns the window synchronously, before loading the page.
+  return mainWindow;
 }
 
 const primaryInstance = app.requestSingleInstanceLock();
@@ -434,6 +453,18 @@ if (primaryInstance)
           });
         },
       );
+
+    registerTurnNotifications({
+      ipcMain,
+      appUrl,
+      getWindow: () => mainWindow,
+      ...(process.platform === "darwin" && {
+        recreateWindow: recreateMainWindow,
+        focusApp: () => app.focus({ steal: true }),
+      }),
+      isSupported: () => Notification.isSupported(),
+      createNotification: (input) => new Notification(input),
+    });
 
     ipcMain.handle("dialog:open", async (_e, opts) => {
       if (!mainWindow) return { canceled: true, filePaths: [] };
@@ -516,11 +547,12 @@ if (primaryInstance)
     }
 
     app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (!mainWindow) recreateMainWindow();
     });
   });
 
 app.on("before-quit", () => {
+  isQuitting = true;
   if (saveTimeout) clearTimeout(saveTimeout);
   try {
     if (mainWindow) saveWindowState(captureWindowState(mainWindow));

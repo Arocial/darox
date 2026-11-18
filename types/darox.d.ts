@@ -1,4 +1,7 @@
-export {};
+import type {
+  TurnNotificationInput,
+  TurnNotificationTarget,
+} from "@/electron/turn-notifications";
 
 interface OpenDialogResult {
   canceled: boolean;
@@ -23,6 +26,9 @@ interface OpenDialogOptions {
 }
 
 interface DaroxApi {
+  showTurnNotification(input: TurnNotificationInput): Promise<boolean>;
+  onTurnNotificationClick(listener: () => void): () => void;
+  takeTurnNotificationTarget(): Promise<TurnNotificationTarget | null>;
   // Dialogs
   openDialog(opts: OpenDialogOptions): Promise<OpenDialogResult>;
   getBootstrapManager(): Promise<BootstrapManagerConfig | null>;

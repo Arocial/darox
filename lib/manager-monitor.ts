@@ -2,7 +2,7 @@ import { useBackendStore } from "@/components/darox-ui/backend-store";
 
 const refreshes = new Map<string, Promise<void>>();
 
-function refreshManager(managerId: string): Promise<void> {
+export function refreshManager(managerId: string): Promise<void> {
   const existing = refreshes.get(managerId);
   if (existing) return existing;
   const request = useBackendStore.getState().refreshManager(managerId);

@@ -38,7 +38,10 @@ Use `npx tsc --noEmit && npm run lint` instead or `npm run build:check` (isolate
 - **Electron** main process under `/electron` (compiled to `/electron/dist`)
   - `main.ts` — window, IPC handlers, `app://` protocol that serves `/out` in prod
   - `external-links.ts` — opens external HTTP(S) links in the system browser and mail links in the system handler; blocks external navigation and new Electron windows while preserving same-origin app navigation
-  - `preload.ts` — exposes `window.darox.openDialog` via `contextBridge`
+  - `preload.ts` — exposes dialogs, local Manager bootstrap, and notification IPC via `window.darox`.
+  - Turn-completion notifications restore and focus the Electron window on click.
+    The frontend only selects the source profile and session path if they are still
+    available in the same worker execution; notification clicks never start workers.
   - Backend connections and profile lifecycle operations live in the shared frontend.
   - On Linux/macOS Electron reuses the local Manager or spawns detached `arox-manager`
     from the user home directory; exiting never stops it. Windows uses remote Managers.
